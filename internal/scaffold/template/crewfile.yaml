@@ -1,0 +1,30 @@
+# crewfile.yaml — YOUR CHOICES. Facts about each harness live in harnesses.yaml;
+# the models and efforts each harness can run are listed in models.yaml.
+#
+# Skills are always global: every enabled harness gets every skill.
+# Agents are opt-in per harness: list names or globs ("*" = all).
+# Each agent picks its own model and effort in its frontmatter.
+
+version: 1
+
+targets:
+  claude-code:
+    enabled: true
+    agents: ["*"]
+
+  opencode:
+    enabled: true          # OpenCode Go plan (see harnesses.yaml catalog)
+    agents: ["*"]
+
+  codex:
+    enabled: false
+    agents: ["*"]
+    exclude: [proposal-writer]       # keep long-form writing on Claude
+
+  gemini-cli:
+    enabled: false
+    agents: []
+
+  cursor:
+    enabled: false
+    agents: []
