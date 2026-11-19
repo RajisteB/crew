@@ -108,7 +108,7 @@ func TestCompileIsIdempotentAndSafe(t *testing.T) {
 	o.Force = false
 
 	// Removing a source prunes its outputs (and empty skill dirs).
-	os.Remove(filepath.Join(dir, "agents/code-explorer.md"))
+	os.Remove(filepath.Join(dir, "agents/proposal-writer.md"))
 	os.RemoveAll(filepath.Join(dir, "skills/pr-description"))
 	tw := filepath.Join(dir, "agents/ticket-worker.md")
 	b, _ := os.ReadFile(tw)
@@ -120,7 +120,7 @@ func TestCompileIsIdempotentAndSafe(t *testing.T) {
 	if err := build.Apply(state, acts); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(agent); !os.IsNotExist(err) {
+	if _, err := os.Lstat(filepath.Join(out, "home/.claude/agents/proposal-writer.md")); !os.IsNotExist(err) {
 		t.Fatal("pruned agent still exists")
 	}
 	if _, err := os.Stat(filepath.Join(out, "home/.claude/skills/pr-description")); !os.IsNotExist(err) {
