@@ -244,3 +244,31 @@ func TestVerify_LegacyWorkflowsDirNote(t *testing.T) {
 	}
 	t.Fatalf("expected an info note pointing at factories/, got %+v", rep.Issues)
 }
+
+func TestHeadless_RejectsBypass(t *testing.T) {
+	for _, bad := range []string{"--dangerously-skip-permissions", "bypassPermissions", "--yolo", "--skip-permissions-check"} {
+		t.Run(bad, func(t *testing.T) {
+			dir := fresh(t)
+			edit(t, filepath.Join(dir, "harnesses.yaml"), "--permission-mode, dontAsk,", "--permission-mode, dontAsk, "+bad+",")
+			expectError(t, dir, "headless commands may not bypass permissions")
+		})
+	}
+}
+
+func TestHeadless_TokenRules(t *testing.T) {
+	cases := []struct{ name, old, new, want string }{
+		{"unknown token", `"{agent}", --allowedTools`, `"{agnt}", --allowedTools`, `unknown token "{agnt}"`},
+		{"agent token required", `--agent, "{agent}", --allowedTools`, `--allowedTools`, "must contain {agent}"},
+		{"flag needs allowed", `--allowedTools, "{allowed}", `, ``, "allow_via: flag needs an {allowed} token"},
+		{"arg needs prompt", "prompt_via: stdin", "prompt_via: arg", "prompt_via: arg needs a {prompt} token"},
+		{"bad prompt_via", "prompt_via: stdin", "prompt_via: pipe", `prompt_via must be "stdin" or "arg"`},
+		{"bad allow_via", "allow_via: flag", "allow_via: maybe", `allow_via must be "flag" or "agent-file"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := fresh(t)
+			edit(t, filepath.Join(dir, "harnesses.yaml"), c.old, c.new)
+			expectError(t, dir, c.want)
+		})
+	}
+}
