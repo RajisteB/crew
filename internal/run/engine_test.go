@@ -298,3 +298,24 @@ func TestEngine_SecondDriverRefused(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// A SIGKILL or power loss mid-station leaves state.json "running" with the
+// station marked in progress and the lock's pid dead.
+func TestEngine_CrashMidStationResumesWithoutDrift(t *testing.T) {
+	e, fr := newEngine(t, engineFactory(), reply("ready"), reply("done"), reply("pass"))
+	ss := &switchSnap{}
+	e.Snap = ss.snap
+	st := run.Begin(e.Factory, "x")
+	st, _ = run.AfterStation(e.Factory, st, v("ready")) // plan finished
+	st = run.MarkInStation(run.WithSnapshot(st, map[string]string{".": "v1"}))
+	orig, _ := e.Store.LoadState()
+	st.RunID = orig.RunID
+	e.Store.SaveState(st)
+	e.Store.Emit(run.Event{Kind: run.EvStart})
+	// every snapshot from now on differs: build's half-done edits
+	e.Snap = func(string, []string) (map[string]string, error) { return map[string]string{".": "v2"}, nil }
+	fr.replies = fr.replies[1:]
+	if st = drive(t, e); st.Status != run.StatusDone || fr.stations() != "b,r" {
+		t.Fatalf("stations=%s state=%+v", fr.stations(), st)
+	}
+}

@@ -280,3 +280,25 @@ func TestGoto_ReopensStoppedRun(t *testing.T) {
 		t.Fatalf("goto on a running run must keep it running: %+v", s)
 	}
 }
+
+func TestResume_CrashedWhileRunningSkipsDrift(t *testing.T) {
+	f := shipChange()
+	s, _ := walk(t, f, "ready")
+	s = run.MarkInStation(s) // state.json says build was running when the process died
+	s, d := run.Resume(f, s)
+	if d.Kind != run.RunStation || d.Station != "build" || !s.SkipDriftOnce {
+		t.Fatalf("resume after crash: s=%+v d=%+v", s, d)
+	}
+}
+
+func TestResume_RunningBetweenStationsKeepsDriftCheck(t *testing.T) {
+	f := shipChange()
+	s, _ := walk(t, f, "ready") // e.g. just approved: no station was mid-run
+	if s, _ = run.Resume(f, s); s.SkipDriftOnce {
+		t.Fatal("a run stopped between stations must still check drift")
+	}
+	done, _ := run.AfterStation(f, run.MarkInStation(s), v("done"))
+	if done.InStation {
+		t.Fatal("AfterStation must clear InStation")
+	}
+}
