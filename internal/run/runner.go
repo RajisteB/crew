@@ -28,11 +28,11 @@ type Runner interface {
 // HeadlessRunner runs stations through each harness's headless: command.
 type HeadlessRunner struct{ Registry *config.Registry }
 
-// errCanceled marks a station stopped because the run itself was stopped.
-var errCanceled = errors.New("station stopped: run interrupted")
+// ErrCanceled marks a station stopped because the run itself was stopped.
+var ErrCanceled = errors.New("station stopped: run interrupted")
 
 // IsCanceled reports whether a Run error means the run was interrupted.
-func IsCanceled(err error) bool { return errors.Is(err, errCanceled) }
+func IsCanceled(err error) bool { return errors.Is(err, ErrCanceled) }
 
 func (r HeadlessRunner) Run(ctx context.Context, req StationRequest) (string, error) {
 	h, ok := r.Registry.Harnesses[req.Harness]
@@ -60,7 +60,7 @@ func (r HeadlessRunner) Run(ctx context.Context, req StationRequest) (string, er
 	err := cmd.Run()
 	switch {
 	case ctx.Err() != nil:
-		return "", errCanceled
+		return "", ErrCanceled
 	case tctx.Err() != nil:
 		return "", fmt.Errorf("%s station timed out after %v", req.Harness, req.Timeout)
 	case err != nil:
