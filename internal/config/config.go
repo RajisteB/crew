@@ -50,6 +50,16 @@ type Harness struct {
 	Capabilities map[string][]string `yaml:"capabilities"` // capability → native tool names
 	Rules        Rules               `yaml:"rules"`
 	Notes        string              `yaml:"notes"`
+	Headless     *HeadlessSpec       `yaml:"headless"` // how crew run starts one agent non-interactively; nil = can't run stations
+}
+
+// HeadlessSpec is the command crew run uses to run one station. Tokens in
+// Command: {agent}, {prompt}, {allowed}.
+type HeadlessSpec struct {
+	Command   []string `yaml:"command"`
+	PromptVia string   `yaml:"prompt_via"` // "stdin" | "arg"
+	AllowVia  string   `yaml:"allow_via"`  // "flag" ({allowed} token) | "agent-file" (compiled tools list restricts)
+	AllowJoin string   `yaml:"allow_join"` // separator for {allowed}; default ","
 }
 
 // CatalogSpec says which models.dev providers a harness can run and how it

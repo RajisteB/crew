@@ -78,6 +78,8 @@ type Project struct {
 	Crew     *config.Crew
 	Agents   []source.Agent
 	Skills   []source.Skill
+	// Factories from factories/*.md.
+	Factories []source.Factory
 	// Enabled harness names, sorted.
 	Enabled []string
 	// Selection[harness] = agents that harness receives, sorted by name.
@@ -123,6 +125,11 @@ func Run(dir string) (*Project, *Report) {
 		rep.errf("", "%v", e)
 	}
 	p.Agents, p.Skills = agents, skills
+	factories, errs := source.LoadFactories(dir)
+	for _, e := range errs {
+		rep.errf("", "%v", e)
+	}
+	p.Factories = factories
 
 	for _, s := range source.StrayEntries(dir, source.AgentsDir) {
 		rep.errf(s, "only one .md file per definition is allowed directly inside %s/", source.AgentsDir)
@@ -144,6 +151,7 @@ func Run(dir string) (*Project, *Report) {
 	}
 	checkSources(p, rep)
 	checkCrew(p, rep)
+	checkFactories(p, rep)
 	return p, rep
 }
 
