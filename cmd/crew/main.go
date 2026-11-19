@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/crewfile-dev/crew/internal/build"
 	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/factory"
 	"github.com/crewfile-dev/crew/internal/migrate"
 	"github.com/crewfile-dev/crew/internal/scaffold"
 	"github.com/crewfile-dev/crew/internal/verify"
@@ -139,7 +141,7 @@ func main() {
 		withNotes := f
 		withNotes.verbose = true // plan is for reviewing, so show every note
 		p, _ := runVerify(dir, withNotes)
-		printMatrix(p)
+		printMatrix(os.Stdout, p)
 		files, notes, err := build.Plan(p, opts(f))
 		if err != nil {
 			fail(1, "%v", err)
@@ -208,11 +210,12 @@ func runVerify(dir string, f flags) (*verify.Project, *verify.Report) {
 	return p, rep
 }
 
-func printMatrix(p *verify.Project) {
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+func printMatrix(w io.Writer, p *verify.Project) {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for _, hn := range p.Enabled {
 		h := p.Registry.Harnesses[hn]
 		fmt.Fprintf(tw, "\n%s (%s) — %d skills\n", h.Display, hn, len(p.Skills))
+		printForemen(tw, h, p)
 		sel := p.Selection[hn]
 		if !h.Agents.Supported {
 			fmt.Fprintln(tw, "  no custom agents in this harness")
@@ -236,7 +239,19 @@ func printMatrix(p *verify.Project) {
 		}
 	}
 	tw.Flush()
-	fmt.Println()
+	fmt.Fprintln(w)
+}
+
+func printForemen(w io.Writer, h config.Harness, p *verify.Project) {
+	if h.Foreman == nil || len(p.Factories) == 0 {
+		return
+	}
+	var names []string
+	for _, f := range p.Factories {
+		n := factory.ForemanPrefix + f.Name
+		names = append(names, fmt.Sprintf("%s (launch: %s)", n, strings.ReplaceAll(h.Foreman.Launch, "{name}", n)))
+	}
+	fmt.Fprintf(w, "  foremen: %s\n", strings.Join(names, ", "))
 }
 
 func printNotes(notes []build.Note) {

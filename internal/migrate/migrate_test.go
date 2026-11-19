@@ -195,3 +195,58 @@ func keys(m map[string]entry) []string {
 	}
 	return out
 }
+
+func TestMigrate_PlanWithoutStateDir(t *testing.T) {
+	root := t.TempDir()
+	from, to := filepath.Join(root, "crewfile"), filepath.Join(root, "crew")
+	os.MkdirAll(from, 0o755)
+	os.WriteFile(filepath.Join(from, "crewfile.yaml"), []byte("version: 1\n"), 0o644)
+	steps, err := migrate.Plan(from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, s := range steps {
+		lines = append(lines, s.String())
+	}
+	got := strings.Join(lines, "\n")
+	if len(steps) != 2 || !strings.Contains(got, "move-dir") || !strings.Contains(got, "crew.yaml") || strings.Contains(got, "rewrite-state") {
+		t.Fatalf("steps:\n%s", got)
+	}
+	if err := migrate.Apply(steps); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMigrate_StepString(t *testing.T) {
+	s := migrate.Step{Kind: migrate.RewriteState, From: "/a", To: "/b"}
+	if got := s.String(); !strings.Contains(got, "paths under /a → /b") {
+		t.Fatalf("String() = %q", got)
+	}
+}
+
+func TestMigrate_ApplyStopsOnError(t *testing.T) {
+	err := migrate.Apply([]migrate.Step{{Kind: "teleport", From: "/a", To: "/b"}})
+	if err == nil || !strings.Contains(err.Error(), `unknown step "teleport"`) {
+		t.Fatalf("got %v", err)
+	}
+	err = migrate.Apply([]migrate.Step{{Kind: migrate.MoveDir, From: filepath.Join(t.TempDir(), "missing"), To: filepath.Join(t.TempDir(), "x")}})
+	if err == nil {
+		t.Fatal("moving a missing dir must fail")
+	}
+}
+
+func TestMigrate_CorruptStateFails(t *testing.T) {
+	root := t.TempDir()
+	from, to := filepath.Join(root, "crewfile"), filepath.Join(root, "crew")
+	os.MkdirAll(filepath.Join(from, ".crewfile"), 0o755)
+	os.WriteFile(filepath.Join(from, "crewfile.yaml"), []byte("version: 1\n"), 0o644)
+	os.WriteFile(filepath.Join(from, ".crewfile", "state.user.json"), []byte("{not json"), 0o644)
+	steps, err := migrate.Plan(from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Apply(steps); err == nil || !strings.Contains(err.Error(), "state.user.json") {
+		t.Fatalf("want an error naming the state file, got %v", err)
+	}
+}

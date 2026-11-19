@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/crewfile-dev/crew/internal/scaffold"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
 func scaffoldDir(t *testing.T) string {
@@ -42,5 +43,14 @@ func TestFactoryCmd_List(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "ship-change") || !strings.Contains(out.String(), "3 stations") {
 		t.Fatalf("list output:\n%s", out.String())
+	}
+}
+
+func TestPrintMatrix_ListsForemen(t *testing.T) {
+	p, _ := verify.Run(scaffoldDir(t))
+	var out bytes.Buffer
+	printMatrix(&out, p)
+	if !strings.Contains(out.String(), "foremen: foreman-ship-change (launch: claude --agent foreman-ship-change)") {
+		t.Fatalf("matrix:\n%s", out.String())
 	}
 }
