@@ -67,6 +67,7 @@ type HeadlessSpec struct {
 	PromptVia string   `yaml:"prompt_via"` // "stdin" | "arg"
 	AllowVia  string   `yaml:"allow_via"`  // "flag" ({allowed} token) | "agent-file" (compiled tools list restricts)
 	AllowJoin string   `yaml:"allow_join"` // separator for {allowed}; default ","
+	Output    string   `yaml:"output"`     // "text" (default: stdout is the reply) | "claude-json" (result + permission_denials)
 }
 
 // CatalogSpec says which models.dev providers a harness can run and how it

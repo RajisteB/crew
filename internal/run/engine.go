@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -31,16 +32,51 @@ func (e *Engine) Drive(ctx context.Context) (State, error) {
 		return State{}, err
 	}
 	defer unlock()
+	if killed, err := e.Store.KillLeftoverChild(); err != nil {
+		return State{}, err
+	} else if killed {
+		e.emit(Event{Kind: EvNote, Msg: "stopped a station process left running by a driver that died"})
+	}
+	st, err := e.loop(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) && st.RunID != "" {
+		// Record it, so `crew run status` and the foreman see why the run
+		// stopped instead of a run that looks forever "running".
+		st = FailRetryable(st, err.Error())
+		e.emit(Event{Kind: EvFailed, Station: st.Current, Msg: st.Reason})
+		if serr := e.Store.SaveState(st); serr != nil {
+			return st, errors.Join(err, serr)
+		}
+	}
+	return st, err
+}
+
+func (e *Engine) loop(ctx context.Context) (State, error) {
 	st, d, err := e.start()
 	if err != nil {
 		return st, err
 	}
-	for d.Kind == RunStation {
-		if st, d, err = e.next(ctx, st); err != nil {
+	for {
+		for d.Kind == RunStation {
+			if st, d, err = e.next(ctx, st); err != nil {
+				return st, err
+			}
+		}
+		// A goto that arrived while the last station ran still applies.
+		g, err := e.Store.TakeGoto()
+		if err != nil {
 			return st, err
 		}
+		if g == "" {
+			return st, e.finish(st, d)
+		}
+		moved, gerr := Goto(e.Factory, st, g)
+		if gerr != nil {
+			e.emit(Event{Kind: EvNote, Msg: "ignored goto: " + gerr.Error()})
+			return st, e.finish(st, d)
+		}
+		e.emit(Event{Kind: EvGoto, Station: g, Msg: moved.Reason})
+		st, d = Resume(e.Factory, moved)
 	}
-	return st, e.finish(st, d)
 }
 
 func (e *Engine) guarded() bool {

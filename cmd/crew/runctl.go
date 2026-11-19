@@ -39,6 +39,11 @@ func runStatus(pos []string, f runFlags, out io.Writer) error {
 	if st.Reason != "" {
 		fmt.Fprintf(out, "reason: %s\n", st.Reason)
 	}
+	if st.Status == run.StatusFailed && st.Retryable {
+		fmt.Fprintf(out, "retryable: fix the cause, then crew run resume %s\n", st.RunID)
+	} else if st.Status == run.StatusInterrupted {
+		fmt.Fprintf(out, "resumable: crew run resume %s\n", st.RunID)
+	}
 	if p := st.Pending; p != nil {
 		fmt.Fprintf(out, "waiting for approval: %s chose %s — %s (output: %s)\n", p.Station, p.Route, p.Verdict.Summary, lastOutput(store))
 	}
@@ -68,7 +73,11 @@ func runSay(id, msg string, f runFlags, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := store.AppendInbox(msg); err != nil {
+	text, err := textArg(msg)
+	if err != nil {
+		return err
+	}
+	if err := store.AppendInbox(text); err != nil {
 		return err
 	}
 	fmt.Fprintln(out, "queued; the next station to start will receive it")
@@ -124,6 +133,15 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 	st, _, err = run.Approve(fac, st, f.gotoStation)
 	if err != nil {
 		return err
+	}
+	if f.note != "" {
+		note, err := textArg(f.note)
+		if err != nil {
+			return err
+		}
+		if err := store.AppendInbox(note); err != nil {
+			return err
+		}
 	}
 	if err := store.SaveState(st); err != nil {
 		return err

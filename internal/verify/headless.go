@@ -10,8 +10,10 @@ import (
 var (
 	headlessToken = regexp.MustCompile(`\{[^{}]*\}`)
 	knownTokens   = map[string]bool{"{agent}": true, "{prompt}": true, "{allowed}": true}
-	// Words that mark a permission bypass. crew never runs a station that way.
-	bypassWords = []string{"dangerously", "bypass", "skip-permissions", "yolo"}
+	// Words and flags that mark a permission bypass or blanket auto-approval.
+	// crew never runs a station that way.
+	bypassWords = []string{"danger", "bypass", "skip-permissions", "yolo"}
+	bypassArgs  = map[string]bool{"--auto": true, "--full-auto": true, "--auto-approve": true}
 )
 
 func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
@@ -24,8 +26,11 @@ func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
 		return
 	}
 	seen := map[string]bool{}
-	for _, arg := range h.Command {
+	for i, arg := range h.Command {
 		low := strings.ToLower(arg)
+		if bypassArgs[low] || (low == "auto" && i > 0 && strings.HasSuffix(h.Command[i-1], "permission-mode")) {
+			rep.errf(at, "headless commands may not bypass permissions (%q auto-approves anything not denied); pre-allow the agent's tools instead", arg)
+		}
 		for _, w := range bypassWords {
 			if strings.Contains(low, w) {
 				rep.errf(at, "headless commands may not bypass permissions (%q); pre-allow the agent's tools instead", arg)
@@ -49,6 +54,11 @@ func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
 		}
 	default:
 		rep.errf(at, "prompt_via must be \"stdin\" or \"arg\" (got %q)", h.PromptVia)
+	}
+	switch h.Output {
+	case "", "text", "claude-json":
+	default:
+		rep.errf(at, "output must be \"text\" or \"claude-json\" (got %q)", h.Output)
 	}
 	switch h.AllowVia {
 	case "flag":

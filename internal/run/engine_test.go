@@ -24,26 +24,33 @@ type fakeRunner struct {
 	mu      sync.Mutex
 	replies []string
 	reqs    []run.StationRequest
+	during  map[int]func()   // call number (1-based) → runs while that station "works"
+	denials map[int][]string // call number → permission denials to report
 }
 
-func (r *fakeRunner) Run(ctx context.Context, req run.StationRequest) (string, error) {
+func (r *fakeRunner) Run(ctx context.Context, req run.StationRequest) (run.Reply, error) {
 	r.mu.Lock()
 	r.reqs = append(r.reqs, req)
+	n := len(r.reqs)
 	if len(r.replies) == 0 {
 		r.mu.Unlock()
-		return "", errors.New("fake: no scripted reply left")
+		return run.Reply{}, errors.New("fake: no scripted reply left")
 	}
 	next := r.replies[0]
 	r.replies = r.replies[1:]
+	hook, denied := r.during[n], r.denials[n]
 	r.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	switch next {
 	case "BLOCK":
 		<-ctx.Done()
-		return "", errStopped
+		return run.Reply{}, errStopped
 	case "ERR":
-		return "", errors.New("fake: claude not logged in")
+		return run.Reply{}, errors.New("fake: claude not logged in")
 	}
-	return next, nil
+	return run.Reply{Text: next, Denials: denied}, nil
 }
 
 var errStopped = run.ErrCanceled
@@ -317,5 +324,78 @@ func TestEngine_CrashMidStationResumesWithoutDrift(t *testing.T) {
 	fr.replies = fr.replies[1:]
 	if st = drive(t, e); st.Status != run.StatusDone || fr.stations() != "b,r" {
 		t.Fatalf("stations=%s state=%+v", fr.stations(), st)
+	}
+}
+
+func TestEngine_DriveErrorIsRecorded(t *testing.T) {
+	e, _ := newEngine(t, engineFactory(), reply("ready"), reply("done"))
+	calls := 0
+	e.Snap = func(string, []string) (map[string]string, error) {
+		calls++
+		if calls > 2 {
+			return nil, errors.New("git exploded")
+		}
+		return map[string]string{".": "v1"}, nil
+	}
+	_, err := e.Drive(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "git exploded") {
+		t.Fatalf("err = %v", err)
+	}
+	st, _ := e.Store.LoadState()
+	if st.Status != run.StatusFailed || !st.Retryable || !strings.Contains(st.Reason, "git exploded") {
+		t.Fatalf("a driving error must be saved so status (and the foreman) can see it: %+v", st)
+	}
+	evs, _ := e.Store.EventsSince(0)
+	if last := evs[len(evs)-1]; last.Kind != run.EvFailed {
+		t.Fatalf("last event = %+v", last)
+	}
+}
+
+func TestEngine_GotoDuringLastStationIsApplied(t *testing.T) {
+	e, fr := newEngine(t, engineFactory(), reply("ready"), reply("done"), reply("pass"), reply("ready"), reply("done"), reply("pass"))
+	fr.during = map[int]func(){3: func() { e.Store.RequestGoto("plan") }}
+	st := drive(t, e)
+	if st.Status != run.StatusDone || fr.stations() != "p,b,r,p,b,r" {
+		t.Fatalf("goto requested during the final station was dropped: stations=%s state=%+v", fr.stations(), st)
+	}
+	if g, _ := e.Store.TakeGoto(); g != "" {
+		t.Fatalf("goto left behind: %q", g)
+	}
+}
+
+func TestEngine_GotoDuringApprovalStationWins(t *testing.T) {
+	e, fr := newEngine(t, approvalEngineFactory(), reply("ready"), reply("done"), reply("pass"), reply("done"), reply("pass"))
+	fr.during = map[int]func(){3: func() { e.Store.RequestGoto("build") }}
+	st := drive(t, e)
+	if fr.stations() != "p,b,r,b,r" || st.Status != run.StatusAwaitingApproval {
+		t.Fatalf("stations=%s state=%+v", fr.stations(), st)
+	}
+}
+
+func TestEngine_PermissionDenialsBecomeNotes(t *testing.T) {
+	e, fr := newEngine(t, engineFactory(), reply("ready"), reply("done"), reply("pass"))
+	fr.denials = map[int][]string{1: {"Bash: rm -rf x"}}
+	drive(t, e)
+	evs, _ := e.Store.EventsSince(0)
+	for _, ev := range evs {
+		if ev.Kind == run.EvNote && ev.Station == "plan" && strings.Contains(ev.Msg, "permission denied: Bash: rm -rf x") {
+			return
+		}
+	}
+	t.Fatalf("no denial note in %+v", evs)
+}
+
+func TestEngine_RecordsAndKillsLeftoverChild(t *testing.T) {
+	e, fr := newEngine(t, engineFactory(), reply("ready"), reply("done"), reply("pass"))
+	var gotOnStart bool
+	fr.during = map[int]func(){1: func() {}}
+	drive(t, e)
+	for _, r := range fr.reqs {
+		if r.OnStart != nil {
+			gotOnStart = true
+		}
+	}
+	if !gotOnStart {
+		t.Fatal("engine must pass OnStart so the station's pid is recorded")
 	}
 }

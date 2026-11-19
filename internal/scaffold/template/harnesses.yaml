@@ -66,9 +66,10 @@ harnesses:
     headless:                     # how `crew run` runs one station non-interactively
       # dontAsk denies anything not pre-approved; --allowedTools pre-approves
       # exactly the agent's capabilities. Never a bypass mode.
-      command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --permission-mode, dontAsk, --output-format, text]
+      command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --permission-mode, dontAsk, --output-format, json]
       prompt_via: stdin
       allow_via: flag
+      output: claude-json         # reply = .result; refused tool calls (.permission_denials) become run notes
     foreman:                      # factories' foremen run as the main session
       launch: "claude --agent {name}"
     rules:
@@ -165,9 +166,11 @@ harnesses:
       skill: [skill]
       structured-output: []
     headless:
-      # The compiled agent's tools map already disables every tool outside its
-      # capabilities; --auto approves only what is left (and nothing denied).
-      command: [opencode, run, --agent, "{agent}", --auto, "{prompt}"]
+      # The compiled agent's tools map disables every tool outside its
+      # capabilities. No --auto: it would also approve whatever opencode asks
+      # about (edits outside the project, your own "ask" rules). Not yet
+      # smoke-tested as a station harness.
+      command: [opencode, run, --agent, "{agent}", "{prompt}"]
       prompt_via: arg
       allow_via: agent-file
     foreman:

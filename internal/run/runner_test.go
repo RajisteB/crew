@@ -40,7 +40,7 @@ func TestHeadlessRunner_StdinAndArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"ARG --agent\nARG reviewer\n", "ARG --allowedTools\nARG Bash,Read\n", "ARG --mode\nARG dontAsk\n", "STDIN hello prompt"} {
-		if !strings.Contains(out, want) {
+		if !strings.Contains(out.Text, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}
 	}
@@ -52,7 +52,7 @@ func TestHeadlessRunner_EmptyAllowlistDropsFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out, "--allowedTools") || !strings.Contains(out, "ARG --mode") {
+	if strings.Contains(out.Text, "--allowedTools") || !strings.Contains(out.Text, "ARG --mode") {
 		t.Fatalf("empty allowlist must drop --allowedTools and its value:\n%s", out)
 	}
 }
@@ -66,7 +66,7 @@ func TestHeadlessRunner_PromptAsArg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "ARG the prompt\n") {
+	if !strings.Contains(out.Text, "ARG the prompt\n") {
 		t.Fatalf("prompt not passed as an argument:\n%s", out)
 	}
 }
@@ -106,7 +106,7 @@ func TestHeadlessRunner_Canceled(t *testing.T) {
 func TestHeadlessRunner_NonZeroExit(t *testing.T) {
 	t.Setenv("FAKE_MODE", "exit3")
 	_, err := run.HeadlessRunner{Registry: fakeRegistry(t)}.Run(context.Background(), req("p"))
-	if err == nil || !strings.Contains(err.Error(), "fake station failed (exit 3)") || !strings.Contains(err.Error(), "boom: not logged in") {
+	if err == nil || !strings.Contains(err.Error(), "fake station failed (exit 3) running "+fakeHarnessPath(t)) || !strings.Contains(err.Error(), "boom: not logged in") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -116,5 +116,43 @@ func TestHeadlessRunner_NoHeadless(t *testing.T) {
 	_, err := run.HeadlessRunner{Registry: reg}.Run(context.Background(), req("p"))
 	if err == nil || !strings.Contains(err.Error(), "no headless") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestHeadlessRunner_NonZeroExitFallsBackToStdout(t *testing.T) {
+	t.Setenv("FAKE_MODE", "stdoutfail")
+	_, err := run.HeadlessRunner{Registry: fakeRegistry(t)}.Run(context.Background(), req("p"))
+	if err == nil || !strings.Contains(err.Error(), "Please run /login first") {
+		t.Fatalf("stdout must be shown when stderr is empty: %v", err)
+	}
+}
+
+func TestHeadlessRunner_OnStartGetsPid(t *testing.T) {
+	t.Setenv("FAKE_MODE", "echo")
+	rq := req("p")
+	var pid int
+	rq.OnStart = func(p int) { pid = p }
+	if _, err := (run.HeadlessRunner{Registry: fakeRegistry(t)}).Run(context.Background(), rq); err != nil {
+		t.Fatal(err)
+	}
+	if pid <= 0 {
+		t.Fatalf("OnStart pid = %d", pid)
+	}
+}
+
+func TestHeadlessRunner_ClaudeJSON(t *testing.T) {
+	t.Setenv("FAKE_MODE", "json")
+	reg := fakeRegistry(t)
+	reg.Harnesses["fake"].Headless.Output = "claude-json"
+	out, err := run.HeadlessRunner{Registry: reg}.Run(context.Background(), req("p"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Text != "hello from json" || len(out.Denials) != 1 || !strings.Contains(out.Denials[0], "Bash") || !strings.Contains(out.Denials[0], "rm -rf x") {
+		t.Fatalf("reply = %+v", out)
+	}
+	t.Setenv("FAKE_MODE", "jsonerr")
+	if _, err := (run.HeadlessRunner{Registry: reg}).Run(context.Background(), req("p")); err == nil || !strings.Contains(err.Error(), "API overloaded") {
+		t.Fatalf("is_error must fail the station: %v", err)
 	}
 }

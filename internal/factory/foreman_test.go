@@ -36,3 +36,15 @@ func TestForemanBody_ContainsLoopAndDiagram(t *testing.T) {
 		}
 	}
 }
+
+func TestForemanBody_QuotesUserTextSafely(t *testing.T) {
+	body := factory.ForemanBody(templateFactory(t))
+	if strings.Contains(body, `--input "<input>"`) || strings.Contains(body, `say <id> "<message>"`) {
+		t.Fatal("user text must never be put inside double quotes on a shell line")
+	}
+	for _, want := range []string{"<<'CREW_TEXT'", "--input @", "crew run say <id> @", "--note"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("foreman body missing %q", want)
+		}
+	}
+}
