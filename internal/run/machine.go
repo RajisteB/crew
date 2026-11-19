@@ -75,7 +75,8 @@ func Approve(f source.Factory, s State, gotoStation string) (State, Decision, er
 	return next, d, nil
 }
 
-// Goto sends the run to a station on the user's request.
+// Goto sends the run to a station on the user's request. On a live run it
+// takes effect before the next station; a stopped run reopens there.
 func Goto(f source.Factory, s State, station string) (State, error) {
 	if _, ok := f.Stations[station]; !ok {
 		return s, fmt.Errorf("no station %q in factory %s", station, f.Name)
@@ -84,8 +85,11 @@ func Goto(f source.Factory, s State, station string) (State, error) {
 	c.Current = station
 	c.Pending = nil
 	c.Reason = "redirected to " + station + " by the user"
-	if c.Status == StatusAwaitingApproval {
-		c.Status = StatusRunning
+	c.Retryable = false
+	if c.Status != StatusRunning {
+		// A stopped run (paused, failed, done, interrupted) reopens: the next
+		// resume runs the chosen station.
+		c.Status = StatusInterrupted
 	}
 	return c, nil
 }
