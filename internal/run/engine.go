@@ -99,10 +99,15 @@ func (e *Engine) next(ctx context.Context, st State) (State, Decision, error) {
 		drifted = Drifted(st.Snapshot, cur)
 	}
 	before := st.Current
+	skipping := st.SkipDriftOnce
 	st, _ = BeforeStation(e.Factory, st, drifted)
-	if st.Current != before {
+	switch {
+	case st.Current != before:
 		e.emit(Event{Kind: EvDrift, Station: st.Current, Msg: st.Reason})
+	case skipping && len(drifted) > 0 && e.Factory.Stations[before].OnDrift != "":
+		e.emit(Event{Kind: EvNote, Station: before, Msg: "drift check skipped on resume: the changes are this station's own unfinished work"})
 	}
+	st = MarkInStation(st)
 	if err := e.Store.SaveState(st); err != nil {
 		return st, Decision{}, err
 	}

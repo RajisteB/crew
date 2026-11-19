@@ -32,6 +32,7 @@ func AfterStation(f source.Factory, s State, v Verdict) (State, Decision) {
 	c := cloneState(s)
 	c.Step++
 	c.Reason = ""
+	c.InStation = false
 	st := f.Stations[c.Current]
 	if v.Route == source.RouteFail {
 		return failState(c, v.Summary)
@@ -94,6 +95,14 @@ func Goto(f source.Factory, s State, station string) (State, error) {
 	return c, nil
 }
 
+// MarkInStation records that the current station is about to run, so a
+// crash mid-station resumes without treating its own edits as drift.
+func MarkInStation(s State) State {
+	c := cloneState(s)
+	c.InStation = true
+	return c
+}
+
 // Interrupt marks a run stopped mid-station (Ctrl-C, SIGTERM).
 func Interrupt(s State, reason string) State {
 	c := cloneState(s)
@@ -124,9 +133,11 @@ func Resume(f source.Factory, s State) (State, Decision) {
 		return c, Decision{Kind: Finished}
 	case c.Status == StatusFailed && !c.Retryable:
 		return c, Decision{Kind: Failed, Reason: c.Reason}
-	case c.Status == StatusInterrupted || c.Status == StatusFailed:
+	case c.Status == StatusInterrupted || c.Status == StatusFailed || c.InStation:
+		// The station's own partial work isn't outside drift.
 		c.SkipDriftOnce = true
 	}
+	c.InStation = false
 	c.Status = StatusRunning
 	c.Retryable = false
 	return c, Decision{Kind: RunStation, Station: c.Current}
