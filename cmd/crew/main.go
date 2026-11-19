@@ -36,6 +36,7 @@ Usage:
   crew capabilities [--harness H | --all] which native tools each capability becomes
   crew plan     [--dir D] [scope flags]   show what each harness gets, models, costs, notes, file changes
   crew compile  [--dir D] [scope flags]   verify, then write files
+  crew factory list | diagram <name>     list factories, or print one as a Mermaid flowchart
   crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
                                          move an old crewfile setup to crew's names
 
@@ -71,6 +72,12 @@ func main() {
 	cmd := os.Args[1]
 	if cmd == "-h" || cmd == "--help" || cmd == "help" {
 		fmt.Print(usage)
+		return
+	}
+	if cmd == "factory" {
+		if err := factoryCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
 		return
 	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)

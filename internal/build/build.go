@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crewfile-dev/crew/internal/factory"
 	"github.com/crewfile-dev/crew/internal/source"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
@@ -143,6 +144,11 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 			put(File{Path: built, Root: filepath.Dir(built), Content: content, Kind: "agent-build", Name: s.Agent.Name, Harnesses: []string{hn}})
 			put(File{Path: dest, Root: dir, Link: built, Kind: "agent", Name: s.Agent.Name, Harnesses: []string{hn}})
 		}
+	}
+	for _, f := range p.Factories {
+		dir := filepath.Join(BuildDir(crewDir, o), "factories")
+		put(File{Path: filepath.Join(dir, f.Name+".md"), Root: dir, Content: []byte(factory.DiagramDoc(f)),
+			Kind: "factory-diagram", Name: f.Name, Harnesses: []string{}})
 	}
 	if len(errs) > 0 {
 		return nil, nil, errors.New(strings.Join(errs, "\n"))
