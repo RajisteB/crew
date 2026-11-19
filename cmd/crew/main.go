@@ -21,6 +21,7 @@ import (
 
 	"github.com/crewfile-dev/crew/internal/build"
 	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/migrate"
 	"github.com/crewfile-dev/crew/internal/scaffold"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
@@ -35,6 +36,8 @@ Usage:
   crew capabilities [--harness H | --all] which native tools each capability becomes
   crew plan     [--dir D] [scope flags]   show what each harness gets, models, costs, notes, file changes
   crew compile  [--dir D] [scope flags]   verify, then write files
+  crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
+                                         move an old crewfile setup to crew's names
 
 Scope flags:
   --scope user|project   write to ~/... (default) or into a project's dot-dirs
@@ -57,6 +60,7 @@ type flags struct {
 	verbose                  bool
 	harness                  string
 	all                      bool
+	from, to                 string
 }
 
 func main() {
@@ -81,6 +85,8 @@ func main() {
 	fs.BoolVar(&f.verbose, "v", false, "print info notes")
 	fs.StringVar(&f.harness, "harness", "", "models/capabilities: only this harness")
 	fs.BoolVar(&f.all, "all", false, "models/capabilities: every harness, not just enabled ones")
+	fs.StringVar(&f.from, "from", "~/crewfile", "migrate: old crewfile directory")
+	fs.StringVar(&f.to, "to", "~/crew", "migrate: new crew directory")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	rest, sub := os.Args[2:], []string(nil)
 	if cmd == "models" && len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
@@ -91,6 +97,10 @@ func main() {
 	}
 	if fs.NArg() > 0 {
 		fail(2, "unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if cmd == "migrate" {
+		runMigrate(f)
+		return
 	}
 	dir, err := resolveDir(f.dir, cmd == "init")
 	if err != nil {
@@ -286,4 +296,23 @@ func expand(p string) string {
 func fail(code int, f string, a ...any) {
 	fmt.Fprintf(os.Stderr, "crew: "+f+"\n", a...)
 	os.Exit(code)
+}
+
+func runMigrate(f flags) {
+	from, to := expand(f.from), expand(f.to)
+	steps, err := migrate.Plan(from, to)
+	if err != nil {
+		fail(1, "migrate: %v", err)
+	}
+	for _, s := range steps {
+		fmt.Println(s)
+	}
+	if f.dryRun {
+		fmt.Println("dry run: nothing changed")
+		return
+	}
+	if err := migrate.Apply(steps); err != nil {
+		fail(1, "migrate: %v", err)
+	}
+	fmt.Printf("migrated to %s\nnext: crew compile   (re-points every harness link at %s)\n", to, to)
 }
