@@ -17,6 +17,17 @@ sleep)
 exit3)
   echo "boom: not logged in" >&2
   exit 3 ;;
+stdoutfail)
+  echo "Please run /login first"
+  exit 1 ;;
+json)
+  cat > /dev/null
+  printf '{"type":"result","is_error":false,"result":"hello from json","permission_denials":[{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}]}\n'
+  exit 0 ;;
+jsonerr)
+  cat > /dev/null
+  printf '{"type":"result","is_error":true,"result":"API overloaded","permission_denials":[]}\n'
+  exit 0 ;;
 esac
 dir="$FAKE_REPLY_DIR"
 n=$(cat "$dir/counter" 2>/dev/null || echo 0)

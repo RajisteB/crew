@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -189,5 +190,34 @@ func TestStore_GitignoreCreated(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(project, ".crew", ".gitignore"))
 	if err != nil || string(b) != "*\n" {
 		t.Fatalf(".crew/.gitignore = %q, %v", b, err)
+	}
+}
+
+func TestStore_KillLeftoverChild(t *testing.T) {
+	_, s, _ := newRun(t)
+	if killed, err := s.KillLeftoverChild(); err != nil || killed {
+		t.Fatalf("no child recorded: killed=%v err=%v", killed, err)
+	}
+	cmd := exec.Command("sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	if err := s.RecordChild(cmd.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	killed, err := s.KillLeftoverChild()
+	if err != nil || !killed {
+		t.Fatalf("killed=%v err=%v", killed, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("orphaned station process still running")
+	}
+	if killed, _ := s.KillLeftoverChild(); killed {
+		t.Fatal("record must be cleared")
 	}
 }

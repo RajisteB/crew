@@ -272,3 +272,16 @@ func TestHeadless_TokenRules(t *testing.T) {
 		})
 	}
 }
+
+func TestHeadless_RejectsAutoApproveModes(t *testing.T) {
+	for _, bad := range []string{"--auto", "--full-auto", "danger-full-access"} {
+		t.Run(bad, func(t *testing.T) {
+			dir := fresh(t)
+			edit(t, filepath.Join(dir, "harnesses.yaml"), "--permission-mode, dontAsk,", "--permission-mode, dontAsk, "+bad+",")
+			expectError(t, dir, "headless commands may not bypass permissions")
+		})
+	}
+	dir := fresh(t)
+	edit(t, filepath.Join(dir, "harnesses.yaml"), "--permission-mode, dontAsk,", "--permission-mode, auto,")
+	expectError(t, dir, "headless commands may not bypass permissions")
+}

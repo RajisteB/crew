@@ -25,7 +25,16 @@ func (e *Engine) runStep(ctx context.Context, st State) (State, Decision, error)
 	n := st.Step + 1
 	e.emit(Event{Kind: EvStepStart, Station: name, Count: n})
 
-	output, v, prompt, err := e.attempt(ctx, req, in, station.RouteNames())
+	req.OnStart = func(pid int) {
+		if err := e.Store.RecordChild(pid); err != nil {
+			e.emit(Event{Kind: EvNote, Station: name, Msg: "couldn't record the station's pid: " + err.Error()})
+		}
+	}
+	output, v, prompt, denials, err := e.attempt(ctx, req, in, station.RouteNames())
+	e.Store.ClearChild()
+	for _, d := range denials {
+		e.emit(Event{Kind: EvNote, Station: name, Msg: "permission denied: " + d + " (not in this agent's capabilities)"})
+	}
 	if err != nil {
 		e.requeue(inbox)
 		return e.stopped(ctx, st, err)
@@ -55,26 +64,29 @@ func (e *Engine) runStep(ctx context.Context, st State) (State, Decision, error)
 
 // attempt runs the station, retrying once with the rejection appended when
 // the reply has no usable verdict. A second bad reply is a station failure.
-func (e *Engine) attempt(ctx context.Context, req StationRequest, in PromptInput, routes []string) (string, Verdict, string, error) {
+func (e *Engine) attempt(ctx context.Context, req StationRequest, in PromptInput, routes []string) (string, Verdict, string, []string, error) {
 	reply, err := e.Runner.Run(ctx, req)
+	denials := reply.Denials
 	if err != nil {
-		return "", Verdict{}, req.Prompt, err
+		return "", Verdict{}, req.Prompt, denials, err
 	}
-	output, v, perr := ParseReply(reply, routes)
+	output, v, perr := ParseReply(reply.Text, routes)
 	if perr == nil {
-		return output, v, req.Prompt, nil
+		return output, v, req.Prompt, denials, nil
 	}
 	e.emit(Event{Kind: EvRetry, Station: in.Station, Msg: perr.Error()})
 	in.RetryError = perr.Error()
 	req.Prompt = BuildPrompt(in)
-	if reply, err = e.Runner.Run(ctx, req); err != nil {
-		return "", Verdict{}, req.Prompt, err
+	reply, err = e.Runner.Run(ctx, req)
+	denials = append(denials, reply.Denials...)
+	if err != nil {
+		return "", Verdict{}, req.Prompt, denials, err
 	}
-	output, v, perr = ParseReply(reply, routes)
+	output, v, perr = ParseReply(reply.Text, routes)
 	if perr != nil {
-		return reply, Verdict{Route: "fail", Summary: fmt.Sprintf("%s gave no usable verdict twice: %v", in.Station, perr)}, req.Prompt, nil
+		return reply.Text, Verdict{Route: "fail", Summary: fmt.Sprintf("%s gave no usable verdict twice: %v", in.Station, perr)}, req.Prompt, denials, nil
 	}
-	return output, v, req.Prompt, nil
+	return output, v, req.Prompt, denials, nil
 }
 
 func (e *Engine) request(st State, inbox []string) (StationRequest, PromptInput, error) {

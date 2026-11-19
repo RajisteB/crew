@@ -303,3 +303,41 @@ func writeAtomic(path string, b []byte) error {
 	}
 	return os.Rename(tmp.Name(), path)
 }
+
+// ---------- the running station's process ----------
+
+// RecordChild remembers the station process (its own process group), so a
+// later driver can stop it if this one died without cleaning up.
+func (s Store) RecordChild(pid int) error {
+	return writeAtomic(s.path("child"), []byte(strconv.Itoa(pid)))
+}
+
+func (s Store) ClearChild() error {
+	err := os.Remove(s.path("child"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+// KillLeftoverChild stops a station process group left behind by a driver
+// that died (closed terminal, SIGKILL), so two agents never edit the same
+// tree. It reports whether something was still running.
+func (s Store) KillLeftoverChild() (bool, error) {
+	b, err := os.ReadFile(s.path("child"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer s.ClearChild()
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 || syscall.Kill(pid, 0) != nil {
+		return false, nil
+	}
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
+		return false, err
+	}
+	return true, nil
+}

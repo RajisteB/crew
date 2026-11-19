@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -46,6 +47,7 @@ func newCLIEnv(t *testing.T, replies ...string) *cliEnv {
 	}
 	e := &cliEnv{t: t, crewDir: scaffoldDir(t), project: t.TempDir(), rep: t.TempDir()}
 	editFile(t, filepath.Join(e.crewDir, "harnesses.yaml"), "command: [claude, -p,", "command: ["+fakeHarness()+", -p,")
+	editFile(t, filepath.Join(e.crewDir, "harnesses.yaml"), "output: claude-json", "output: text")
 	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "t@example.com"}, {"config", "user.name", "t"}, {"commit", "-q", "--allow-empty", "-m", "init"}} {
 		if out, err := exec.Command("git", append([]string{"-C", e.project}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, out)
@@ -213,5 +215,71 @@ func TestCLI_RunErrors(t *testing.T) {
 	}
 	if out, code := e.crew("run", "status", "nope-123"); code != 1 || !strings.Contains(out, "no run") {
 		t.Fatalf("unknown run: exit %d\n%s", code, out)
+	}
+}
+
+func (e *cliEnv) start(env []string, args ...string) (*exec.Cmd, *strings.Builder) {
+	e.t.Helper()
+	cmd := exec.Command(crewBin, args...)
+	cmd.Dir = e.project
+	cmd.Env = append(append(os.Environ(), "CREW_HOME="+e.crewDir, "FAKE_REPLY_DIR="+e.rep), env...)
+	var out strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		e.t.Fatal(err)
+	}
+	return cmd, &out
+}
+
+func TestCLI_SighupInterrupts(t *testing.T) {
+	e := newCLIEnv(t)
+	cmd, out := e.start([]string{"FAKE_MODE=sleep"}, "run", "ship-change", "--input", "x")
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "→ plan") && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	cmd.Process.Signal(syscall.SIGHUP)
+	cmd.Wait()
+	id := runID(t, out.String())
+	status, _ := e.crew("run", "status", id)
+	if !strings.Contains(status, "status interrupted") {
+		t.Fatalf("closing the terminal must interrupt the run cleanly:\n%s\n---\n%s", out.String(), status)
+	}
+}
+
+func TestCLI_GuardedFactoryOutsideGitFailsFast(t *testing.T) {
+	e := newCLIEnv(t)
+	e.project = t.TempDir() // not a git repo; ship-change has on_drift
+	out, code := e.crew("run", "ship-change", "--input", "x")
+	if code != 1 || !strings.Contains(out, "is not a git repository") {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(e.project, ".crew", "runs")); !os.IsNotExist(err) {
+		t.Fatal("no run should be created when the drift guard can't work")
+	}
+}
+
+func TestCLI_ApproveWithNote(t *testing.T) {
+	e := newCLIEnv(t, verdict("ready"), verdict("done"), verdict("fix"), verdict("done"), verdict("pass"))
+	out, _ := e.crew("run", "ship-change", "--input", "x")
+	if out, code := e.crew("run", "approve", runID(t, out), "--note", "keep the old route too"); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	b, _ := os.ReadFile(filepath.Join(e.rep, "prompt-4"))
+	if !strings.Contains(string(b), "keep the old route too") {
+		t.Fatalf("--note must reach the next station:\n%s", b)
+	}
+}
+
+func TestCLI_StatusShowsRetryable(t *testing.T) {
+	e := newCLIEnv(t) // no scripted replies: the fake harness exits 1
+	out, code := e.crew("run", "ship-change", "--input", "x")
+	if code != 1 {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	id := runID(t, out)
+	status, _ := e.crew("run", "status", id)
+	if !strings.Contains(status, "retryable: fix the cause, then crew run resume "+id) {
+		t.Fatalf("status:\n%s", status)
 	}
 }

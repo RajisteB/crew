@@ -22,9 +22,9 @@ import (
 const runUsage = `usage:
   crew run <factory> --input TEXT|@FILE [--project P] [--detach]   start a run
   crew run status [<id>] [--since N]       list runs, or show one run and its events after N
-  crew run say <id> <message…>             pass a message to the next station
+  crew run say <id> <message…|@FILE>       pass a message to the next station
   crew run goto <id> <station>             send the work to a station
-  crew run approve <id> [--goto S] [--detach]   continue a run waiting for approval
+  crew run approve <id> [--goto S] [--note TEXT|@FILE] [--detach]   continue a run waiting for approval
   crew run resume <id> [--detach]          continue a stopped, failed or interrupted run
 common flags: --dir D (crew directory), --project P (default: current directory)`
 
@@ -34,7 +34,7 @@ type usageError struct{ msg string }
 func (u usageError) Error() string { return u.msg }
 
 type runFlags struct {
-	dir, project, input, gotoStation string
+	dir, project, input, gotoStation, note string
 	since                            int
 	detach                           bool
 }
@@ -48,6 +48,7 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&f.project, "project", "", "project directory")
 	fs.StringVar(&f.input, "input", "", "run input: text, or @file")
 	fs.StringVar(&f.gotoStation, "goto", "", "approve: continue at this station instead")
+	fs.StringVar(&f.note, "note", "", "approve: a message for the next station (text, or @file)")
 	fs.IntVar(&f.since, "since", 0, "status: only events after this cursor")
 	fs.BoolVar(&f.detach, "detach", false, "keep running in the background")
 	pos, err := parseInterleaved(fs, args)
@@ -144,6 +145,9 @@ func startRun(name string, f runFlags, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if err := checkWatchRoots(fac, f.project); err != nil {
+		return err
+	}
 	src, err := os.ReadFile(filepath.Join(dir, fac.Path))
 	if err != nil {
 		return err
@@ -154,6 +158,27 @@ func startRun(name string, f runFlags, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "run %s\n", st.RunID)
 	return driveOrDetach(store, st.RunID, dir, f, out)
+}
+
+// checkWatchRoots fails before a run exists when a drift guard couldn't
+// work (a watched root isn't a git repo).
+func checkWatchRoots(fac source.Factory, project string) error {
+	for _, s := range fac.Stations {
+		if s.OnDrift != "" {
+			_, err := run.Snapshot(project, fac.WatchRoots())
+			return err
+		}
+	}
+	return nil
+}
+
+// textArg reads "@file" or returns the text itself.
+func textArg(v string) (string, error) {
+	if strings.HasPrefix(v, "@") {
+		b, err := os.ReadFile(expand(v[1:]))
+		return string(b), err
+	}
+	return v, nil
 }
 
 func readInput(in string) (string, error) {
@@ -223,7 +248,7 @@ func drive(store run.Store, dir, project string, out io.Writer) error {
 	for _, a := range p.Agents {
 		agents[a.Name] = a
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	e := &run.Engine{
 		Store: store, Factory: fac, Agents: agents, Registry: p.Registry,
