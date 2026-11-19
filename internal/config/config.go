@@ -51,6 +51,13 @@ type Harness struct {
 	Rules        Rules               `yaml:"rules"`
 	Notes        string              `yaml:"notes"`
 	Headless     *HeadlessSpec       `yaml:"headless"` // how crew run starts one agent non-interactively; nil = can't run stations
+	Foreman      *ForemanSpec        `yaml:"foreman"`  // can host a factory's foreman as the main session; nil = no foremen
+}
+
+// ForemanSpec says how a harness hosts a foreman agent as its main session.
+type ForemanSpec struct {
+	Static map[string]any `yaml:"static"` // keys that override agents.static for foremen (e.g. mode: primary)
+	Launch string         `yaml:"launch"` // how the user starts it; {name} is the foreman's name
 }
 
 // HeadlessSpec is the command crew run uses to run one station. Tokens in

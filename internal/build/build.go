@@ -119,16 +119,28 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 			}
 		}
 
-		if !h.Agents.Supported {
-			continue
+		if len(p.Factories) > 0 && !canHostForeman(h) {
+			notes = append(notes, Note{hn, fmt.Sprintf("no foreman: %s can't host a main-session agent with shell (crew run still works)", h.Display)})
 		}
-		sel := p.Selection[hn]
-		if len(sel) == 0 {
+		if !h.Agents.Supported {
 			continue
 		}
 		dir, err := resolve(h.Agents.UserDir, h.Agents.ProjectDir, o)
 		if err != nil {
 			return nil, nil, err
+		}
+		if len(p.Factories) > 0 && canHostForeman(h) {
+			fs, err := foremanOutputs(p, hn, crewDir, dir, link, o)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, f := range fs {
+				put(f)
+			}
+		}
+		sel := p.Selection[hn]
+		if len(sel) == 0 {
+			continue
 		}
 		for _, s := range sel {
 			content, err := renderAgent(p.Registry, h, s)

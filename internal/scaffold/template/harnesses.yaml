@@ -69,6 +69,8 @@ harnesses:
       command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --permission-mode, dontAsk, --output-format, text]
       prompt_via: stdin
       allow_via: flag
+    foreman:                      # factories' foremen run as the main session
+      launch: "claude --agent {name}"
     rules:
       name_max: 64
       name_forbidden: [claude, anthropic]
@@ -168,6 +170,9 @@ harnesses:
       command: [opencode, run, --agent, "{agent}", --auto, "{prompt}"]
       prompt_via: arg
       allow_via: agent-file
+    foreman:
+      static: {mode: primary}     # a primary agent (picked with Tab in the TUI), not a subagent
+      launch: "opencode, then press Tab until {name} is selected"
     rules:
       name_max: 64
 
