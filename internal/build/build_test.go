@@ -331,3 +331,28 @@ func verifyRun(t *testing.T, dir string) (*verify.Project, *verify.Report) {
 	}
 	return p, rep
 }
+
+func TestBuildPlan_WritesDiagram(t *testing.T) {
+	dir, out := setup(t)
+	p, rep := verify.Run(dir)
+	if !rep.OK(false) {
+		t.Fatalf("verify: %+v", rep.Issues)
+	}
+	files, _, err := build.Plan(p, build.Opts{Out: out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if f.Kind == "factory-diagram" {
+			if !strings.HasSuffix(f.Path, filepath.Join("factories", "ship-change.md")) {
+				t.Fatalf("diagram path = %s", f.Path)
+			}
+			s := string(f.Content)
+			if !strings.Contains(s, "```mermaid\nflowchart LR\n") || !strings.HasPrefix(s, "# ship-change\n") {
+				t.Fatalf("diagram content:\n%s", s)
+			}
+			return
+		}
+	}
+	t.Fatal("no factory-diagram file planned")
+}
