@@ -364,17 +364,34 @@ func parseWith(path string, into any, strict bool) (string, error) {
 	return strings.TrimSpace(body) + "\n", nil
 }
 
-var unknownField = regexp.MustCompile(`field (\S+) not found in type \S+`)
+var (
+	unknownField = regexp.MustCompile(`field (\S+) not found in type (\S+)`)
+	allowedKeys  = map[string]string{
+		"source.Agent":   "name, description, model, effort, per_harness, capabilities, skills",
+		"source.Factory": "name, description, start, harness, watch, timeout, stations",
+		"source.Station": "agent, harness, approve, on_drift, timeout, routes",
+	}
+)
 
 // friendly rewrites yaml.v3's "field x not found in type source.Agent" into
 // something that says what is allowed and where harness specifics belong.
 func friendly(err error, into any) string {
-	allowed := "name, description"
-	if _, ok := into.(*Agent); ok {
-		allowed = "name, description, model, effort, per_harness, capabilities, skills"
+	msg := unknownField.ReplaceAllStringFunc(err.Error(), func(m string) string {
+		sub := unknownField.FindStringSubmatch(m)
+		allowed, ok := allowedKeys[sub[2]]
+		if !ok {
+			allowed = "name, description"
+		}
+		hint := "; harness-specific settings belong in harnesses.yaml"
+		if sub[2] != "source.Agent" && sub[2] != "source.Skill" {
+			hint = ""
+		}
+		return fmt.Sprintf("unknown key %q (allowed: %s%s)", sub[1], allowed, hint)
+	})
+	if strings.Contains(msg, "did not find expected alphabetic or numeric character") {
+		msg += ` (a bare * is YAML syntax; write max: "*" in quotes)`
 	}
-	return unknownField.ReplaceAllString(err.Error(),
-		"unknown key \"$1\" (allowed: "+allowed+"; harness-specific settings belong in harnesses.yaml)")
+	return msg
 }
 
 func rel(root, p string) string {
