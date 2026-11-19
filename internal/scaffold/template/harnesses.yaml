@@ -1,12 +1,12 @@
 # harnesses.yaml — FACTS about each harness. Nothing here is a preference.
 #
 # Your choices (which harnesses are on, which agents go where) live in
-# crewfile.yaml. The list of every model and effort each harness can run lives
-# in models.yaml, generated from `catalog` below by `crewfile models sync`.
+# crew.yaml. The list of every model and effort each harness can run lives
+# in models.yaml, generated from `catalog` below by `crew models sync`.
 # Agents and skills stay harness-agnostic; everything harness-specific (paths,
 # field names, tool names, how a model id is spelled) is mapped here.
 #
-# `crewfile verify` fails once `verified` is older than stale_after_days.
+# `crew verify` fails once `verified` is older than stale_after_days.
 # That's on purpose: these tools change their formats every few months.
 # Re-check the docs links, fix what moved, bump the date.
 
@@ -19,7 +19,7 @@ stale_after_days: 60
 # harness has no per-agent control for it).
 capabilities: [read, search, edit, write, shell, web, delegate, skill, structured-output]
 
-# Where `crewfile models sync` gets the model list, effort levels and prices.
+# Where `crew models sync` gets the model list, effort levels and prices.
 # models.dev is the catalog OpenCode itself uses.
 catalog_source: https://models.dev/api.json
 

@@ -39,7 +39,7 @@ func Diff(statePath string, files []File, force bool) ([]Action, error) {
 func classify(f *File, st *stateFile, planned map[string]bool, force bool) (Action, error) {
 	conflict := func(why string) (Action, error) { return Action{Conflict, f.Path, why, f}, nil }
 	if l := linkedAncestor(f.Root, f.Path); l != "" {
-		return conflict(l + " is a link; crewfile never writes through one, even with --force (move it)")
+		return conflict(l + " is a link; crew never writes through one, even with --force (move it)")
 	}
 	d, err := inspect(f.Path)
 	if err != nil {
@@ -55,9 +55,9 @@ func classify(f *File, st *stateFile, planned map[string]bool, force bool) (Acti
 		return Action{Update, f.Path, "replacing the copied folder with a link", f}, nil
 	case d.isDir:
 		// Apply could never empty it, so --force doesn't help here.
-		return conflict("a folder crewfile didn't write (or that holds other files) is in the way; move it yourself")
+		return conflict("a folder crew didn't write (or that holds other files) is in the way; move it yourself")
 	case !owned && !force:
-		return conflict("file exists and was not written by crewfile (use --force to take it over)")
+		return conflict("file exists and was not written by crew (use --force to take it over)")
 	case owned && d.fingerprint != rec.SHA256 && !force:
 		return conflict("file was edited by hand since the last compile (edit the source instead, or --force)")
 	}
@@ -97,7 +97,7 @@ func orphanActions(st *stateFile, planned map[string]bool, force bool) ([]Action
 	return acts, nil
 }
 
-// onlyOwnedCopies reports whether every file under dir is one crewfile wrote,
+// onlyOwnedCopies reports whether every file under dir is one crew wrote,
 // is unchanged, and is about to be deleted as no longer produced, i.e. the
 // folder is an old copy that a link may replace. OS junk files are ignored;
 // anything else (including a link inside) makes it false.

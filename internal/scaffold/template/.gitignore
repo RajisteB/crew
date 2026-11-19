@@ -1,5 +1,5 @@
-# crewfile's record of which files it wrote (per machine)
-.crewfile/
+# crew's record of which files it wrote (per machine)
+.crew/
 
-# generated agent files that each harness links to (rebuilt by `crewfile compile`)
+# generated agent files that each harness links to (rebuilt by `crew compile`)
 build/

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crewfile-dev/crewfile/internal/config"
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 func testRegistry() *config.Registry {

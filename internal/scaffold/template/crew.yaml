@@ -1,4 +1,4 @@
-# crewfile.yaml — YOUR CHOICES. Facts about each harness live in harnesses.yaml;
+# crew.yaml — YOUR CHOICES. Facts about each harness live in harnesses.yaml;
 # the models and efforts each harness can run are listed in models.yaml.
 #
 # Skills are always global: every enabled harness gets every skill.

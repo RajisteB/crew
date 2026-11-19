@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crewfile-dev/crewfile/internal/build"
-	"github.com/crewfile-dev/crewfile/internal/scaffold"
-	"github.com/crewfile-dev/crewfile/internal/verify"
+	"github.com/crewfile-dev/crew/internal/build"
+	"github.com/crewfile-dev/crew/internal/scaffold"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
 func setup(t *testing.T) (dir, out string) {
@@ -192,7 +192,7 @@ func TestInheritWritesNoModel(t *testing.T) {
 
 func TestCodexTOMLShape(t *testing.T) {
 	dir, out := setup(t)
-	edit(t, filepath.Join(dir, "crewfile.yaml"), "  codex:\n    enabled: false\n    agents: [\"*\"]", "  codex:\n    enabled: true\n    agents: [code-explorer]")
+	edit(t, filepath.Join(dir, "crew.yaml"), "  codex:\n    enabled: false\n    agents: [\"*\"]", "  codex:\n    enabled: true\n    agents: [code-explorer]")
 	edit(t, filepath.Join(dir, "agents/code-explorer.md"), "per_harness:\n", "per_harness:\n  codex: {model: gpt-6-luna, effort: low}\n")
 	o := build.Opts{Scope: "user", Out: out}
 	must(t, build.Apply(build.StatePath(dir, o), compile(t, dir, o)))
@@ -213,7 +213,7 @@ func TestProjectScope(t *testing.T) {
 		}
 	}
 	if _, err := os.Stat(filepath.Join(proj, ".opencode/skills")); !os.IsNotExist(err) {
-		t.Fatal("OpenCode reads .claude/skills, so crewfile must not write a second copy")
+		t.Fatal("OpenCode reads .claude/skills, so crew must not write a second copy")
 	}
 }
 
@@ -233,7 +233,7 @@ func lstatLink(t *testing.T, path string) string {
 	return target
 }
 
-func TestUserScopeLinksIntoCrewfile(t *testing.T) {
+func TestUserScopeLinksIntoCrew(t *testing.T) {
 	dir, out := setup(t)
 	o := build.Opts{Scope: "user", Out: out}
 	if err := build.Apply(build.StatePath(dir, o), compile(t, dir, o)); err != nil {
@@ -243,7 +243,7 @@ func TestUserScopeLinksIntoCrewfile(t *testing.T) {
 		t.Fatalf("skill link points at %s", got)
 	}
 	agent := lstatLink(t, filepath.Join(out, "home/.claude/agents/ticket-worker.md"))
-	if !strings.HasPrefix(agent, filepath.Join(out, "crewfile-build")+string(filepath.Separator)) {
+	if !strings.HasPrefix(agent, filepath.Join(out, "crew-build")+string(filepath.Separator)) {
 		t.Fatalf("agent link should point into the build dir, got %s", agent)
 	}
 	// A skill edit is live with no compile.
@@ -319,7 +319,7 @@ func TestForeignSkillFolderConflicts(t *testing.T) {
 	os.WriteFile(filepath.Join(mine, "SKILL.md"), []byte("someone else's"), 0o644)
 	acts := compile(t, dir, o)
 	if count(acts, build.Conflict) != 1 {
-		t.Fatalf("a skill folder crewfile didn't write must conflict: %+v", acts)
+		t.Fatalf("a skill folder crew didn't write must conflict: %+v", acts)
 	}
 }
 

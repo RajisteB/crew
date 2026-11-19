@@ -9,11 +9,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/crewfile-dev/crewfile/internal/catalog"
-	"github.com/crewfile-dev/crewfile/internal/config"
+	"github.com/crewfile-dev/crew/internal/catalog"
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
-// runModels handles `crewfile models [sync]`.
+// runModels handles `crew models [sync]`.
 func runModels(dir string, args []string, f flags) {
 	switch {
 	case len(args) == 0:
@@ -21,7 +21,7 @@ func runModels(dir string, args []string, f flags) {
 	case len(args) == 1 && args[0] == "sync":
 		syncModels(dir)
 	default:
-		fail(2, "usage: crewfile models [--harness H | --all]  or  crewfile models sync")
+		fail(2, "usage: crew models [--harness H | --all]  or  crew models sync")
 	}
 }
 
@@ -61,7 +61,7 @@ func syncModels(dir string) {
 		}
 		fmt.Println(line)
 	}
-	fmt.Printf("wrote %s (from %s)\nrun `crewfile verify` to check agents against the new list\n", path, reg.CatalogSource)
+	fmt.Printf("wrote %s (from %s)\nrun `crew verify` to check agents against the new list\n", path, reg.CatalogSource)
 }
 
 func hasCatalog(reg *config.Registry) bool {
@@ -119,7 +119,7 @@ func ids(es []config.ModelEntry) map[string]bool {
 func listModels(dir string, f flags) {
 	models, err := config.LoadModels(dir)
 	if err != nil {
-		fail(1, "%v (run `crewfile models sync` to create it)", err)
+		fail(1, "%v (run `crew models sync` to create it)", err)
 	}
 	show, err := harnessesToShow(dir, models, f)
 	if err != nil {
@@ -139,7 +139,7 @@ func listModels(dir string, f flags) {
 		}
 	}
 	tw.Flush()
-	fmt.Printf("\nlist fetched %s from %s; refresh with `crewfile models sync`\n", models.Fetched, models.Source)
+	fmt.Printf("\nlist fetched %s from %s; refresh with `crew models sync`\n", models.Fetched, models.Source)
 }
 
 // harnessesToShow: --harness H, --all, or (default) the enabled targets.
@@ -153,7 +153,7 @@ func harnessesToShow(dir string, models *config.Models, f flags) ([]string, erro
 	if f.all {
 		return sortedHarnesses(models.Harnesses), nil
 	}
-	lo, err := config.LoadCrewfile(dir)
+	lo, err := config.LoadCrew(dir)
 	if err != nil {
 		return nil, err
 	}

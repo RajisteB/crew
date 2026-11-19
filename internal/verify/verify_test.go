@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crewfile-dev/crewfile/internal/scaffold"
-	"github.com/crewfile-dev/crewfile/internal/verify"
+	"github.com/crewfile-dev/crew/internal/scaffold"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
 func fresh(t *testing.T) string {
@@ -57,7 +57,7 @@ func TestStrictChecks(t *testing.T) {
 		{"effort checked per model", "agents/ticket-worker.md", "kimi-k3.1-pro, effort: high}", "kimi-k3.1-pro, effort: medium}", `[opencode] opencode-go/kimi-k3.1-pro doesn't accept effort "medium" (accepted: low, high, max)`},
 		{"unknown per_harness key", "agents/code-explorer.md", "  opencode: {model:", "  vscode: {model:", `per_harness: unknown harness "vscode"`},
 		{"empty per_harness entry", "agents/code-explorer.md", "  opencode: {model: opencode-go/deepseek-v4.1-flash, effort: low}", "  opencode: {}", "per_harness.opencode: set model, effort or both"},
-		{"no catalog means inherit", "crewfile.yaml", "  cursor:\n    enabled: false\n    agents: []", "  cursor:\n    enabled: true\n    agents: [code-explorer]", "[cursor] Cursor agents can't pin a model"},
+		{"no catalog means inherit", "crew.yaml", "  cursor:\n    enabled: false\n    agents: []", "  cursor:\n    enabled: true\n    agents: [code-explorer]", "[cursor] Cursor agents can't pin a model"},
 		{"inherit effort still validated", "agents/code-explorer.md", "model: claude-haiku-5-5\neffort: low\n", "model: inherit\neffort: hihg\n", `[claude-code] effort "hihg" isn't accepted by any Claude Code model`},
 		{"all must be alone", "agents/code-explorer.md", "[read, search]", "[all, read]", `"all" must be the only`},
 		{"unknown capability", "agents/code-explorer.md", "[read, search]", "[read, telepathy]", `unknown capability "telepathy"`},
@@ -69,10 +69,10 @@ func TestStrictChecks(t *testing.T) {
 		{"effort key and suffix exclusive", "harnesses.yaml", "effort_suffix: \"#\"", "effort_suffix: \"#\"\n        effort: effort", "set effort or effort_suffix, not both"},
 		{"missing capability mapping", "harnesses.yaml", "      delegate: [Agent]\n", "", `missing mapping for "delegate"`},
 		{"model list missing a harness", "models.yaml", "  opencode:\n", "  opencode-old:\n", "no models listed for opencode"},
-		{"unknown target harness", "crewfile.yaml", "  cursor:", "  vscode:\n    enabled: false\n  cursor:", "unknown harness"},
-		{"enabled must be explicit", "crewfile.yaml", "  cursor:\n    enabled: false\n    agents: []", "  cursor:\n    agents: []", "enabled must be set explicitly"},
-		{"unknown agent in target", "crewfile.yaml", "enabled: false\n    agents: [\"*\"]\n    exclude: [proposal-writer]", "enabled: true\n    agents: [\"*\"]\n    exclude: [proposal-writr]", `unknown agent "proposal-writr"`},
-		{"glob matches nothing", "crewfile.yaml", "enabled: false\n    agents: [\"*\"]\n    exclude: [proposal-writer]", "enabled: true\n    agents: [\"*\"]\n    exclude: [zzz-*]", `pattern "zzz-*" matches no agents`},
+		{"unknown target harness", "crew.yaml", "  cursor:", "  vscode:\n    enabled: false\n  cursor:", "unknown harness"},
+		{"enabled must be explicit", "crew.yaml", "  cursor:\n    enabled: false\n    agents: []", "  cursor:\n    agents: []", "enabled must be set explicitly"},
+		{"unknown agent in target", "crew.yaml", "enabled: false\n    agents: [\"*\"]\n    exclude: [proposal-writer]", "enabled: true\n    agents: [\"*\"]\n    exclude: [proposal-writr]", `unknown agent "proposal-writr"`},
+		{"glob matches nothing", "crew.yaml", "enabled: false\n    agents: [\"*\"]\n    exclude: [proposal-writer]", "enabled: true\n    agents: [\"*\"]\n    exclude: [zzz-*]", `pattern "zzz-*" matches no agents`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestSkillFolderLayout(t *testing.T) {
 func TestMissingModelsFile(t *testing.T) {
 	dir := fresh(t)
 	os.Remove(filepath.Join(dir, "models.yaml"))
-	expectError(t, dir, "run `crewfile models sync`")
+	expectError(t, dir, "run `crew models sync`")
 	// Other problems must still be reported while the list is missing.
 	edit(t, filepath.Join(dir, "agents/spike-researcher.md"), "skills: [go-backend-conventions]", "skills: [nope]")
 	expectError(t, dir, `unknown skill "nope"`)
@@ -164,7 +164,7 @@ func TestModelsFileOptionalWithoutCatalogs(t *testing.T) {
 
 func TestEffortIgnoredWhereHarnessHasNoEffortSetting(t *testing.T) {
 	dir := fresh(t)
-	edit(t, filepath.Join(dir, "crewfile.yaml"), "  gemini-cli:\n    enabled: false\n    agents: []", "  gemini-cli:\n    enabled: true\n    agents: [code-explorer]")
+	edit(t, filepath.Join(dir, "crew.yaml"), "  gemini-cli:\n    enabled: false\n    agents: []", "  gemini-cli:\n    enabled: true\n    agents: [code-explorer]")
 	edit(t, filepath.Join(dir, "agents/code-explorer.md"), "per_harness:\n", "per_harness:\n  gemini-cli: {model: gemini-3.8-flash, effort: high}\n")
 	_, rep := verify.Run(dir)
 	for _, i := range rep.Issues {
@@ -230,4 +230,17 @@ func TestCapabilityWithoutToolIsNoted(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected note %q, got %+v", want, rep.Issues)
+}
+
+func TestVerify_LegacyWorkflowsDirNote(t *testing.T) {
+	dir := fresh(t)
+	os.MkdirAll(filepath.Join(dir, "workflows"), 0o755)
+	os.WriteFile(filepath.Join(dir, "workflows", "x.md"), []byte("---\nname: x\n---\n"), 0o644)
+	_, rep := verify.Run(dir)
+	for _, i := range rep.Issues {
+		if i.Level == verify.Info && strings.Contains(i.Msg, "factories/") {
+			return
+		}
+	}
+	t.Fatalf("expected an info note pointing at factories/, got %+v", rep.Issues)
 }

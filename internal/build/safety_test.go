@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crewfile-dev/crewfile/internal/build"
+	"github.com/crewfile-dev/crew/internal/build"
 )
 
 func must(t *testing.T, err error) {
@@ -53,7 +53,7 @@ func TestFailedApplyThenRerunKeepsSource(t *testing.T) {
 	dir, out, state, o := linkedUser(t)
 	skillDir := oldCopy(t, dir, out, state, "pr-description")
 
-	ro := filepath.Join(out, "crewfile-build")
+	ro := filepath.Join(out, "crew-build")
 	must(t, os.RemoveAll(ro))
 	must(t, os.MkdirAll(ro, 0o555)) // a later write fails, standing in for any I/O error
 	if err := build.Apply(state, compile(t, dir, o)); err == nil {
@@ -90,7 +90,7 @@ func TestStaleRecordUnderLinkIsForgotten(t *testing.T) {
 	lstatLink(t, link)
 }
 
-// Review finding 2: --force can't replace a folder holding files crewfile
+// Review finding 2: --force can't replace a folder holding files crew
 // doesn't own, so it must say so up front instead of failing halfway.
 func TestForceDoesNotReplaceForeignFolder(t *testing.T) {
 	dir, out, state, o := linkedUser(t)
