@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// SeedStateForTest records files as written by crewfile, the way an older
+// SeedStateForTest records files as written by crew, the way an older
 // copy-based compile would have.
 func SeedStateForTest(t *testing.T, statePath string, files map[string][]byte) {
 	t.Helper()

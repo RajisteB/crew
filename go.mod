@@ -1,4 +1,4 @@
-module github.com/crewfile-dev/crewfile
+module github.com/crewfile-dev/crew
 
 go 1.22
 

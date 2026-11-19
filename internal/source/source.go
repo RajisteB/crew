@@ -22,7 +22,9 @@ import (
 const (
 	AgentsDir    = "agents"
 	SkillsDir    = "skills"
-	WorkflowsDir = "workflows"
+	FactoriesDir = "factories"
+	// LegacyWorkflowsDir is the old name of factories/; verify points it out.
+	LegacyWorkflowsDir = "workflows"
 	// SkillFile is the one file inside each skills/<name>/ folder.
 	SkillFile = "SKILL.md"
 	// CapAll grants every capability and tells harnesses to inherit their full tool set.
@@ -92,10 +94,10 @@ type Skill struct {
 	Description string `yaml:"description"`
 
 	Body string `yaml:"-"`
-	Path string `yaml:"-"` // skills/<name>/SKILL.md, relative to the crewfile dir
+	Path string `yaml:"-"` // skills/<name>/SKILL.md, relative to the crew dir
 }
 
-// Dir is the skill's folder relative to the crewfile dir.
+// Dir is the skill's folder relative to the crew dir.
 func (s Skill) Dir() string { return filepath.Dir(s.Path) }
 
 // FileError ties a problem to the source file it came from.
@@ -146,15 +148,6 @@ func LoadSkills(root string) ([]Skill, []error) {
 		out = append(out, s)
 	}
 	return out, errs
-}
-
-// ListWorkflows returns workflow files so verify can say they're ignored (MVP).
-func ListWorkflows(root string) []string {
-	files, _ := listMarkdown(filepath.Join(root, WorkflowsDir))
-	for i, f := range files {
-		files[i] = rel(root, f)
-	}
-	return files
 }
 
 // StrayEntries returns anything in dir that isn't a top-level .md file

@@ -56,7 +56,7 @@ func StatePath(dir string, o Opts) string {
 		abs, _ := filepath.Abs(o.Out)
 		key += "-out-" + short(abs)
 	}
-	return filepath.Join(dir, ".crewfile", "state."+key+".json")
+	return filepath.Join(dir, ".crew", "state."+key+".json")
 }
 
 func short(s string) string {
@@ -131,7 +131,7 @@ const maxDepth = 8
 
 // linkedAncestor returns the first folder between root (exclusive) and path
 // that is a symlink, or "". Writing or deleting below such a folder would
-// reach whatever it points at, for example the crewfile source itself. root
+// reach whatever it points at, for example the crew source itself. root
 // may itself be a link (a symlinked ~/.claude is fine). Records from before
 // roots were tracked have root == ""; for those the walk stops at a folder
 // named skills or agents.

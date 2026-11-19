@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crewfile-dev/crewfile/internal/catalog"
-	"github.com/crewfile-dev/crewfile/internal/config"
+	"github.com/crewfile-dev/crew/internal/catalog"
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 const api = `{

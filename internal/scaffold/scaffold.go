@@ -1,4 +1,4 @@
-// Package scaffold writes a starter crewfile directory.
+// Package scaffold writes a starter crew directory.
 package scaffold
 
 import (

@@ -3,7 +3,7 @@ package config
 // ---------- models.yaml ----------
 
 // Models is the baseline list: every model each harness can run, generated
-// from the catalog (models.dev) by `crewfile models sync`.
+// from the catalog (models.dev) by `crew models sync`.
 type Models struct {
 	Version   int                     `yaml:"version"`
 	Source    string                  `yaml:"source"`

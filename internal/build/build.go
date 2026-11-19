@@ -1,8 +1,8 @@
 // Package build turns a verified project into files for each harness and
 // writes them safely: it only ever overwrites or deletes files it wrote
-// itself (tracked in .crewfile/state.*.json), unless --force is given.
+// itself (tracked in .crew/state.*.json), unless --force is given.
 //
-// In user scope every harness points back at the crewfile directory: each
+// In user scope every harness points back at the crew directory: each
 // skill is a link to skills/<name>/, and each agent is a link to a file
 // generated under build/<harness>/. Skill edits are live; agent edits need a
 // compile. Project scope writes real copies, since a repo can't commit links
@@ -17,8 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crewfile-dev/crewfile/internal/source"
-	"github.com/crewfile-dev/crewfile/internal/verify"
+	"github.com/crewfile-dev/crew/internal/source"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
 type Opts struct {
@@ -52,7 +52,7 @@ func (f File) want() string {
 // BuildDir is where generated agent files live in user scope.
 func BuildDir(crewDir string, o Opts) string {
 	if o.Out != "" {
-		return filepath.Join(o.Out, "crewfile-build")
+		return filepath.Join(o.Out, "crew-build")
 	}
 	return filepath.Join(crewDir, "build")
 }

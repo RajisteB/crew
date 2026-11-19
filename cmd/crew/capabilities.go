@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/crewfile-dev/crewfile/internal/config"
-	"github.com/crewfile-dev/crewfile/internal/source"
+	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/source"
 )
 
 const notAvailable = "— not available"
@@ -87,7 +87,7 @@ func capabilityHarnesses(dir string, reg *config.Registry, f flags) ([]string, e
 			out = append(out, hn)
 		}
 	} else {
-		lo, err := config.LoadCrewfile(dir)
+		lo, err := config.LoadCrew(dir)
 		if err != nil {
 			return nil, err
 		}

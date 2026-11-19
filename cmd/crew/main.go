@@ -1,13 +1,13 @@
-// Command crewfile compiles harness-agnostic agents and skills into the native
+// Command crew compiles harness-agnostic agents and skills into the native
 // formats of Claude Code, Codex, OpenCode, Gemini CLI, Cursor, etc.
 //
-//	crewfile init     [--dir D]
-//	crewfile verify   [--dir D] [-v] [--allow-warnings]
-//	crewfile models   [--dir D] [--harness H | --all]
-//	crewfile models sync [--dir D]
-//	crewfile capabilities [--dir D] [--harness H | --all]
-//	crewfile plan     [--dir D] [scope flags]
-//	crewfile compile  [--dir D] [scope flags] [--dry-run] [--force] [--allow-warnings]
+//	crew init     [--dir D]
+//	crew verify   [--dir D] [-v] [--allow-warnings]
+//	crew models   [--dir D] [--harness H | --all]
+//	crew models sync [--dir D]
+//	crew capabilities [--dir D] [--harness H | --all]
+//	crew plan     [--dir D] [scope flags]
+//	crew compile  [--dir D] [scope flags] [--dry-run] [--force] [--allow-warnings]
 package main
 
 import (
@@ -19,22 +19,22 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/crewfile-dev/crewfile/internal/build"
-	"github.com/crewfile-dev/crewfile/internal/config"
-	"github.com/crewfile-dev/crewfile/internal/scaffold"
-	"github.com/crewfile-dev/crewfile/internal/verify"
+	"github.com/crewfile-dev/crew/internal/build"
+	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/scaffold"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
-const usage = `crewfile — compile agents and skills across AI coding harnesses
+const usage = `crew — compile agents and skills across AI coding harnesses
 
 Usage:
-  crewfile init     [--dir D]                 scaffold a crewfile directory
-  crewfile verify   [--dir D] [-v]            strict check of config + sources
-  crewfile models   [--harness H | --all]     list every model + effort each harness can run
-  crewfile models sync                        refresh models.yaml from the catalog (models.dev)
-  crewfile capabilities [--harness H | --all] which native tools each capability becomes
-  crewfile plan     [--dir D] [scope flags]   show what each harness gets, models, costs, notes, file changes
-  crewfile compile  [--dir D] [scope flags]   verify, then write files
+  crew init     [--dir D]                 scaffold a crew directory
+  crew verify   [--dir D] [-v]            strict check of config + sources
+  crew models   [--harness H | --all]     list every model + effort each harness can run
+  crew models sync                        refresh models.yaml from the catalog (models.dev)
+  crew capabilities [--harness H | --all] which native tools each capability becomes
+  crew plan     [--dir D] [scope flags]   show what each harness gets, models, costs, notes, file changes
+  crew compile  [--dir D] [scope flags]   verify, then write files
 
 Scope flags:
   --scope user|project   write to ~/... (default) or into a project's dot-dirs
@@ -43,12 +43,12 @@ Scope flags:
 
 Other flags:
   --dry-run              (compile) show actions without writing
-  --force                (compile) overwrite/delete files crewfile doesn't own or that were hand-edited
+  --force                (compile) overwrite/delete files crew doesn't own or that were hand-edited
   --allow-warnings       don't fail on warnings (errors still fail)
   -v                     also print info notes
 
-Directory resolution: --dir, then $CREWFILE_HOME, then the current directory if it
-contains crewfile.yaml, then ~/crewfile.
+Directory resolution: --dir, then $CREW_HOME, then the current directory if it
+contains crew.yaml, then ~/crew.
 `
 
 type flags struct {
@@ -71,7 +71,7 @@ func main() {
 	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	var f flags
-	fs.StringVar(&f.dir, "dir", "", "crewfile directory")
+	fs.StringVar(&f.dir, "dir", "", "crew directory")
 	fs.StringVar(&f.scope, "scope", "user", "user or project")
 	fs.StringVar(&f.project, "project", "", "project root (scope=project)")
 	fs.StringVar(&f.out, "out", "", "staging directory")
@@ -103,7 +103,7 @@ func main() {
 		if err != nil {
 			fail(1, "%v", err)
 		}
-		fmt.Printf("created %d files in %s\nnext: cd %s && crewfile verify && crewfile plan\n", len(created), dir, dir)
+		fmt.Printf("created %d files in %s\nnext: cd %s && crew verify && crew plan\n", len(created), dir, dir)
 	case "capabilities":
 		runCapabilities(dir, f)
 	case "models":
@@ -259,11 +259,11 @@ func resolveDir(flagDir string, forInit bool) (string, error) {
 	if flagDir != "" {
 		return pick(flagDir)
 	}
-	if env := os.Getenv("CREWFILE_HOME"); env != "" {
+	if env := os.Getenv("CREW_HOME"); env != "" {
 		return pick(env)
 	}
 	if !forInit {
-		if _, err := os.Stat(config.CrewfileFile); err == nil {
+		if _, err := os.Stat(config.CrewFile); err == nil {
 			return pick(".")
 		}
 	}
@@ -271,7 +271,7 @@ func resolveDir(flagDir string, forInit bool) (string, error) {
 	if err != nil {
 		return "", errors.New("can't find home directory; pass --dir")
 	}
-	return filepath.Join(home, "crewfile"), nil
+	return filepath.Join(home, "crew"), nil
 }
 
 func expand(p string) string {
@@ -284,6 +284,6 @@ func expand(p string) string {
 }
 
 func fail(code int, f string, a ...any) {
-	fmt.Fprintf(os.Stderr, "crewfile: "+f+"\n", a...)
+	fmt.Fprintf(os.Stderr, "crew: "+f+"\n", a...)
 	os.Exit(code)
 }

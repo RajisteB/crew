@@ -98,7 +98,7 @@ func write(f File) error {
 
 // linkAtomic points path at target. An existing file or link is replaced
 // atomically; an existing folder must already be empty apart from OS junk
-// (Diff checked that it only held crewfile's own copies, deleted first).
+// (Diff checked that it only held crew's own copies, deleted first).
 func linkAtomic(path, target string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -126,7 +126,7 @@ func tempLink(dir, target string) (string, error) {
 		if _, err := rand.Read(b[:]); err != nil {
 			return "", err
 		}
-		tmp := filepath.Join(dir, ".crewfile-link-"+hex.EncodeToString(b[:]))
+		tmp := filepath.Join(dir, ".crew-link-"+hex.EncodeToString(b[:]))
 		err := os.Symlink(target, tmp)
 		if err == nil {
 			return tmp, nil
@@ -186,7 +186,7 @@ func writeAtomic(path string, content []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".crewfile-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".crew-*")
 	if err != nil {
 		return err
 	}

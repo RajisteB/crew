@@ -1,18 +1,19 @@
-// Package verify loads a crewfile directory and checks it strictly. It never
+// Package verify loads a crew directory and checks it strictly. It never
 // stops at the first problem: every issue is collected so one run shows
 // everything that needs fixing.
 package verify
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/crewfile-dev/crewfile/internal/config"
-	"github.com/crewfile-dev/crewfile/internal/source"
+	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/source"
 )
 
 type Level int
@@ -74,7 +75,7 @@ type Project struct {
 	Dir      string
 	Registry *config.Registry
 	Models   *config.Models
-	Crewfile *config.Crewfile
+	Crew     *config.Crew
 	Agents   []source.Agent
 	Skills   []source.Skill
 	// Enabled harness names, sorted.
@@ -96,22 +97,22 @@ func Run(dir string) (*Project, *Report) {
 	if err != nil {
 		rep.errf(config.RegistryFile, "%v", err)
 	}
-	lo, err := config.LoadCrewfile(dir)
+	lo, err := config.LoadCrew(dir)
 	if err != nil {
-		rep.errf(config.CrewfileFile, "%v", err)
+		rep.errf(config.CrewFile, "%v", err)
 	}
 	// models.yaml is only needed when some harness picks models from a catalog.
 	// When it's missing, every other check still runs; model lookups are skipped.
 	models := &config.Models{}
 	if reg != nil && usesCatalog(reg) {
 		if m, err := config.LoadModels(dir); err != nil {
-			rep.errf(config.ModelsFile, "%v (run `crewfile models sync` to create it)", err)
+			rep.errf(config.ModelsFile, "%v (run `crew models sync` to create it)", err)
 			models = nil
 		} else {
 			models = m
 		}
 	}
-	p.Registry, p.Crewfile, p.Models = reg, lo, models
+	p.Registry, p.Crew, p.Models = reg, lo, models
 
 	agents, errs := source.LoadAgents(dir)
 	for _, e := range errs {
@@ -129,8 +130,8 @@ func Run(dir string) (*Project, *Report) {
 	for _, li := range source.SkillLayoutIssues(dir) {
 		rep.errf(li.Path, "%s", li.Msg)
 	}
-	for _, w := range source.ListWorkflows(dir) {
-		rep.infof(w, "workflows are not compiled yet (MVP); ignored")
+	if fi, err := os.Stat(filepath.Join(dir, source.LegacyWorkflowsDir)); err == nil && fi.IsDir() {
+		rep.infof(source.LegacyWorkflowsDir+"/", "workflows/ is now factories/; move your files there")
 	}
 
 	if reg == nil || lo == nil {
@@ -142,7 +143,7 @@ func Run(dir string) (*Project, *Report) {
 		checkModels(reg, models, rep)
 	}
 	checkSources(p, rep)
-	checkCrewfile(p, rep)
+	checkCrew(p, rep)
 	return p, rep
 }
 
@@ -375,7 +376,7 @@ func checkModels(r *config.Registry, m *config.Models, rep *Report) {
 		rep.errf(w, "fetched must be a YYYY-MM-DD date (got %q)", m.Fetched)
 	} else if r.StaleAfterDays > 0 {
 		if age := int(Now().Sub(v).Hours() / 24); age > r.StaleAfterDays {
-			rep.warnf(w, "model list is %d days old (limit %d): run `crewfile models sync`", age, r.StaleAfterDays)
+			rep.warnf(w, "model list is %d days old (limit %d): run `crew models sync`", age, r.StaleAfterDays)
 		}
 	}
 	for _, hn := range sortedKeys(r.Harnesses) {
@@ -383,13 +384,13 @@ func checkModels(r *config.Registry, m *config.Models, rep *Report) {
 			continue
 		}
 		if len(m.Harnesses[hn]) == 0 {
-			rep.errf(w, "no models listed for %s: run `crewfile models sync`", hn)
+			rep.errf(w, "no models listed for %s: run `crew models sync`", hn)
 		}
 	}
 	for _, hn := range sortedKeys(m.Harnesses) {
 		h, ok := r.Harnesses[hn]
 		if !ok || h.Catalog == nil {
-			rep.warnf(w, "lists models for %q, which has no catalog in %s: run `crewfile models sync`", hn, config.RegistryFile)
+			rep.warnf(w, "lists models for %q, which has no catalog in %s: run `crew models sync`", hn, config.RegistryFile)
 		}
 		seen := map[string]bool{}
 		for _, e := range m.Harnesses[hn] {
@@ -419,7 +420,7 @@ func checkSources(p *Project, rep *Report) {
 			rep.errf(a.Path, "name %q is also used by a skill; keep names unique across agents and skills", a.Name)
 		}
 		if a.Model == "" {
-			rep.errf(a.Path, "model is required: an id from %s (see `crewfile models`) or %q", config.ModelsFile, source.ModelInherit)
+			rep.errf(a.Path, "model is required: an id from %s (see `crew models`) or %q", config.ModelsFile, source.ModelInherit)
 		}
 		for _, hn := range sortedKeys(a.PerHarness) {
 			if _, ok := r.Harnesses[hn]; !ok {
@@ -486,11 +487,11 @@ func checkCommon(rep *Report, path, name, desc, body string) {
 	}
 }
 
-// ---------------- crewfile ----------------
+// ---------------- crew ----------------
 
-func checkCrewfile(p *Project, rep *Report) {
-	const w = config.CrewfileFile
-	r, lo := p.Registry, p.Crewfile
+func checkCrew(p *Project, rep *Report) {
+	const w = config.CrewFile
+	r, lo := p.Registry, p.Crew
 	if lo.Version != config.SchemaVersion {
 		rep.errf(w, "version must be %d (got %d)", config.SchemaVersion, lo.Version)
 	}
@@ -585,7 +586,7 @@ func resolveModel(rep *Report, models *config.Models, hn string, h config.Harnes
 			rep.infof(a.Path, "[%s] %s can't set an effort without a model; effort %q is ignored", hn, h.Display, c.Effort)
 			sel.Effort = ""
 		} else if models != nil && h.Catalog != nil && !anyModelAccepts(models.Harnesses[hn], c.Effort) {
-			rep.errf(a.Path, "[%s] effort %q isn't accepted by any %s model (see `crewfile models --harness %s`)", hn, c.Effort, h.Display, hn)
+			rep.errf(a.Path, "[%s] effort %q isn't accepted by any %s model (see `crew models --harness %s`)", hn, c.Effort, h.Display, hn)
 		}
 		return sel
 	case h.Catalog == nil:
@@ -601,7 +602,7 @@ func resolveModel(rep *Report, models *config.Models, hn string, h config.Harnes
 	}
 	e, ok := models.Find(hn, c.Model)
 	if !ok {
-		rep.errf(a.Path, "[%s] model %q isn't available in %s; pick one from `crewfile models --harness %s` (set it under per_harness.%s if other harnesses use a different model)",
+		rep.errf(a.Path, "[%s] model %q isn't available in %s; pick one from `crew models --harness %s` (set it under per_harness.%s if other harnesses use a different model)",
 			hn, c.Model, h.Display, hn, hn)
 		return sel
 	}
@@ -625,7 +626,7 @@ func noteMissingTools(rep *Report, r *config.Registry, hn string, h config.Harne
 	}
 	for _, c := range a.Capabilities {
 		if len(h.Capabilities[c]) == 0 {
-			rep.infof(a.Path, "[%s] %s has no %s tool, so it's dropped there (see `crewfile capabilities`)", hn, c, h.Display)
+			rep.infof(a.Path, "[%s] %s has no %s tool, so it's dropped there (see `crew capabilities`)", hn, c, h.Display)
 		}
 	}
 }
