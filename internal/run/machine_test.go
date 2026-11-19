@@ -264,3 +264,19 @@ func TestMachine_DoesNotMutateInput(t *testing.T) {
 		t.Fatalf("input state mutated:\n got %+v\nwant %+v", s, orig)
 	}
 }
+
+func TestGoto_ReopensStoppedRun(t *testing.T) {
+	f := shipChange()
+	failed, _ := walk(t, f, "ready", "fail")
+	s, err := run.Goto(f, failed, "plan")
+	if err != nil || s.Status != run.StatusInterrupted || s.Current != "plan" {
+		t.Fatalf("goto on failed run: %+v %v", s, err)
+	}
+	if _, d := run.Resume(f, s); d.Kind != run.RunStation || d.Station != "plan" {
+		t.Fatalf("resume after goto = %+v", d)
+	}
+	live, _ := walk(t, f, "ready")
+	if s, _ := run.Goto(f, live, "review"); s.Status != run.StatusRunning {
+		t.Fatalf("goto on a running run must keep it running: %+v", s)
+	}
+}
