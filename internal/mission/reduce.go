@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/gh"
@@ -45,6 +46,7 @@ func SentBackDone(s State, piece, reason, problem string) State {
 		}
 		p.SentBack[reason]++
 		p.Status, p.Wait = PieceRunning, nil
+		p.GreenSince = time.Time{}
 		p.Problem = string([]rune(problem)[:min(len([]rune(problem)), maxProblemRunes)])
 	})
 }
@@ -56,12 +58,16 @@ func PROpened(s State, piece string, pr gh.PR, head string, now time.Time) State
 	return update(s, piece, func(p *PieceState) {
 		p.PR, p.PRURL, p.Status = pr.Number, pr.URL, PiecePROpen
 		p.Head, p.PRSince = head, now
+		p.GreenSince = time.Time{}
 	})
 }
 
 // BranchUpdated records a new head crew pushed to the piece's pull request.
 func BranchUpdated(s State, piece, head string, now time.Time) State {
-	return update(s, piece, func(p *PieceState) { p.Head, p.PRSince = head, now })
+	return update(s, piece, func(p *PieceState) {
+		p.Head, p.PRSince = head, now
+		p.GreenSince = time.Time{}
+	})
 }
 
 // Merged records that the piece's pull request was merged.
@@ -79,4 +85,27 @@ func Asked(s State, piece string) State {
 // CleanedUp records that the piece's worktree was removed.
 func CleanedUp(s State, piece string) State {
 	return update(s, piece, func(p *PieceState) { p.Worktree = "" })
+}
+
+// PRWaits makes a pr-open piece's merge wait say question: it opens a merge
+// wait when the piece holds no wait, and replaces the question of a merge
+// wait it already holds. opened reports whether a new wait was opened. A piece
+// holding another kind of wait, or not pr-open, is returned unchanged.
+func PRWaits(s State, piece, question string, now time.Time) (next State, opened bool) {
+	cur, ok := s.Piece(piece)
+	if !ok || cur.Status != PiecePROpen {
+		return s, false
+	}
+	switch {
+	case cur.Wait == nil:
+		id := fmt.Sprintf("w%d", s.NextWait)
+		next = update(s, piece, func(p *PieceState) {
+			p.Wait = &Wait{ID: id, Kind: WaitMerge, Question: question, Since: now}
+		})
+		next.NextWait++
+		return next, true
+	case cur.Wait.Kind == WaitMerge && cur.Wait.Question != question:
+		return update(s, piece, func(p *PieceState) { p.Wait.Question = question }), false
+	}
+	return s, false
 }

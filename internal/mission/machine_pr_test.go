@@ -23,6 +23,9 @@ func prCase(since time.Duration, mode principal.AutoMode, checks ...gh.Check) (M
 	return m, s, o
 }
 
+// settled marks the piece's checks as green for two minutes already.
+func settled(s *State) { s.Pieces[0].GreenSince = t0.Add(-2 * checksSettle) }
+
 func chk(state string) gh.Check {
 	return gh.Check{Name: "ci-" + state, State: state, URL: "http://x/" + state}
 }
@@ -62,6 +65,7 @@ func TestDecide_OffOpensMergeWaitOnce(t *testing.T) {
 
 func TestDecide_OnMergesWhenChecksPass(t *testing.T) {
 	m, s, o := prCase(time.Minute, principal.AutoOn, chk("pass"), chk("skip"))
+	settled(&s)
 	s1, as := decide(m, s, o)
 	got := of[Merge](as)
 	if len(got) != 1 || got[0] != (Merge{Piece: "a", Head: "abc", Checked: true}) {
@@ -86,6 +90,7 @@ func TestDecide_OnHoldsWhilePending(t *testing.T) {
 		t.Fatalf("wait = %+v", w)
 	}
 	o = withPR(o, func(p *gh.PR) { p.Checks = []gh.Check{chk("pass")} })
+	settled(&s1)
 	_, as = decide(m, s1, o)
 	if len(of[Merge](as)) != 1 {
 		t.Fatalf("want merge with wait held, got %#v", as)
@@ -138,13 +143,16 @@ func TestDecide_WithoutChecksMergesAtOnce(t *testing.T) {
 func TestDecide_HeadMismatchNeverMerges(t *testing.T) {
 	for _, tc := range []struct {
 		name string
+		want string
 		edit func(*State, *Obs)
 	}{
-		{"other head", func(s *State, o *Obs) { *o = withPR(*o, func(p *gh.PR) { p.HeadSHA = "zzz" }) }},
-		{"empty head", func(s *State, o *Obs) {
-			s.Pieces[0].Head = ""
-			*o = withPR(*o, func(p *gh.PR) { p.HeadSHA = "" })
-		}},
+		{"other head", "PR #7 (a) has commits crew didn't push, so crew won't merge it; it is waiting on you",
+			func(s *State, o *Obs) { *o = withPR(*o, func(p *gh.PR) { p.HeadSHA = "zzz" }) }},
+		{"empty head", "PR #7 (a) was opened before crew recorded what it pushed, so crew won't merge it; it is waiting on you",
+			func(s *State, o *Obs) {
+				s.Pieces[0].Head = ""
+				*o = withPR(*o, func(p *gh.PR) { p.HeadSHA = "" })
+			}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, s, o := prCase(time.Minute, principal.AutoOn, chk("pass"))
@@ -154,8 +162,7 @@ func TestDecide_HeadMismatchNeverMerges(t *testing.T) {
 			m, s, o = prCase(3*time.Minute, principal.AutoOn, chk("pass"))
 			tc.edit(&s, &o)
 			s1, as = decide(m, s, o)
-			want := "PR #7 (a) has commits crew didn't push, so crew won't merge it; it is waiting on you"
-			if w := piece(t, s1, "a").Wait; w == nil || w.Question != want {
+			if w := piece(t, s1, "a").Wait; w == nil || w.Question != tc.want {
 				t.Fatalf("wait = %+v", w)
 			}
 			if len(of[Merge](as)) != 0 {

@@ -17,6 +17,8 @@ var oldSince = testNow.Add(-time.Hour)
 
 // prHarness puts P1 in pr-open (PR #1, head h1, pushed an hour ago), with the
 // pull request observed as open and mergeable, the product switch set to mode.
+// The checks have already been green for two minutes, so a passing PR merges on
+// the first tick.
 func prHarness(t *testing.T, mode principal.AutoMode, checks ...gh.Check) *harness {
 	t.Helper()
 	h := newHarness(t)
@@ -24,6 +26,7 @@ func prHarness(t *testing.T, mode principal.AutoMode, checks ...gh.Check) *harne
 	h.edit(func(s *State) {
 		p := &s.Pieces[0]
 		p.Status, p.PR, p.Head, p.PRSince = PiecePROpen, 1, "h1", oldSince
+		p.GreenSince = testNow.Add(-2 * checksSettle)
 	})
 	h.git.head = "h1"
 	h.gh.prs[1] = gh.PR{Number: 1, State: "OPEN", Mergeable: "MERGEABLE", HeadSHA: "h1", Checks: checks}

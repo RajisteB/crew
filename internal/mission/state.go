@@ -64,22 +64,23 @@ type Decision struct {
 
 // PieceState is one piece's progress.
 type PieceState struct {
-	ID        string         `json:"id"`
-	Status    PieceStatus    `json:"status"`
-	RunID     string         `json:"run_id,omitempty"`
-	Branch    string         `json:"branch,omitempty"`
-	Worktree  string         `json:"worktree,omitempty"`
-	PR        int            `json:"pr,omitempty"`
-	PRURL     string         `json:"pr_url,omitempty"`
-	Resumes   int            `json:"resumes,omitempty"`
-	Calls     int            `json:"calls,omitempty"`
-	SentBack  map[string]int `json:"sent_back,omitempty"` // reason -> times
-	Decisions []Decision     `json:"decisions,omitempty"`
-	Wait      *Wait          `json:"wait,omitempty"`
-	Added     bool           `json:"added,omitempty"`
-	Head      string         `json:"head,omitempty"`     // the commit crew pushed to the pull request
-	PRSince   time.Time      `json:"pr_since,omitempty"` // when crew last pushed that head
-	Problem   string         `json:"problem,omitempty"`  // why the piece was last sent back from its pull request: names only, at most 300 runes
+	ID         string         `json:"id"`
+	Status     PieceStatus    `json:"status"`
+	RunID      string         `json:"run_id,omitempty"`
+	Branch     string         `json:"branch,omitempty"`
+	Worktree   string         `json:"worktree,omitempty"`
+	PR         int            `json:"pr,omitempty"`
+	PRURL      string         `json:"pr_url,omitempty"`
+	Resumes    int            `json:"resumes,omitempty"`
+	Calls      int            `json:"calls,omitempty"`
+	SentBack   map[string]int `json:"sent_back,omitempty"` // reason -> times
+	Decisions  []Decision     `json:"decisions,omitempty"`
+	Wait       *Wait          `json:"wait,omitempty"`
+	Added      bool           `json:"added,omitempty"`
+	Head       string         `json:"head,omitempty"`        // the commit crew pushed to the pull request
+	PRSince    time.Time      `json:"pr_since,omitempty"`    // when crew last pushed that head
+	GreenSince time.Time      `json:"green_since,omitempty"` // when crew first saw this head with its checks all green
+	Problem    string         `json:"problem,omitempty"`     // why the piece was last sent back from its pull request: names only, at most 300 runes
 }
 
 // State is state.json. It holds ids, counts and short messages only: never

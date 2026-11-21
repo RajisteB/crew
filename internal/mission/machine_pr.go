@@ -12,6 +12,7 @@ import (
 const (
 	checksGrace    = 2 * time.Minute  // how long a new head may show no checks
 	checksPatience = 30 * time.Minute // how long checks may run before the principal is told
+	checksSettle   = 1 * time.Minute  // how long the checks must stay green before crew merges
 	maxPRSendBacks = 2
 	maxFailedShown = 10
 )
@@ -28,6 +29,8 @@ func (d *decider) prOpen(id string) {
 	if d.ended(id, pr) || pr.State != "OPEN" {
 		return
 	}
+	green := p.GreenSince
+	p.GreenSince = time.Time{} // only the rule 12 condition keeps it
 	if p.Wait != nil && (p.Wait.Kind == WaitQuestion || p.Wait.Kind == WaitLimit) {
 		return
 	}
@@ -49,18 +52,21 @@ func (d *decider) prOpen(id string) {
 		d.mergeWait(id, blockerQuestion(pr.Number, id, auto.Blocker))
 	case !ours:
 		if since >= checksGrace {
-			d.mergeWait(id, fmt.Sprintf("PR #%d (%s) has commits crew didn't push, so crew won't merge it; it is waiting on you", pr.Number, id))
+			d.mergeWait(id, notOursQuestion(pr.Number, id, p.Head))
 		}
 	case pr.Mergeable != "MERGEABLE":
+		if since >= checksPatience {
+			d.mergeWait(id, fmt.Sprintf("PR #%d (%s): GitHub hasn't said whether it can be merged after 30m; it is waiting on you", pr.Number, id))
+		}
 	case mode == principal.AutoWithoutChecks:
 		d.add(Merge{Piece: id, Head: p.Head})
 	default:
-		d.byChecks(id, pr, since, pass, fail, pending)
+		d.byChecks(id, pr, since, green, pass, fail, pending)
 	}
 }
 
 // byChecks is rules 10 to 12: mode on, our head, a mergeable pull request.
-func (d *decider) byChecks(id string, pr gh.PR, since time.Duration, pass, fail, pending int) {
+func (d *decider) byChecks(id string, pr gh.PR, since time.Duration, green time.Time, pass, fail, pending int) {
 	switch {
 	case pass+fail+pending == 0:
 		if since >= checksGrace {
@@ -71,8 +77,29 @@ func (d *decider) byChecks(id string, pr gh.PR, since time.Duration, pass, fail,
 			d.mergeWait(id, fmt.Sprintf("PR #%d (%s): checks are still running after 30m; crew merges it when they pass, or merge it yourself", pr.Number, id))
 		}
 	case pass > 0 && fail == 0:
-		d.add(Merge{Piece: id, Head: d.ps(id).Head, Checked: true})
+		d.settle(id, green)
 	}
+}
+
+// settle is rule 12: the checks are green. crew merges once they have been
+// green for checksSettle, counted from the first tick that saw them so.
+func (d *decider) settle(id string, green time.Time) {
+	p := d.ps(id)
+	if green.IsZero() {
+		p.GreenSince = d.o.Now
+		return
+	}
+	p.GreenSince = green
+	if d.o.Now.Sub(green) >= checksSettle {
+		d.add(Merge{Piece: id, Head: p.Head, Checked: true})
+	}
+}
+
+func notOursQuestion(n int, id, head string) string {
+	if head == "" {
+		return fmt.Sprintf("PR #%d (%s) was opened before crew recorded what it pushed, so crew won't merge it; it is waiting on you", n, id)
+	}
+	return fmt.Sprintf("PR #%d (%s) has commits crew didn't push, so crew won't merge it; it is waiting on you", n, id)
 }
 
 // ended handles a merged or closed pull request (rules 1 and 2) and reports
@@ -110,11 +137,16 @@ func (d *decider) failedChecks(id string, checks []gh.Check) {
 	d.ask(id, reasonChecksFailed)
 }
 
-// mergeWait tells the principal the pull request waits on them, unless the
-// piece already holds a wait.
+// mergeWait tells the principal the pull request waits on them. A merge wait
+// the piece already holds keeps its place and takes the new question; any other
+// wait is left alone.
 func (d *decider) mergeWait(id, question string) {
-	if d.ps(id).Wait == nil {
+	p := d.ps(id)
+	switch {
+	case p.Wait == nil:
 		d.wait(id, WaitMerge, question, "")
+	case p.Wait.Kind == WaitMerge && p.Wait.Question != question:
+		p.Wait.Question = question
 	}
 }
 
