@@ -1,6 +1,6 @@
 # Orchestrator, domains and missions: design
 
-Status: **revised after review** · drafted 2026-11-18 · revised 2026-11-21 · builds on [factories](2026-11-18-factories-design.md)
+Status: **approved 2026-11-21** · drafted 2026-11-18 · revised 2026-11-21 · builds on [factories](2026-11-18-factories-design.md)
 
 ## Intent
 
@@ -34,6 +34,7 @@ The model is an organization, not a pipeline:
 - **Work that isn't code is a first-class outcome.** A piece can end in a deliverable instead of, or as well as, a PR.
 - **Every piece is a Jira issue, assigned to the principal,** so the whole mission shows on their board and moves across it as it runs.
 - **Auto-merge that works unattended, set per domain.** A switch for each domain in each repo, set only by the principal, so code can merge on its own while design still waits for them. With it on, crew merges each PR once its checks pass and accepts each deliverable once it is posted.
+- **The principal decides, once per repo, whether crew may push to it,** knowing whether it is public or private.
 - **The principal can always see what is waiting on them**, and is told when something starts waiting.
 - **Nothing is lost when a session or the engine dies.** Mission state is on disk and a mission can be resumed.
 - **Problems go to the nearest manager first:** a scoped orchestrator, then the main one, then the principal.
@@ -69,7 +70,7 @@ Three layers, all required:
 1. **crew is the only thing that merges or releases.** No agent prompt asks an agent to do either.
 2. **Session rules.** crew already launches each station with a tool allowlist built from its agent's capabilities. This design adds a deny list to every session crew starts, the same way the user's story-orchestrator does (`--settings` with deny rules, no permission prompts):
    - merging or closing a PR, pushing to `main`, force-pushing
-   - any `crew automerge` or `crew release approve` command
+   - any `crew automerge`, `crew repo confirm` or `crew release approve` command
    - for stations and scoped orchestrators, every `crew run` and `crew mission` command, so a station can't pass an approval stop or answer for the principal
    - writing anywhere in `~/crew`
    - writing to Jira, which crew does itself
@@ -78,7 +79,7 @@ Three layers, all required:
    Scoped orchestrators get read tools only. The main orchestrator's shell is limited to `crew` commands where the harness can express that. A harness that can't apply deny rules can't run mission pieces; `crew verify` says which can.
 
    **The session the principal talks to is started by the principal, not by crew.** `crew compile` writes the orchestrator's rules next to the agent, and the launch line crew prints includes them. Started any other way, that session has only its tool list and its prompt.
-3. **Principal-only commands.** `crew automerge` and `crew release approve` need an interactive terminal and a typed confirmation, with no flag and no piped input that skips it. A pseudo-terminal can fake this, which is why layer 2 also denies the commands.
+3. **Principal-only commands.** `crew automerge`, `crew repo confirm` and `crew release approve` need an interactive terminal and a typed confirmation, with no flag and no piped input that skips it. A pseudo-terminal can fake this, which is why layer 2 also denies the commands.
 
 A real boundary would need agents to run under a separate identity (another OS user, or a GitHub account that can't merge). That is out of scope here and is revisited in Project 2, where money moves.
 
@@ -156,11 +157,20 @@ crew refuses the mission unless all of these hold:
 - every harness the pieces need can apply deny rules
 - the repo has a GitHub remote and `gh` is logged in
 - no piece's factory watches folders outside the repo
+- the principal has confirmed this repo, and its visibility is still what they confirmed
 
 crew then adjusts and reports:
 
 - **Overlapping paths.** If two pieces that could run together have paths that intersect, crew makes the later one wait for the earlier one and says so. A piece with no paths can't be checked, and crew warns about it.
-- **Public repo.** If the repo is public, crew says that piece branches and PRs will be visible.
+
+### Repo confirmation
+
+Whether crew may push to a repo is the principal's decision, made once per repo before its first mission.
+
+- **The command.** `crew repo confirm`, in a terminal, with a typed confirmation. crew shows whether the repo is **public or private**, its remote, and what missions will push there: piece branches and PRs.
+- **What is recorded.** The answer and the visibility it was given for, in `~/crew`, with a fingerprint like the switch's.
+- **If the visibility later changes,** for example a private repo is made public, crew stops pushing in that repo and asks for the confirmation again.
+- **No session can run it.** It is on the deny list and needs a terminal.
 
 ### Mission approval
 
@@ -390,7 +400,7 @@ crew merges rather than rebases, so it never needs a force-push. A piece with no
 
 The repo `acme` holds `app/`, `site/`, `ads/` and `brand/`. Three domains are defined: product, design and marketing. The request: *"Launch referrals: $10 credit per invited friend who signs up, plus a landing page and an ad campaign."*
 
-The plan is the same in both:
+The principal has already run `crew repo confirm` in `acme`, which is private. The plan is the same in both:
 
 - P1: product, credits API, `app/api/**`
 - P2: product, invite screen, `app/ui/**`, waits for P1
@@ -427,7 +437,7 @@ The plan is the same in both:
 
 **Project 1,** in stages that each work on their own:
 
-1. **Missions, one piece at a time.** Domains, the `orchestrator` agent, the mission file and its checks, mission approval, the engine (state, events, stop, resume), session deny rules, worktrees, one PR per piece, waiting for the principal's merge, status, notifications, exceptions with the fixed summary. Concurrency is 1. Foremen still exist.
+1. **Missions, one piece at a time.** Domains, the `orchestrator` agent, the mission file and its checks, mission approval, the engine (state, events, stop, resume), session deny rules, the repo confirmation, worktrees, one PR per piece, waiting for the principal's merge, status, notifications, exceptions with the fixed summary. Concurrency is 1. Foremen still exist.
 2. **Auto-merge.** The switch, check watching, merging, conflict handling.
 3. **The Jira board and deliverables.** The epic and issues, assignment, statuses, comments, queued writes, deliverables and accepting them.
 4. **Parallel pieces.** Concurrency above 1, the overlap check, the path check, budgets.
@@ -451,7 +461,7 @@ Planning quality can't be unit-tested, so the repo keeps **golden missions**: a 
 5. **Context is lost at each delegation hop.** Passing the request down word for word reduces this.
 6. **Wrong domain picks** depend on how clearly domain descriptions are written. Golden missions are the check.
 7. **Whether an added piece really serves the request is still the orchestrator's judgment.** It is capped, quoted, logged and notified, not prevented.
-8. **Pushing publishes in a public repo.** crew warns at mission start and does nothing more.
+8. **Pushing publishes in a public repo.** The principal confirms each repo once and crew checks its visibility hasn't changed. After that, every piece branch in a public repo is public.
 9. **Answers given through the orchestrator are relayed by an agent.** They are recorded word for word, but nothing proves the principal said them.
 10. **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 11. **A reboot stops a mission** until someone runs status or opens a session.
