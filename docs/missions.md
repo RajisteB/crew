@@ -26,11 +26,12 @@ Stage 1 does not merge for you, does not write to Jira, and does not run pieces 
 
 ### A new crew directory
 
-`crew init` already writes `missions.yaml` and an empty `domains/` folder. You need three more things:
+`crew init` already writes `missions.yaml` and an empty `domains/` folder. You need four more things:
 
 1. A domain.
 2. A harness that can apply deny rules (the default `claude-code` entry can).
 3. A confirmation of the repo, once.
+4. A run of `crew compile`, which writes the orchestrator agent and its settings file (see "Launching the orchestrator").
 
 ### An existing crew directory
 
@@ -92,7 +93,7 @@ Next to `foreman:`, add the `deny:` block:
 
 The two path rules start with `/{crew_dir}/**` because Claude Code reads a path with one leading slash as relative to the settings file, and a path with two leading slashes as absolute. `{crew_dir}` is already an absolute path that starts with a slash, so writing one slash in front of it gives the two you need.
 
-Run `crew verify` afterwards. The note about your harness should be gone.
+Run `crew verify` afterwards. The note about your harness should be gone. Then run `crew compile`, which writes the orchestrator agent and the settings file with its deny rules; `crew verify` only prints the launch line.
 
 ### A domain
 
@@ -107,7 +108,13 @@ factories: [ship-change]
 Use the existing component library. Keep changes small.
 ```
 
-The body is the briefing: every piece in this domain gets it as part of its input. The orchestrator picks domains by their `description`, so write it as the sentence that tells it when to choose this domain. If the description contains a colon, put it in quotes, because the frontmatter is YAML.
+The body is the briefing: every piece in this domain gets it as part of its input. The orchestrator picks domains by their `description`, so write it as the sentence that tells it when to choose this domain. The frontmatter is YAML, which breaks on a colon followed by a space and on a space followed by `#`. If your description has either, put it in quotes:
+
+```yaml
+description: "The web front end: pages, components and styling."
+```
+
+Use single quotes when the text itself contains double quotes. The same applies to a piece's `brief:` in a plan.
 
 List what you have:
 
@@ -139,13 +146,14 @@ If the repo's visibility changes later (private to public, say), `start`, `go` a
 `missions.yaml` holds the settings. The ones you are most likely to change:
 
 - `mission_approval: on` makes `start` stop and wait for your `go`. Set it to `off` and `start` begins the mission at once.
+- `limits.runs_at_once` must be `1` for now, and so must any `runs_at_once` under `repos:`. Pieces run one at a time until crew can check that parallel pieces don't touch the same files. Any other value, including `"*"`, makes crew refuse the file with an error like `limits.runs_at_once must be 1 (got "3"): pieces run one at a time until crew can check that parallel pieces don't overlap`.
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
-- `remind_after: 30m` is how long a waiting item goes unanswered before crew notifies you again. The gap doubles each time.
+- `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
 - `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo.
 
 ## Launching the orchestrator
 
-You talk to the orchestrator in your coding tool, started from the line crew prints. `crew verify` and `crew compile` both print it:
+You talk to the orchestrator in your coding tool, started from the line crew prints. `crew compile` writes the orchestrator agent and its settings file, so run it first; `crew verify` and `crew compile` both print the line:
 
 ```
 claude-code:
@@ -183,6 +191,7 @@ pieces:
     domain: web
     factory: ship-change
     brief: Add a /health endpoint.
+    paths: [api/**]
   - id: P2
     domain: web
     factory: ship-change
@@ -192,7 +201,9 @@ pieces:
 Add a health endpoint and show its status on the settings page.
 ```
 
-`crew mission plan` checks it before creating anything: every domain and factory must exist, the factory must be one of that domain's, no piece may wait for itself or for a missing piece, pieces can't wait on each other in a loop, every brief must be filled in, the piece count must be under your limit, and every station's harness must be able to apply deny rules. If anything fails it lists every problem and creates nothing. If the plan passes, it prints the mission id, a table of pieces, a diagram, and the next command:
+A piece's `paths` records where the piece is meant to work. It is optional, and crew doesn't enforce it yet.
+
+`crew mission plan` checks it before creating anything: every domain and factory must exist, the factory must be one of that domain's, no piece may wait for itself or for a missing piece, pieces can't wait on each other in a loop, every brief must be filled in, the piece count must be no more than your limit, and every station's harness must be able to apply deny rules. If anything fails it lists every problem and creates nothing. If the plan passes, it prints the mission id, a table of pieces, a diagram, and the next command:
 
 ```
 mission m-20261121-162953-e991 planned (/home/you/src/app/.crew/missions/m-20261121-162953-e991)
@@ -211,7 +222,7 @@ next: crew mission start m-20261121-162953-e991
 `start` and `go` are two steps on purpose.
 
 - `crew mission start <id>` checks that the plan still passes, that every harness can apply deny rules, and that the repo is confirmed and still has the visibility you confirmed. With `mission_approval: on` it then stops, shows the plan and prints `waiting for go: crew mission go <id>`. With `mission_approval: off` it starts the engine straight away.
-- `crew mission go <id>` is your decision. It works only on a mission that is waiting for go, runs the same checks again (a lot can change between the two commands) and then starts the engine. It also saves a copy of the plan you approved as `approved.md`.
+- `crew mission go <id>` is your decision. It works only on a mission that is waiting for go, runs the same checks again (a lot can change between the two commands) and then starts the engine. It saves a copy of the plan you approved as `approved.md`. (With `mission_approval: off`, `start` saves it, because starting is the approval.)
 
 Either one ends with:
 
@@ -253,7 +264,7 @@ cursor 3
 
 ## What "waiting on you" means
 
-The engine does not guess at anything that needs a person. When it reaches such a point it parks the piece, records a wait with an id (`w1`, `w2`, ...), tells you with a desktop notification (macOS only for now) and shows it under "Waiting on you". If you don't answer, it reminds you after `remind_after`, then after twice as long, and so on.
+The engine does not guess at anything that needs a person. When it reaches such a point it parks the piece, records a wait with an id (`w1`, `w2`, ...), tells you with a desktop notification (macOS only for now) and shows it under "Waiting on you". If you don't answer, it reminds you at `remind_after`, then at twice that, then four times that, all measured from when the item started waiting (with 30 minutes: 30 minutes, 1 hour, 2 hours).
 
 There are five kinds:
 
@@ -296,13 +307,13 @@ crew checks the new plan against the old one first and refuses it, changing noth
 - A new piece reuses an id that was used before in this mission, even one that was cancelled.
 - The new plan fails the same checks `plan` runs.
 
-What an amendment may do: add pieces, change a queued piece (its brief, its domain, its factory, what it waits for), and remove any piece that isn't complete, which cancels it. Every change goes in the mission's change log with your words.
+What an amendment may do: add pieces, change a queued piece (its brief, its domain, its factory, its paths, what it waits for), and remove any piece that isn't complete, which cancels it. Every change goes in the mission's change log with your words.
 
 ## Stop and resume
 
 `crew mission stop <id>` applies to a running mission. It tells the engine to shut down, which interrupts the running pieces' runs where they are. Worktrees and branches stay in place. A mission that hasn't started has nothing to stop, and one that is already stopped or done is left alone.
 
-`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that was started with go, which is to say one with an `approved.md`; a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was.
+`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that has been started, which is to say one with an `approved.md` (written by `go`, or by `start` when approval is off); a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was.
 
 If the engine process crashes, a supervisor restarts it up to three times and records each restart as an event. After that it marks the mission stopped and notifies you. A reboot also ends the engine; run `resume` afterwards.
 
@@ -314,7 +325,7 @@ Everything a mission writes goes in the repo it works on, under `.crew/`. crew w
 <repo>/.crew/
 ├── missions/<mission-id>/
 │   ├── mission.md        the plan and your request, with a change log
-│   ├── approved.md       the plan as it was when you said go
+│   ├── approved.md       the plan as it was when the mission started
 │   ├── state.json        where each piece is
 │   ├── events.jsonl      what happened, one line per event
 │   ├── inbox/            answers and amendments waiting for the engine
