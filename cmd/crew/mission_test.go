@@ -310,6 +310,9 @@ func TestMissionResume_RefusesWhileEngineLive(t *testing.T) {
 	r := newMissionRig(t)
 	id := r.plan()
 	r.edit(id, func(s *mission.State) { s.Status = mission.StatusStopped })
+	if err := r.store(id).SaveApproved(); err != nil {
+		t.Fatal(err)
+	}
 	unlock, err := r.store(id).Lock()
 	if err != nil {
 		t.Fatal(err)

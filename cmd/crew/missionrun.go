@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -164,24 +165,20 @@ func runChild(ctx context.Context, cmd *exec.Cmd) error {
 	return err
 }
 
-// stopAfterCrashes marks a mission stopped once its supervisor has given
-// up. No engine is alive then, so the supervisor may write the state.
+// stopAfterCrashes marks a mission stopped once its supervisor has given up.
 func stopAfterCrashes(store mission.Store) error {
-	if _, live := store.LockedBy(); live {
-		return nil
+	id := filepath.Base(store.Dir)
+	_, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+		if cur.Status != mission.StatusRunning {
+			return cur, mission.Event{}, nil
+		}
+		next := cur.Clone()
+		next.Status = mission.StatusStopped
+		return next, mission.Event{Kind: mission.EvStopped, By: "crew", Msg: "the engine keeps crashing"}, nil
+	})
+	var driven drivenError
+	if errors.As(err, &driven) {
+		return nil // an engine is alive after all; it owns the state
 	}
-	st, err := store.LoadState()
-	if err != nil {
-		return err
-	}
-	if st.Status != mission.StatusRunning {
-		return nil
-	}
-	st = st.Clone()
-	st.Status = mission.StatusStopped
-	if err := store.SaveState(st); err != nil {
-		return err
-	}
-	_, err = store.Emit(mission.Event{Kind: mission.EvStopped, By: "crew", Msg: "the engine keeps crashing"})
 	return err
 }

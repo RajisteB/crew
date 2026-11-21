@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,11 +12,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crewfile-dev/crew/internal/config"
 	"github.com/crewfile-dev/crew/internal/gitx"
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/notify"
 	"github.com/crewfile-dev/crew/internal/principal"
+	"github.com/crewfile-dev/crew/internal/run"
 )
+
+// noStations is a runner that fails the test if any station is run.
+type noStations struct{ t *testing.T }
+
+func (n noStations) Run(context.Context, run.StationRequest) (run.Reply, error) {
+	n.t.Error("a test reached a real station run")
+	return run.Reply{}, errors.New("no stations in tests")
+}
 
 var missionIDRe = regexp.MustCompile(`m-\d{8}-\d{6}-[0-9a-f]{4}`)
 
@@ -44,13 +56,14 @@ func newMissionRig(t *testing.T) *missionRig {
 		t.Fatal(err)
 	}
 	fakeGH(t, "private")
-	oldStart, oldNotifier, oldTick := startDetached, newNotifier, tickEvery
+	oldStart, oldNotifier, oldTick, oldRunner := startDetached, newNotifier, tickEvery, newRunner
+	newRunner = func(*config.Registry) run.Runner { return noStations{t} }
 	startDetached = func(id, dir, project, logPath string) (int, error) {
 		r.starts = append(r.starts, startCall{id, dir, project, logPath})
 		return 4242, r.startErr
 	}
 	newNotifier = func() notify.Notifier { return notify.Nop{} }
-	t.Cleanup(func() { startDetached, newNotifier, tickEvery = oldStart, oldNotifier, oldTick })
+	t.Cleanup(func() { startDetached, newNotifier, tickEvery, newRunner = oldStart, oldNotifier, oldTick, oldRunner })
 	store := principal.Store{Dir: filepath.Join(r.crewDir, "principal")}
 	rec := principal.RepoRecord{Repo: "acme/app", Visibility: "private", ConfirmedAt: time.Now()}
 	if err := store.ConfirmRepo(rec); err != nil {

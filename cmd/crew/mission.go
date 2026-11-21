@@ -239,14 +239,6 @@ func openMission(env missionEnv, id string) (mission.Store, mission.State, error
 	return store, st, err
 }
 
-// requireIdle refuses to write state while a live engine holds the lock.
-func requireIdle(store mission.Store, id string) error {
-	if pid, live := store.LockedBy(); live {
-		return fmt.Errorf("mission %s is being driven (pid %d)", id, pid)
-	}
-	return nil
-}
-
 // startChecks is everything start and resume check before an engine runs.
 func startChecks(env missionEnv, store mission.Store) error {
 	p, err := verifiedProject(env.crewDir, env.out)
@@ -280,9 +272,6 @@ func missionStart(env missionEnv, id string) error {
 	if st.Status != mission.StatusPlanned {
 		return fmt.Errorf("mission %s is %s; only a planned mission can be started", id, st.Status)
 	}
-	if err := requireIdle(store, id); err != nil {
-		return err
-	}
 	if err := startChecks(env, store); err != nil {
 		return err
 	}
@@ -291,11 +280,21 @@ func missionStart(env missionEnv, id string) error {
 		return err
 	}
 	if settings.Approval != "on" {
-		return launchMission(env, store, st)
+		return launchMission(env, store, id, mission.StatusPlanned)
 	}
-	st = st.Clone()
-	st.Status = mission.StatusAwaitingGo
-	if err := store.SaveState(st); err != nil {
+	return awaitGo(env, store, id)
+}
+
+// awaitGo parks a started mission until the principal says go.
+func awaitGo(env missionEnv, store mission.Store, id string) error {
+	if _, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+		if cur.Status != mission.StatusPlanned {
+			return cur, mission.Event{}, fmt.Errorf("mission %s is %s; only a planned mission can be started", id, cur.Status)
+		}
+		next := cur.Clone()
+		next.Status = mission.StatusAwaitingGo
+		return next, mission.Event{}, nil
+	}); err != nil {
 		return err
 	}
 	m, err := store.Mission()
@@ -315,27 +314,31 @@ func missionGo(env missionEnv, id string) error {
 	if st.Status != mission.StatusAwaitingGo {
 		return fmt.Errorf("mission %s is %s; go needs a mission waiting for go (crew mission start %s)", id, st.Status, id)
 	}
-	if err := requireIdle(store, id); err != nil {
+	if err := startChecks(env, store); err != nil {
 		return err
 	}
-	return launchMission(env, store, st)
+	return launchMission(env, store, id, mission.StatusAwaitingGo)
 }
 
-// launchMission approves the plan, marks the mission running and starts its
+// launchMission approves the plan and marks the mission running, under the
+// mission lock and only if it is still in the status from, then starts its
 // supervisor in the background.
-func launchMission(env missionEnv, store mission.Store, st mission.State) error {
-	if err := store.SaveApproved(); err != nil {
+func launchMission(env missionEnv, store mission.Store, id string, from mission.Status) error {
+	_, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+		if cur.Status != from {
+			return cur, mission.Event{}, fmt.Errorf("mission %s is %s, not %s; nothing was started", id, cur.Status, from)
+		}
+		if err := store.SaveApproved(); err != nil {
+			return cur, mission.Event{}, err
+		}
+		next := cur.Clone()
+		next.Status = mission.StatusRunning
+		return next, mission.Event{Kind: mission.EvMissionStart, By: "crew"}, nil
+	})
+	if err != nil {
 		return err
 	}
-	st = st.Clone()
-	st.Status = mission.StatusRunning
-	if err := store.SaveState(st); err != nil {
-		return err
-	}
-	if _, err := store.Emit(mission.Event{Kind: mission.EvMissionStart, By: "crew"}); err != nil {
-		return err
-	}
-	return detachMission(env, store, st.MissionID)
+	return detachMission(env, store, id)
 }
 
 func detachMission(env missionEnv, store mission.Store, id string) error {

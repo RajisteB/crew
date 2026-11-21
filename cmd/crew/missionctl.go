@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -109,19 +111,76 @@ func openForDryRun(env missionEnv, id string) (mission.Store, mission.State, mis
 	return store, st, m, err
 }
 
+// drivenError means a live engine holds the mission lock.
+type drivenError struct {
+	id  string
+	pid int
+}
+
+func (e drivenError) Error() string {
+	return fmt.Sprintf("mission %s is being driven (pid %d)", e.id, e.pid)
+}
+
+// writeState is the one way a command other than the engine changes a
+// mission's state. It takes the mission lock, reloads the state under it,
+// lets f decide the new state (f re-checks the status it needs), saves it and
+// emits f's event. Run slow checks before it; start any process after it.
+func writeState(store mission.Store, id string, f func(mission.State) (mission.State, mission.Event, error)) (mission.State, error) {
+	unlock, err := store.Lock()
+	if err != nil {
+		if pid, live := store.LockedBy(); live {
+			return mission.State{}, drivenError{id: id, pid: pid}
+		}
+		return mission.State{}, err
+	}
+	defer unlock()
+	cur, err := store.LoadState()
+	if err != nil {
+		return cur, err
+	}
+	next, ev, err := f(cur)
+	if err != nil {
+		return cur, err
+	}
+	if err := store.SaveState(next); err != nil {
+		return cur, err
+	}
+	if ev.Kind != "" {
+		if _, err := store.Emit(ev); err != nil {
+			return next, err
+		}
+	}
+	return next, nil
+}
+
 func missionStop(env missionEnv, id string) error {
 	store, st, err := openMission(env, id)
 	if err != nil {
 		return err
 	}
-	if pid, live := store.LockedBy(); live {
-		return stopEngine(env.out, store, id, pid)
-	}
 	switch st.Status {
-	case mission.StatusRunning, mission.StatusAwaitingGo:
-		return markStopped(env.out, store, st)
+	case mission.StatusPlanned, mission.StatusAwaitingGo:
+		return fmt.Errorf("mission %s hasn't started; nothing to stop", id)
+	case mission.StatusStopped, mission.StatusDone:
+		fmt.Fprintf(env.out, "mission %s is already %s; nothing changed\n", id, st.Status)
+		return nil
 	}
-	fmt.Fprintf(env.out, "mission %s is %s; nothing to stop\n", id, st.Status)
+	_, err = writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+		if cur.Status != mission.StatusRunning {
+			return cur, mission.Event{}, fmt.Errorf("mission %s is %s, not running; nothing changed", id, cur.Status)
+		}
+		next := cur.Clone()
+		next.Status = mission.StatusStopped
+		return next, mission.Event{Kind: mission.EvStopped, By: "crew"}, nil
+	})
+	var driven drivenError
+	switch {
+	case errors.As(err, &driven):
+		return stopEngine(env.out, store, id, driven.pid)
+	case err != nil:
+		return err
+	}
+	fmt.Fprintf(env.out, "mission %s wasn't running; marked stopped\n", id)
 	return nil
 }
 
@@ -140,27 +199,17 @@ func stopEngine(out io.Writer, store mission.Store, id string, pid int) error {
 	return fmt.Errorf("mission %s: the engine (pid %d) is still running %s after SIGTERM", id, pid, stopWait)
 }
 
-// markStopped records a stop when no engine is alive to do it.
-func markStopped(out io.Writer, store mission.Store, st mission.State) error {
-	st = st.Clone()
-	st.Status = mission.StatusStopped
-	if err := store.SaveState(st); err != nil {
-		return err
-	}
-	if _, err := store.Emit(mission.Event{Kind: mission.EvStopped, By: "crew"}); err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "mission %s wasn't running; marked stopped\n", st.MissionID)
-	return nil
-}
-
 func missionResume(env missionEnv, id string) error {
 	store, st, err := openMission(env, id)
 	if err != nil {
 		return err
 	}
-	if err := requireIdle(store, id); err != nil {
-		return err
+	if _, statErr := os.Stat(filepath.Join(store.Dir, "approved.md")); statErr != nil {
+		hint := "go"
+		if st.Status == mission.StatusPlanned {
+			hint = "start"
+		}
+		return fmt.Errorf("mission %s was never started; use crew mission %s %s", id, hint, id)
 	}
 	if st.Status != mission.StatusStopped && st.Status != mission.StatusRunning {
 		return fmt.Errorf("mission %s is %s; only a stopped mission (or a running one whose engine died) can be resumed", id, st.Status)
@@ -168,9 +217,15 @@ func missionResume(env missionEnv, id string) error {
 	if err := startChecks(env, store); err != nil {
 		return err
 	}
-	st = st.Clone()
-	st.Status = mission.StatusRunning
-	if err := store.SaveState(st); err != nil {
+	_, err = writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+		if cur.Status != mission.StatusStopped && cur.Status != mission.StatusRunning {
+			return cur, mission.Event{}, fmt.Errorf("mission %s is %s; nothing was resumed", id, cur.Status)
+		}
+		next := cur.Clone()
+		next.Status = mission.StatusRunning
+		return next, mission.Event{}, nil
+	})
+	if err != nil {
 		return err
 	}
 	return detachMission(env, store, id)
