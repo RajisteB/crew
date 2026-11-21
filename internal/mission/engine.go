@@ -38,6 +38,10 @@ type Engine struct {
 	// RepoGate re-checks, before every push, that the repo is still
 	// confirmed at its current visibility. Nil means no check.
 	RepoGate func(ctx context.Context) error
+	// Switches holds the auto-merge switches. Nil means every domain is off.
+	Switches SwitchReader
+	// MergeMethod is the gh merge method; empty means squash.
+	MergeMethod string
 
 	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
 	streaks   map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
@@ -66,17 +70,18 @@ func (e *Engine) now() time.Time {
 
 // tick is the working copy of one Tick.
 type tick struct {
-	e      *Engine
-	ctx    context.Context
-	m      Mission
-	s      State
-	lim    Limits
-	in     CheckInput
-	now    time.Time
-	obs    Obs
-	notes  map[string]struct{}
-	mDirty bool
-	halted bool // the mission was stopped during this tick; no further actions run
+	e        *Engine
+	ctx      context.Context
+	m        Mission
+	s        State
+	lim      Limits
+	in       CheckInput
+	now      time.Time
+	obs      Obs
+	notes    map[string]struct{}
+	mDirty   bool
+	switches *switchSnapshot // the switches read this tick, once
+	halted   bool            // the mission was stopped during this tick; no further actions run
 }
 
 // Tick runs one round. The caller holds the mission lock. A failure that
@@ -184,7 +189,7 @@ func (t *tick) note(piece, format string, args ...any) {
 // done, pull requests for pr-open pieces. An observation that fails is a
 // note and leaves that piece out.
 func (t *tick) observe() {
-	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, PRs: map[string]gh.PR{}}
+	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, PRs: map[string]gh.PR{}, Auto: map[string]AutoObs{}}
 	t.obs = o
 	for _, p := range t.s.Pieces {
 		switch {
@@ -226,6 +231,7 @@ func (t *tick) observePR(p PieceState) {
 		return
 	}
 	t.obs.PRs[p.ID] = pr
+	t.observeAuto(p, pr)
 }
 
 // ---------- loop ----------
