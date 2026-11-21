@@ -31,7 +31,7 @@ func (s Store) path(name string) string { return filepath.Join(s.Dir, name) }
 // NewRun creates the run folder, freezing a copy of the factory source so
 // edits to the factory can't change a run already in progress.
 func NewRun(project string, f source.Factory, factorySrc []byte, input string, now time.Time) (Store, State, error) {
-	if err := ensureCrewDir(project); err != nil {
+	if err := EnsureCrewDir(project); err != nil {
 		return Store{}, State{}, err
 	}
 	id, err := newRunID(f.Name, now)
@@ -51,9 +51,9 @@ func NewRun(project string, f source.Factory, factorySrc []byte, input string, n
 	return s, st, s.SaveState(st)
 }
 
-// ensureCrewDir creates <project>/.crew with a .gitignore that ignores it, so
+// EnsureCrewDir creates <project>/.crew with a .gitignore that ignores it, so
 // runs never end up in the project's history and its .gitignore is untouched.
-func ensureCrewDir(project string) error {
+func EnsureCrewDir(project string) error {
 	dir := filepath.Join(project, CrewDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -139,7 +139,7 @@ func (s Store) SaveState(st State) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(s.path("state.json"), b)
+	return WriteAtomic(s.path("state.json"), b)
 }
 
 func stepDir(s Store, n int, station string) string {
@@ -238,7 +238,7 @@ func (s Store) DrainInbox() ([]string, error) {
 }
 
 func (s Store) RequestGoto(station string) error {
-	return writeAtomic(s.path("goto"), []byte(station))
+	return WriteAtomic(s.path("goto"), []byte(station))
 }
 
 func (s Store) TakeGoto() (string, error) {
@@ -288,7 +288,7 @@ func (s Store) LockedBy() (int, bool) {
 	return pid, syscall.Kill(pid, 0) == nil
 }
 
-func writeAtomic(path string, b []byte) error {
+func WriteAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return err
@@ -309,7 +309,7 @@ func writeAtomic(path string, b []byte) error {
 // RecordChild remembers the station process (its own process group), so a
 // later driver can stop it if this one died without cleaning up.
 func (s Store) RecordChild(pid int) error {
-	return writeAtomic(s.path("child"), []byte(strconv.Itoa(pid)))
+	return WriteAtomic(s.path("child"), []byte(strconv.Itoa(pid)))
 }
 
 func (s Store) ClearChild() error {
