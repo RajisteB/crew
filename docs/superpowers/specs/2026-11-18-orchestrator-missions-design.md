@@ -15,8 +15,9 @@ The model is an organization, not a pipeline:
 | **domain** | A kind of work (product, design, marketing, …), defined once in the crew config. It has its own factories, conventions and allowed releases. |
 | **mission** | The orchestrator's plan for one job, as a file. crew checks it and runs it. |
 | **piece** | One unit of a mission. Each piece is a factory run, or a sub-mission planned by the orchestrator working inside one domain. |
+| **deliverable** | Work a piece produces that isn't a change to the repo: a brief, research, a media plan. It lives on the piece's Jira issue. |
 | **factory / station / run** | Unchanged from the factories design, apart from one new optional factory field, `rework`. |
-| **proposal** | An outward step that can be reviewed and thrown away: pushing a piece branch, opening a PR. Proposals are automatic. |
+| **proposal** | An outward step that can be reviewed and thrown away: pushing a piece branch, opening a PR, creating or updating a Jira issue. Proposals are automatic. |
 | **effect** | An outward step that can't be taken back or costs money: merging into `main`, publishing, launching a campaign, spending. Every effect needs the principal's switch or approval. |
 | **release** | An effect other than a merge (Project 2). Releases are approved one at a time. |
 
@@ -30,7 +31,9 @@ The model is an organization, not a pipeline:
 - **Recursion at the orchestrator level.** A big share of a job in one domain goes to a copy of the orchestrator scoped to that domain, which plans it as a sub-mission. Depth has a limit, under the same rule as loops: a number or `"*"`, and no limit is an error.
 - **Parallel pieces in one repo.** Each run gets its own git worktree, with a cap on how many run at once.
 - **One PR per piece.** A piece that depends on another waits until that piece is complete, then starts from the updated `main`.
-- **Auto-merge that works unattended.** A per-repo switch only the principal can set. With it on, crew merges each PR once its checks pass.
+- **Work that isn't code is a first-class outcome.** A piece can end in a deliverable instead of, or as well as, a PR.
+- **Every piece is a Jira issue, assigned to the principal,** so the whole mission shows on their board and moves across it as it runs.
+- **Auto-merge that works unattended.** A per-repo switch only the principal can set. With it on, crew merges each PR once its checks pass and accepts each deliverable once it is posted.
 - **The principal can always see what is waiting on them**, and is told when something starts waiting.
 - **Nothing is lost when a session or the engine dies.** Mission state is on disk and a mission can be resumed.
 - **Problems go to the nearest manager first:** a scoped orchestrator, then the main one, then the principal.
@@ -69,6 +72,7 @@ Three layers, all required:
    - any `crew automerge` or `crew release approve` command
    - for stations and scoped orchestrators, every `crew run` and `crew mission` command, so a station can't pass an approval stop or answer for the principal
    - writing anywhere in `~/crew`
+   - writing to Jira, which crew does itself
    - the CLIs of release platforms
 
    Scoped orchestrators get read tools only. The main orchestrator's shell is limited to `crew` commands where the harness can express that. A harness that can't apply deny rules can't run mission pieces; `crew verify` says which can.
@@ -174,18 +178,19 @@ One detached process per mission, `crew mission run <id>`, drives it. Like the r
 |---|---|
 | `mission.md` | The current plan, the request and the change log. |
 | `approved.md` | The plan as the principal approved it. |
-| `state.json` | Each piece's status, run id, branch, worktree, PR number and counters. Written atomically. |
+| `state.json` | Each piece's status, run id, branch, worktree, PR number, Jira issue and counters, plus any Jira writes still to send. Written atomically. |
 | `events.jsonl` | Every event, appended under a lock, as the run engine does today. |
 | `lock` | The pid of the process driving the mission. |
 | `inbox/` | Answers from the principal, read on the next tick. |
+| `deliverables/` | One folder per piece, for work that isn't a change to the repo. |
 
 Run folders stay in the main repo's `.crew/runs`, with each run's work directory set to its worktree. `.crew/` already ignores itself, so none of this reaches a PR.
 
 **The loop.** On each tick (default every 60 seconds) the engine:
 
-1. reads run states, PR and check states through `gh`, and the inbox
+1. reads run states, PR and check states through `gh`, the Jira status of deliverables waiting to be accepted, and the inbox
 2. decides the next actions from the state alone
-3. acts: starts a piece, opens a PR, merges, calls the orchestrator, notifies the principal
+3. acts: starts a piece, opens a PR, merges, calls the orchestrator, sends queued Jira writes, notifies the principal
 
 It polls `gh`; there are no webhooks.
 
@@ -194,6 +199,7 @@ It polls `gh`; there are no webhooks.
 - `mission-start`, `mission-done`, `stopped`, `resumed`
 - `piece-queued`, `piece-start`, `piece-stopped`, `piece-complete`, `piece-cancelled`
 - `pr-opened`, `checks-passed`, `checks-failed`, `pr-merged`, `conflict`
+- `deliverable-posted`, `deliverable-accepted`
 - `exception`, `decision`, `escalated`
 - `amendment`, `piece-added`, `rebrief`
 - `waiting-on-principal`, `notified`, `answered`
@@ -222,13 +228,50 @@ All limits live in the crew config in `~/crew`, with an optional override per re
 
 More than one mission may run in a repo. Hitting a mission's limit stops new work in it and goes straight to the principal.
 
+### What a piece produces
+
+| Outcome | Example | Where it ends up | How later pieces get it |
+|---|---|---|---|
+| **Change** | A landing page, ad copy kept in `ads/`, a badge in `brand/` | A PR | From the updated `main` |
+| **Deliverable** | Keyword research, a campaign brief, a media plan | Attached to the piece's Jira issue, with a copy in the mission folder | crew passes the copy to them as input |
+| **Release** (Project 2) | The campaign going live | The outside platform | Not applicable |
+
+- **A piece can produce a change and a deliverable together.**
+- **How a station hands over a deliverable.** crew gives each run a deliverables folder inside the mission folder, outside the worktree and outside git. Whatever the run leaves there is the deliverable.
+- **Deliverables aren't path-checked,** because they never enter the repo.
+
 ### When a piece is complete
 
 - Its run finished `done`, **and**
 - if it changed files, its PR is merged, **and**
+- if it produced a deliverable, the deliverable is accepted, **and**
 - if it ends in a release (Project 2), the release has gone out.
 
-A piece that changed no files is complete at `done`, with no PR. A delegated piece is complete when every one of its sub-pieces is. `waits_for` always means "wait until complete".
+**Accepting a deliverable follows the auto-merge switch,** so one switch decides whether finished work needs the principal. With the switch off, the principal accepts by moving the Jira issue to Done, or with `crew mission answer`. With it on, the deliverable is accepted as soon as it is posted.
+
+A piece that produced nothing is complete at `done`. A delegated piece is complete when every one of its sub-pieces is. `waits_for` always means "wait until complete".
+
+### Jira
+
+Jira is where the principal watches a mission. It is set per repo in the crew config: the project, the assignee and the status transitions. A repo with no Jira config runs missions without it, and deliverables stay in the mission folder only.
+
+- **One epic per mission, one issue per piece,** sub-pieces included. crew creates them when the mission starts and whenever a piece is added.
+- **Every issue is assigned,** by default to the principal, so it appears on their board. Where the board works in sprints, crew also puts each issue in the active sprint, because an issue outside it doesn't show on the board.
+- **Each issue moves as its piece does:**
+
+  | Piece | Jira status |
+  |---|---|
+  | Queued | To Do |
+  | Running | In Progress |
+  | PR open, or deliverable posted and waiting | In Review |
+  | Complete | Done |
+  | Cancelled | Done, with a comment saying it was cancelled |
+
+- **A piece waiting on the principal is flagged** on its issue, with the question or the reason as a comment.
+- **Comments carry the story:** the PR link, each orchestrator decision with its reason, each amendment and each escalation.
+- **crew writes to Jira; agents don't.** Writes are queued in the mission state and retried, as the story-orchestrator does. Jira being down never stops a piece.
+- **Jira follows the mission, with one exception.** crew reads back only one thing: a deliverable's issue being moved to Done, which accepts it. Moving a code piece's issue by hand changes nothing, because its PR decides.
+- **Credentials** come from the environment and never appear in config, state, logs or notifications.
 
 ### Scoped orchestrator (recursion)
 
@@ -322,11 +365,13 @@ crew merges rather than rebases, so it never needs a force-push. A piece with no
 
 - **A repo with no checks.** `crew automerge on` refuses and explains the two ways forward: add CI, or use `--without-checks`. That flag has its own confirmation text naming the risk. *(My call: this keeps full automation available in a repo with no CI, as an explicit choice.)*
 - **Where it lives.** In `~/crew`, keyed by repo, with a fingerprint written each time `crew automerge` sets it. If the stored value changes any other way, crew treats the switch as off, refuses to merge, and tells the principal.
+- **Deliverables follow the same switch.** Off: the principal accepts each one. Either `on` state: a deliverable is accepted as soon as it is posted. The command keeps the name `automerge`.
 - **Project 2.** The switch becomes the `merge` kind of release setting: `off` maps to `review`, both `on` states map to `auto`.
 
 ### Reaching the principal
 
-- **`crew mission status [id]`** leads with **Waiting on you**: PRs ready to merge, stations waiting for approval, escalated questions and budget stops. Below that: running, queued (and what each waits for), complete.
+- **`crew mission status [id]`** leads with **Waiting on you**: PRs ready to merge, deliverables to accept, stations waiting for approval, escalated questions and budget stops. Below that: running, queued (and what each waits for), complete.
+- **The Jira board** shows the same picture without a terminal.
 - **Desktop notification** when something starts waiting on the principal, when the orchestrator adds a piece, and when a mission finishes or its engine crashes. On macOS this uses `osascript`, as the story-orchestrator does. Notifications carry no file content and no secrets.
 - **A reminder** if something has waited longer than a set time (default 30 minutes), then once more each time that doubles.
 - **Answering.** Each waiting item has an id. The principal answers through the orchestrator ("merge them", "use the dark variant") or directly with `crew mission answer <id>`. Answers land in the mission's inbox and are recorded with the principal's words. The "go", answers, amendments, `approve: true` stops and accepting out-of-paths files all travel this way, through `crew mission go`, `answer` and `amend`.
@@ -349,28 +394,30 @@ The plan is the same in both:
 - P2: product, invite screen, `app/ui/**`, waits for P1
 - P3: design, referral visuals, `brand/**`, **delegated**
 - P4: marketing, landing page, `site/**`, waits for P3
-- P5: marketing, ad campaign, `ads/**`, waits for P1, P2 and P3
+- P5: marketing, campaign brief (a deliverable), waits for P3
+- P6: marketing, ad campaign, `ads/**`, waits for P1, P2, P3 and P5
 
 ### A. Auto-merge off (the default)
 
 1. **Plan.** The orchestrator shows the plan and diagram. The principal says "go".
-2. **Start.** crew starts P1 and P3. The design-scoped orchestrator plans P3.1 (a badge) and P3.2 (three ad creatives, waiting for P3.1).
+2. **Start.** crew creates a Jira epic with an issue for each piece, all assigned to the principal and in To Do. It starts P1 and P3, and their issues move to In Progress. The design-scoped orchestrator plans P3.1 (a badge) and P3.2 (three ad creatives, waiting for P3.1).
 3. **The principal closes the session.** The mission keeps running.
-4. **First PR.** P1 finishes and crew opens PR #12. A notification arrives: "acme: PR #12 is waiting on you."
-5. **Nothing happens for 30 minutes.** A reminder arrives. P2 and P5 are queued behind P1.
-6. **The principal comes back** and opens a new session. The orchestrator reports: "Waiting on you: PR #12 (credits API), PR #13 (badge). Queued behind them: P2, P3.2, P5."
+4. **First PR.** P1 finishes and crew opens PR #12. Its issue moves to In Review with the PR link. A notification arrives: "acme: PR #12 is waiting on you."
+5. **Nothing happens for 30 minutes.** A reminder arrives. P2 and P6 are queued behind P1.
+6. **The principal comes back** and opens a new session. The orchestrator reports: "Waiting on you: PR #12 (credits API), PR #13 (badge). Queued behind them: P2, P3.2, P6."
 7. **They merge both on GitHub.** On the next tick crew starts P2 and P3.2 from the updated `main` and removes the two worktrees.
-8. **And so on** until every PR is merged. The wrap-up lists PRs, merges and decisions.
+8. **A deliverable.** P5 finishes with a campaign brief, not code. crew attaches it to P5's issue and moves the issue to In Review. The principal reads it on the board and moves it to Done. P6 will get the brief as input.
+9. **And so on** until every PR is merged and every deliverable accepted. The wrap-up lists PRs, merges and decisions.
 
 ### B. Auto-merge on
 
 1. **Once, beforehand.** The principal ran `crew automerge on` in `acme` and typed the confirmation.
 2. **Plan and start,** as above.
-3. **Merging.** P1 opens PR #12. Its checks pass and crew merges it. P2 starts from the updated `main`. Nobody is asked.
+3. **Merging.** P1 opens PR #12. Its checks pass and crew merges it. P2 starts from the updated `main`. Later, P5's campaign brief is posted to its issue and accepted at once. Nobody is asked, and the board shows each issue moving to Done.
 4. **A problem.** P3.2's review hits its limit. The design-scoped orchestrator sends it back to the planner once. It fails the same way. It can't choose the same action again, so it escalates, and the main orchestrator has no better option. The principal is notified: "use the dark variant, or drop 9:16?"
-5. **An amendment.** The principal answers, and adds "make it $15". P1 is already merged, so the orchestrator amends the mission: P6 (change the credit to $15) is added, and P5, which hasn't started, gets a new brief. Both go in the change log.
+5. **An amendment.** The principal answers, and adds "make it $15". P1 is already merged, so the orchestrator amends the mission: P7 (change the credit to $15) is added, with its own Jira issue, and P6, which hasn't started, gets a new brief. Both go in the change log.
 6. **An out-of-paths stop.** P2 finishes but also edited `brand/logo.svg`. No PR opens. The orchestrator sends it back to the builder, which drops the edit.
-7. **The release (Project 2).** P5 ends with release request #7: Meta Ads, three creatives, US 25–44, $200 a day, $2,000 cap. The principal reviews and approves it in a terminal.
+7. **The release (Project 2).** P6 ends with release request #7: Meta Ads, three creatives, US 25–44, $200 a day, $2,000 cap. The principal reviews and approves it in a terminal.
 8. **The wrap-up.** PRs, merges, the release, the amendment, and each call the orchestrators made with its reason.
 
 ## Build order
@@ -379,9 +426,10 @@ The plan is the same in both:
 
 1. **Missions, one piece at a time.** Domains, the `orchestrator` agent, the mission file and its checks, mission approval, the engine (state, events, stop, resume), session deny rules, worktrees, one PR per piece, waiting for the principal's merge, status, notifications, exceptions with the fixed summary. Concurrency is 1. Foremen still exist.
 2. **Auto-merge.** The switch, check watching, merging, conflict handling.
-3. **Parallel pieces.** Concurrency above 1, the overlap check, the path check, budgets.
-4. **Delegation.** Scoped orchestrators, sub-pieces and their checks.
-5. **Cutover.** The orchestrator takes over the foremen's job of driving plain runs, and the `foreman-*` agents are removed. `crew run` itself stays as it is, for factories that belong to no domain, watch folders outside the repo, or run in a project without GitHub.
+3. **The Jira board and deliverables.** The epic and issues, assignment, statuses, comments, queued writes, deliverables and accepting them.
+4. **Parallel pieces.** Concurrency above 1, the overlap check, the path check, budgets.
+5. **Delegation.** Scoped orchestrators, sub-pieces and their checks.
+6. **Cutover.** The orchestrator takes over the foremen's job of driving plain runs, and the `foreman-*` agents are removed. `crew run` itself stays as it is, for factories that belong to no domain, watch folders outside the repo, or run in a project without GitHub.
 
 **Project 2:** releases, with requests, previews, terminal approval, per-platform actions, `review`/`auto`/`off`, budget caps, and a separate identity for running them.
 
@@ -404,6 +452,7 @@ Planning quality can't be unit-tested, so the repo keeps **golden missions**: a 
 9. **Answers given through the orchestrator are relayed by an agent.** They are recorded word for word, but nothing proves the principal said them.
 10. **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 11. **A reboot stops a mission** until someone runs status or opens a session.
+12. **Jira emails anyone watching an issue** each time crew writes to it.
 
 ## Left to the builder
 
@@ -412,4 +461,6 @@ Planning quality can't be unit-tested, so the repo keeps **golden missions**: a 
 - The merge method (squash or merge commit).
 - The exact deny rules per harness, written from the bullets in "What the safeguards cover".
 - Notifications on systems other than macOS.
+- The Jira client, following the story-orchestrator's, and how sub-pieces sit under the epic.
+- The size limit for a deliverable attached to an issue.
 - How the `foreman-*` links are removed during compile.
