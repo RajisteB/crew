@@ -135,17 +135,24 @@ func (d *decider) notify(body string) {
 	d.add(Notify{Title: "crew mission " + d.s.MissionID, Body: body})
 }
 
-// wait gives the piece a new wait, replacing any it holds. A back status moves
-// the piece to waiting; without one the piece keeps its status.
-func (d *decider) wait(id, kind, question string, back PieceStatus) {
+// openWait gives the piece a new wait, replacing any it holds. A back status
+// moves the piece to waiting; without one the piece keeps its status. It
+// records and notifies nothing.
+func (d *decider) openWait(id, kind, question string, back PieceStatus) {
 	p := d.ps(id)
 	p.Wait = &Wait{ID: fmt.Sprintf("w%d", d.s.NextWait), Kind: kind, Question: question, Since: d.o.Now, Back: back}
 	d.s.NextWait++
 	if back != "" {
 		p.Status = PieceWaiting
 	}
+}
+
+// wait opens a wait, records that the mission is waiting on the principal and
+// notifies them.
+func (d *decider) wait(id, kind, question string, back PieceStatus) {
+	d.openWait(id, kind, question, back)
 	d.record(EvWaitingOnPrincipal, id, kind+": "+question)
-	d.notify(waitText(*p))
+	d.notify(waitText(*d.ps(id)))
 }
 
 // waitText is what a notification about the piece's wait says.

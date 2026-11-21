@@ -20,13 +20,13 @@ const (
 
 // Piece is one unit of a mission: a domain, a factory and what to wait for.
 type Piece struct {
-	ID       string   `yaml:"id"`
-	Domain   string   `yaml:"domain"`
-	Factory  string   `yaml:"factory"`
-	Delegate bool     `yaml:"delegate"`
-	Brief    string   `yaml:"brief"`
-	Paths    []string `yaml:"paths"`
-	WaitsFor []string `yaml:"waits_for"`
+	ID       string   `yaml:"id" json:"id"`
+	Domain   string   `yaml:"domain" json:"domain"`
+	Factory  string   `yaml:"factory" json:"factory"`
+	Delegate bool     `yaml:"delegate" json:"delegate"`
+	Brief    string   `yaml:"brief" json:"brief"`
+	Paths    []string `yaml:"paths" json:"paths"`
+	WaitsFor []string `yaml:"waits_for" json:"waits_for"`
 }
 
 // Change is one line of the change log.
