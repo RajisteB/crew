@@ -179,9 +179,12 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 		t.note(a.Piece, "can't summarise the run for the orchestrator: %v", err)
 		return nil
 	}
-	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
 	d, err := t.decide(sum)
+	if t.ctx.Err() != nil {
+		return nil // stopped during the call: not a decision, not a question; the next engine asks again
+	}
+	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	if err != nil {
 		d = OrchDecision{Reason: err.Error()}
 	}

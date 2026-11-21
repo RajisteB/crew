@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -186,5 +187,32 @@ func TestEngine_SummaryOutageIsOneNoteAndNoException(t *testing.T) {
 	h.tick()
 	if len(h.events(EvException)) != 1 {
 		t.Fatalf("events = %v", h.kinds())
+	}
+}
+
+// cancelOrch cancels the tick's context mid-call, the way a stop signal does.
+type cancelOrch struct{ cancel context.CancelFunc }
+
+func (o cancelOrch) Decide(context.Context, string, Summary) (OrchDecision, error) {
+	o.cancel()
+	return OrchDecision{}, errors.New("run interrupted")
+}
+
+func TestEngine_StopDuringOrchestratorCallChangesNothing(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	runID := h.runPiece("P1")
+	h.runs.setRun(runID, limitHit(), false)
+	h.runs.summary = limitHit()
+	ctx, cancel := context.WithCancel(context.Background())
+	h.e.Orch = cancelOrch{cancel}
+	if _, err := h.e.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	p := h.piece("P1")
+	if p.Status != PieceRunning || p.Calls != 0 || p.Wait != nil {
+		t.Fatalf("piece = %+v", p)
+	}
+	if len(h.notif.sent) != 0 || len(h.events(EvException)) != 0 || len(h.events(EvEscalated)) != 0 || len(h.events(EvDecision)) != 0 {
+		t.Fatalf("sent %v kinds %v", h.notif.sent, h.kinds())
 	}
 }
