@@ -149,6 +149,7 @@ func (a *applier) carryOut(d OrchDecision) (Mission, State, []Action, *RunStep) 
 	case "retry":
 		step = &RunStep{Piece: a.piece, Kind: "retry"}
 	case "goto":
+		a.resumeFromPR()
 		step = &RunStep{Piece: a.piece, Kind: "goto", Station: d.Station, Note: d.Note}
 	case "cancel":
 		step = a.cancelPiece(a.piece, a.by)
@@ -170,7 +171,7 @@ func (a *applier) rejection(d OrchDecision) (why, action string) {
 		return d.Reason, invalidAction
 	case d.Action == "":
 		return "the decision names no action", invalidAction
-	case !slices.Contains(allowedActions, d.Action):
+	case !slices.Contains(allowedFor(a.failure), d.Action):
 		return fmt.Sprintf("%q is not an action it may take", d.Action), invalidAction
 	case a.repeats(d):
 		return fmt.Sprintf("it repeats an earlier %s for the same stop", d.Action), d.Action
@@ -275,7 +276,7 @@ func (a *applier) reject(d OrchDecision, action, why string) {
 // escalate puts a question to the principal and holds the piece until it is
 // answered.
 func (a *applier) escalate(question string) {
-	a.openWait(a.piece, WaitQuestion, question, PieceRunning)
+	a.openWait(a.piece, WaitQuestion, question, a.backAfterQuestion())
 	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvEscalated, Piece: a.piece, By: a.by, Msg: question}})
 	a.notify(waitText(*a.ps(a.piece)))
 }

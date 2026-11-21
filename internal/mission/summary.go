@@ -52,7 +52,7 @@ func BuildSummary(id string, m Mission, ps PieceState, rs run.State, f source.Fa
 		Stations: f.StationNames(), LastSummary: last.Verdict.Summary,
 		LastNotes: slices.Clone(last.Verdict.Notes), Earlier: slices.Clone(ps.Decisions),
 		CallsLeft: left(lim.OrchestratorCalls, ps.Calls), AdditionsLeft: left(lim.Additions, additions),
-		Allowed: slices.Clone(allowedActions), StepsDir: stepsDir,
+		Allowed: allowedFor(failureOf(rs)), StepsDir: stepsDir,
 	}
 	if sum.Station == "" {
 		sum.Station = last.Station
