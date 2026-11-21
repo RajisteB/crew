@@ -1,5 +1,10 @@
-// Package principal holds decisions only the human owner may make, recorded
-// where an agent session cannot forge them without the tamper check noticing.
+// Package principal holds decisions only the human owner may make.
+//
+// The sha256 beside repos.json catches hand edits and accidents. It is
+// unkeyed, so it is not a boundary against a process that deliberately
+// rewrites both files. The controls that matter are the terminal-only
+// confirmation (read from /dev/tty, no flag or env bypass) and the deny rules
+// on the crew directory.
 package principal
 
 import (
@@ -26,6 +31,12 @@ const (
 
 // ErrTampered means repos.json exists but does not match its checksum.
 var ErrTampered = errors.New("repos.json does not match its checksum")
+
+// ErrNotConfirmed and ErrVisibilityChanged are the expected CheckRepo failures.
+var (
+	ErrNotConfirmed      = errors.New("this repo isn't confirmed; run crew repo confirm in a terminal")
+	ErrVisibilityChanged = errors.New("repo visibility changed since confirmation")
+)
 
 // RepoRecord is one repository the principal confirmed.
 type RepoRecord struct {
@@ -138,10 +149,18 @@ func CheckRepo(s Store, info gh.RepoInfo) error {
 		return err
 	}
 	if !ok {
-		return errors.New("this repo isn't confirmed; run crew repo confirm in a terminal")
+		return ErrNotConfirmed
 	}
 	if rec.Visibility != info.Visibility {
-		return fmt.Errorf("this repo was confirmed as %s and is now %s; run crew repo confirm again", rec.Visibility, info.Visibility)
+		return &visibilityError{was: rec.Visibility, now: info.Visibility}
 	}
 	return nil
 }
+
+type visibilityError struct{ was, now string }
+
+func (e *visibilityError) Error() string {
+	return fmt.Sprintf("this repo was confirmed as %s and is now %s; run crew repo confirm again", e.was, e.now)
+}
+
+func (e *visibilityError) Unwrap() error { return ErrVisibilityChanged }

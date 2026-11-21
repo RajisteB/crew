@@ -57,17 +57,19 @@ func repoStatus(store principal.Store, project string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	rec, ok, err := store.Repo(info.Slug)
-	if err == nil && !ok {
+	switch err := principal.CheckRepo(store, info); {
+	case errors.Is(err, principal.ErrNotConfirmed):
 		fmt.Fprintf(out, "%s: not confirmed; run crew repo confirm in a terminal\n", info.Slug)
 		return nil
-	}
-	if err == nil {
-		err = principal.CheckRepo(store, info)
-	}
-	if err != nil {
+	case errors.Is(err, principal.ErrVisibilityChanged):
 		fmt.Fprintf(out, "%s: %v\n", info.Slug, err)
 		return nil
+	case err != nil:
+		return err // tampered store or an unexpected failure: exit non-zero
+	}
+	rec, _, err := store.Repo(info.Slug)
+	if err != nil {
+		return err
 	}
 	fmt.Fprintf(out, "%s: confirmed as %s (%s)\n", info.Slug, rec.Visibility, rec.ConfirmedAt.Format(time.DateOnly))
 	return nil

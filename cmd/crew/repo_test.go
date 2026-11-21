@@ -137,3 +137,21 @@ func TestRepoStatus_States(t *testing.T) {
 		t.Fatalf("got %q", out.String())
 	}
 }
+
+func TestRepoStatus_TamperedStoreIsAnError(t *testing.T) {
+	fakeGH(t, "private")
+	fakeTTY(t, "acme/app\n")
+	args, crewDir := repoArgs(t, "confirm")
+	if err := repoCmd(args, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(crewDir, "principal", "repos.json")
+	data, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, []byte(strings.Replace(string(data), "private", "public ", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := repoCmd([]string{"status", "--dir", crewDir, "--project", args[4]}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("err = %v, want one naming %s", err, path)
+	}
+}
