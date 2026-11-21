@@ -277,3 +277,17 @@ func TestDecide_AbsentAutoIsOff(t *testing.T) {
 		t.Fatal("merged")
 	}
 }
+
+func TestDecide_MergeWaitNotifySaysWhy(t *testing.T) {
+	m, s, o := prCase(3*time.Minute, principal.AutoOn)
+	_, as := decide(m, s, o)
+	if n := of[Notify](as); len(n) != 1 || !strings.Contains(n[0].Body, "has no checks") {
+		t.Fatalf("notifies = %#v", n)
+	}
+	m, s, o = prCase(0, principal.AutoOff)
+	o.Auto = map[string]AutoObs{"a": {Mode: principal.AutoOff, Blocker: "design"}}
+	_, as = decide(m, s, o)
+	if n := of[Notify](as); len(n) != 1 || !strings.Contains(n[0].Body, "design") {
+		t.Fatalf("notifies = %#v", n)
+	}
+}

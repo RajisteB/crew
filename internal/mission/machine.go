@@ -174,7 +174,7 @@ func (d *decider) wait(id, kind, question string, back PieceStatus) {
 // waitText is what a notification about the piece's wait says.
 func waitText(p PieceState) string {
 	if p.Wait.Kind == WaitMerge {
-		return fmt.Sprintf("PR #%d (%s) is waiting on you", p.PR, p.ID)
+		return p.Wait.Question
 	}
 	return fmt.Sprintf("%s: %s", p.ID, p.Wait.Question)
 }
