@@ -247,3 +247,19 @@ func TestRemoteURL_ReturnsOrigin(t *testing.T) {
 		t.Fatal("expected error for a missing remote")
 	}
 }
+
+func TestAddWorktree_HasNoUpstream(t *testing.T) {
+	repo, _ := newRepo(t)
+	if err := repo.Fetch("main"); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "@{u}")
+	cmd.Dir = wt
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("the piece branch tracks %q; it must have no upstream", strings.TrimSpace(string(out)))
+	}
+}

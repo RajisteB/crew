@@ -51,7 +51,7 @@ func TestOrchestratorOutputs_WritesAgentAndSettings(t *testing.T) {
 	if !slices.Contains(s.Permissions.Allow, "Bash(crew:*)") {
 		t.Errorf("allow lacks Bash(crew:*): %v", s.Permissions.Allow)
 	}
-	for _, d := range []string{"Bash(crew automerge:*)", "Bash(crew repo confirm:*)", "Bash(crew release approve:*)"} {
+	for _, d := range []string{"Bash(crew automerge:*)", "Bash(crew repo confirm:*)", "Bash(crew release approve:*)", "Bash(git push origin HEAD:main:*)"} {
 		if !slices.Contains(s.Permissions.Deny, d) {
 			t.Errorf("deny lacks %s: %v", d, s.Permissions.Deny)
 		}

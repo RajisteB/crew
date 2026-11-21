@@ -75,7 +75,7 @@ func (r Repo) AddWorktree(path, branch, from string) error {
 	if err := checkRef("start point", from); err != nil {
 		return err
 	}
-	_, err := git(r.Dir, "worktree", "add", "-B", branch, "--", path, from)
+	_, err := git(r.Dir, "worktree", "add", "--no-track", "-B", branch, "--", path, from)
 	return err
 }
 
