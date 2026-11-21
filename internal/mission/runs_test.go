@@ -256,3 +256,15 @@ func TestLocalRuns_StopInterruptsRun(t *testing.T) {
 		t.Fatalf("stopping an undriven run = %v, want nil", err)
 	}
 }
+
+// verify.Run gives factories a path relative to the crew directory; Start
+// must read the file from there, not from the process's working directory.
+func TestLocalRuns_StartReadsFactoryRelativeToCrewDir(t *testing.T) {
+	e := newLocal(t)
+	f := e.l.Project.Factories[0]
+	f.Path = filepath.Base(f.Path)
+	e.l.Project.Factories = []source.Factory{f}
+	if _, err := e.l.Start(Piece{ID: "api", Factory: "tiny"}, "do it", e.worktree); err != nil {
+		t.Fatalf("Start with a crew-relative factory path: %v", err)
+	}
+}

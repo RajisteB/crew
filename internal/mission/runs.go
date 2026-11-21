@@ -53,7 +53,11 @@ func (l *LocalRuns) Start(p Piece, input, worktree string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("piece %s: no factory %q", p.ID, p.Factory)
 	}
-	src, err := os.ReadFile(f.Path)
+	path := f.Path
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(l.CrewDir, path) // verify gives paths relative to the crew directory
+	}
+	src, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("piece %s: %w", p.ID, err)
 	}
