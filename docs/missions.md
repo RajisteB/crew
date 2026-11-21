@@ -18,7 +18,7 @@ This guide is for the owner of a crew setup who has used factories and has not u
 
 ## What stage 1 does and doesn't do
 
-Stage 1 runs one piece at a time. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. Each piece produces one pull request, and you merge it yourself on GitHub. When you do, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
+Stage 1 runs one piece at a time. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. The limit is per mission: two missions started in the same repo each run their own piece, and nothing checks that they touch different files, so don't run two missions over the same part of a repo at once. Each piece produces one pull request, and you merge it yourself on GitHub. When you do, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
 
 Stage 1 does not merge for you, does not write to Jira, and does not run pieces in parallel. `crew automerge` and `crew release approve` don't exist yet, and `delegate: true` on a piece is refused.
 
@@ -41,7 +41,7 @@ If you created your crew directory before missions existed, run this (add `--dir
 crew mission setup
 ```
 
-It writes `missions.yaml` and `domains/` if they are missing and prints what it wrote, or `already set up`. It does not touch your `harnesses.yaml`, so you add the missions parts by hand. Until you do, `crew mission start` refuses, and `crew verify` prints one note per harness that can't apply deny rules:
+It writes `missions.yaml` and `domains/` if they are missing and prints what it wrote, or `already set up`. It does not touch your `harnesses.yaml`, so you add the missions parts by hand. Until you do, `crew mission start` refuses, and `crew verify -v` prints one note per harness that can't apply deny rules. The note is an info line, so plain `crew verify` leaves it out; `-v` shows it:
 
 ```
 info   crew.yaml: harness opencode: can't apply deny rules, so it can't run mission pieces
@@ -81,6 +81,7 @@ Next to `foreman:`, add the `deny:` block:
         - "Bash(git push --force:*)"
         - "Bash(git push -f:*)"
         - "Bash(git push origin main:*)"
+        - "Bash(git push origin HEAD:main:*)"
         - "Bash(crew automerge:*)"
         - "Bash(crew repo confirm:*)"
         - "Bash(crew release approve:*)"
@@ -141,6 +142,10 @@ acme/app: confirmed as private (2026-11-21)
 
 If the repo's visibility changes later (private to public, say), `start`, `go` and `resume` refuse to run, and `crew repo status` says what changed. In a public repo every piece branch is public, and so is the text of each pull request, which includes your request.
 
+A mission can run for days, so the engine checks again before every push. If the confirmation has been removed or the visibility has changed, nothing is pushed: the mission is stopped, you get a notification, and the message names the two commands to run, `crew repo confirm` and then `crew mission resume <id>`. The piece keeps its state, so resume carries on where it was. If GitHub can't be reached for the check, the engine notes it and tries again on the next tick.
+
+`start`, `go`, `resume` and that check also make sure the repo gh works on is the repo `origin` points at. In a clone with both `upstream` and `origin`, gh may default to `upstream`; when the two names differ crew refuses and says so. Fix it with `gh repo set-default`. An `origin` that has no owner/repo form (a local path) isn't compared.
+
 ### Mission settings
 
 `missions.yaml` holds the settings. The ones you are most likely to change:
@@ -149,7 +154,7 @@ If the repo's visibility changes later (private to public, say), `start`, `go` a
 - `limits.runs_at_once` must be `1` for now, and so must any `runs_at_once` under `repos:`. Pieces run one at a time until crew can check that parallel pieces don't touch the same files. Any other value, including `"*"`, makes crew refuse the file with an error like `limits.runs_at_once must be 1 (got "3"): pieces run one at a time until crew can check that parallel pieces don't overlap`.
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
 - `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
-- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo.
+- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. `steps` is read but not enforced in this stage.
 
 ## Launching the orchestrator
 
@@ -182,7 +187,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 
 ### A plan
 
-A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it:
+A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it. The line `<!-- crew:changes -->` ends the request: everything between the frontmatter and that line is the request, word for word, and crew records later changes below it, under `## Changes`. A plan without the marker line is rejected.
 
 ```markdown
 ---
@@ -199,6 +204,8 @@ pieces:
     waits_for: [P1]
 ---
 Add a health endpoint and show its status on the settings page.
+<!-- crew:changes -->
+## Changes
 ```
 
 A piece's `paths` records where the piece is meant to work. It is optional, and crew doesn't enforce it yet.
@@ -254,17 +261,26 @@ Queued:
 
 Events:
   1  11:29:53  mission-start
-  2  11:29:53  piece-start  P1  crew/m-20261121-162953-e991/P1
-  3  11:29:53  pr-opened  P1  PR #7
+  2  11:29:54  resumed
+  3  11:29:54  piece-start  P1  crew/m-20261121-162953-e991/P1
+  4  11:41:12  pr-opened  P1  PR #7
+  5  11:42:12  waiting-on-principal  P1  merge: PR #7 (P1) is waiting on you
+  6  11:42:12  notified  PR #7 (P1) is waiting on you
 
-cursor 3
+cursor 6
 ```
+
+The engine writes `resumed` every time it starts, the first time included.
+
+A mission marked `running` whose engine has died (after a reboot, say) says so, in the list and in the detail view: `engine not running; crew mission resume <id>` takes the place of `live, pid …`.
 
 `--since N` prints only the events after cursor `N`, which is how a script or the orchestrator follows along.
 
 ## What "waiting on you" means
 
 The engine does not guess at anything that needs a person. When it reaches such a point it parks the piece, records a wait with an id (`w1`, `w2`, ...), tells you with a desktop notification (macOS only for now) and shows it under "Waiting on you". If you don't answer, it reminds you at `remind_after`, then at twice that, then four times that, all measured from when the item started waiting (with 30 minutes: 30 minutes, 1 hour, 2 hours).
+
+crew also notifies you, once, when the same failure has kept repeating for the `remind_after` interval (for five ticks in a row if `remind_after` isn't set): GitHub logged out, a push refused by permissions or a hook, a mission file crew can't read. The notification names the mission, the piece if there is one, and the error. A failure that clears and comes back is told again. A changed repo visibility stops the mission until you confirm again (see "Confirming the repo").
 
 There are five kinds:
 
@@ -289,6 +305,20 @@ crew mission answer m-20261121-162953-e991 w2 --do goto --station build \
 
 A command that changes a mission while the engine is running doesn't edit the mission itself. It leaves the answer in the mission's `inbox/`, and the engine applies it on its next tick (once a minute). If the engine isn't running, the answer is applied when you resume.
 
+## When a station fails
+
+A run can end badly in three ways, and crew handles them in this order.
+
+1. **The run failed in a way that can be retried** (it was interrupted, say). The engine resumes the run where it stopped, at most twice per piece.
+2. **The run finished but left uncommitted files.** The engine sends the piece back once, to the factory's rework station (its `rework` station, or its start station when none is set), with a note listing the files. If files are uncommitted again when it finishes, that counts as a failure like the next one.
+3. **The run failed in a way that can't be retried, a route hit its `max`, or the two resumes or the one send-back didn't help.** The engine asks the orchestrator for one decision in a headless call. The orchestrator picks `retry`, `goto`, `cancel`, `rebrief`, `add` or `escalate`. A decision that can't be used, or that repeats an action it already took for the same kind of stop, comes to you as a `question`, and so does `escalate`.
+
+Each piece may use `orchestrator_calls_per_piece` such calls (3 by default). When they are used up, the next failure becomes a `limit` wait for you without another call.
+
+A git or GitHub command that doesn't answer is cut off (git after 30 seconds, or 2 minutes when it reaches the network; gh after 60 seconds, and git never asks for a password) and is tried again on the next tick.
+
+A worktree that holds uncommitted work is left in place when its piece is cancelled, so you can look at it. crew says so in a note and keeps trying to remove it each time the engine starts; remove it by hand when you are done. A piece that completes has its worktree removed, because its work is merged or empty.
+
 ## Changing a mission after it has started
 
 Use `crew mission amend` when you change your mind mid-mission. Give it the whole revised plan and your words:
@@ -297,12 +327,41 @@ Use `crew mission amend` when you change your mind mid-mission. Give it the whol
 crew mission amend m-20261121-162953-e991 @new-plan.md --words "also add a P3 for the docs"
 ```
 
+The revised plan is the whole file with the request and the marker lines exactly as they are in the current plan (`.crew/missions/<id>/mission.md`), and only the pieces changed. For the plan above, adding a docs piece looks like this:
+
+```markdown
+---
+pieces:
+  - id: P1
+    domain: web
+    factory: ship-change
+    brief: Add a /health endpoint.
+    paths: [api/**]
+  - id: P2
+    domain: web
+    factory: ship-change
+    brief: Show the health status on the settings page.
+    waits_for: [P1]
+  - id: P3
+    domain: web
+    factory: ship-change
+    brief: Document the /health endpoint.
+    waits_for: [P1]
+---
+Add a health endpoint and show its status on the settings page.
+<!-- crew:changes -->
+## Changes
+```
+
+If the current plan already has lines under `## Changes`, you can leave them out or keep them: crew keeps its own change log either way. What you said goes in `--words`, and crew passes it to the stations of every piece that starts afterwards, after the request, so a later change wins where it differs from the request.
+
 crew checks the new plan against the old one first and refuses it, changing nothing, in these cases:
 
 - The request text differs. An amendment can't change the request; start a new mission for a different job.
 - The plan is the same as the current one.
+- The mission hasn't started. Amend works on a running or stopped mission that has been started; for a planned mission, or one waiting for go, make a new plan with `crew mission plan`.
 - The mission is done.
-- A piece that has started (running, waiting, with a pull request open, or complete) has a changed field. Only a piece that is still queued can be changed.
+- A piece that has started (running, waiting, with a pull request open, or complete) has a changed field. Only a piece that has not started can be changed: a queued one, or one parked on a question because it waited for a piece that was cancelled.
 - A complete piece is removed from the plan.
 - A new piece reuses an id that was used before in this mission, even one that was cancelled.
 - The new plan fails the same checks `plan` runs.
@@ -353,6 +412,9 @@ What crew promises is this: crew itself never merges, closes or releases anythin
 The limits, specifically:
 
 - **Deny rules match command prefixes.** A command written another way, such as other flags first or a different spelling of the same push, isn't caught.
+- **The rule protecting the crew directory covers the file-editing tools.** A write made through a shell command isn't caught.
+- **"Pushing to main" is matched literally** (`git push origin main`, `git push origin HEAD:main`). If the repo's default branch has another name, add rules for it in `harnesses.yaml`.
+- **The mission's own folder in the repo (`state.json`, `inbox/`) and `.crew/runs/` are not protected.** "A station can't answer for you" is true of the `crew` commands; a file written into `inbox/` by another route would be applied as your answer.
 - **Where the confirmation is read from depends on which crew directory the command resolves.** Confirmations are stored under `<crew dir>/principal/`, so `--dir`, `CREW_HOME`, or a `crew.yaml` in the current directory choose which record is read.
 - **The checksum on the confirmation file catches hand edits and accidents only.** It isn't keyed, so someone who understands it can rewrite the file and the checksum together.
 - **A pseudo-terminal can fake the terminal.** That is why the session rules also deny `crew repo confirm`.
