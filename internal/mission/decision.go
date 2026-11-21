@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -43,6 +44,17 @@ func cutDecision(d OrchDecision) OrchDecision {
 	d.Target = cutText(d.Target, maxNameRunes)
 	d.Quote = cutText(d.Quote, maxNameRunes)
 	return d
+}
+
+// tooLong names the first of action, station or target that is over its cap.
+// Such a value can never be valid, so it is refused before any lookup.
+func tooLong(d OrchDecision) string {
+	for _, f := range []struct{ name, v string }{{"action", d.Action}, {"station", d.Station}, {"target", d.Target}} {
+		if utf8.RuneCountInString(f.v) > maxNameRunes {
+			return fmt.Sprintf("the %s is too long (over %d characters)", f.name, maxNameRunes)
+		}
+	}
+	return ""
 }
 
 // cutText cuts s to n runes and makes it valid UTF-8.
@@ -105,6 +117,7 @@ type applier struct {
 	by      string
 	piece   string
 	failure string
+	quote   string  // the model's full quote: checked uncut
 	next    Mission // the plan with an added piece, when the action is add
 }
 
@@ -112,12 +125,17 @@ type applier struct {
 // can't be used, or repeats an earlier one for the same stop, becomes a
 // question for the principal instead. m and s are never modified.
 func ApplyDecision(m Mission, s State, piece, failure string, d OrchDecision, by string, in CheckInput, now time.Time) (Mission, State, []Action, *RunStep) {
-	d = cutDecision(d)
-	a := &applier{decider: decider{m: m, s: s.Clone(), o: Obs{Now: now}}, in: in, by: by, piece: piece, failure: failure}
+	a := &applier{decider: decider{m: m, s: s.Clone(), o: Obs{Now: now}}, in: in, by: by, piece: piece, failure: failure, quote: d.Quote}
+	long := tooLong(d)
+	d = cutDecision(d) // validation below sees full values only through long and quote
 	if a.ps(piece) == nil {
 		return m, a.s, nil, nil
 	}
-	if why, action := a.rejection(d); why != "" {
+	why, action := a.rejection(d)
+	if long != "" {
+		why, action = long, invalidAction
+	}
+	if why != "" {
 		a.reject(d, action, why)
 		return m, a.s, a.actions, nil
 	}
@@ -207,7 +225,7 @@ func (a *applier) addProblem(d OrchDecision) string {
 	switch {
 	case d.Piece == nil:
 		return "add needs a piece"
-	case strings.TrimSpace(d.Quote) == "" || !strings.Contains(a.m.Request, d.Quote):
+	case strings.TrimSpace(a.quote) == "" || !strings.Contains(a.m.Request, a.quote):
 		return "the quote is not in the request"
 	case !Allows(a.in.Limits.Additions, a.s.Additions+1):
 		return "the orchestrator has used up its piece additions"

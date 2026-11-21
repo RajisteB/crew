@@ -286,3 +286,29 @@ func TestApplyDecision_ModelTextIsCut(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyDecision_FieldsAreValidatedUncut(t *testing.T) {
+	m := acme()
+	m.Request = strings.Repeat("Launch referrals with a credit per friend. ", 8)
+	run := func(d OrchDecision) (Mission, State, []Action, *RunStep) {
+		return ApplyDecision(m, exState(), "P1", "limit-hit", d, "orchestrator", exInput(), t0)
+	}
+	head := string([]rune(m.Request)[:100])
+	_, s, as, _ := run(OrchDecision{Action: "add", Piece: newPiece(), Quote: head + strings.Repeat("Z", 50)})
+	if s.Pieces[0].Wait == nil || !hasKind(as, EvEscalated) || s.Additions != 0 {
+		t.Error("add with a forged long quote was accepted")
+	}
+	m2, s, as, _ := run(OrchDecision{Action: "add", Piece: newPiece(), Quote: string([]rune(m.Request)[:150]), Reason: "needed"})
+	if len(m2.Pieces) != len(m.Pieces)+1 || s.Additions != 1 {
+		t.Fatal("add with a genuine long quote was refused")
+	}
+	for _, str := range longStrings(s, as) {
+		if n := len([]rune(str)); n > 100 {
+			t.Errorf("stored string has %d runes", n)
+		}
+	}
+	_, s, as, step := run(OrchDecision{Action: "goto", Station: strings.Repeat("p", 150)})
+	if step != nil || s.Pieces[0].Wait == nil || !strings.Contains(s.Pieces[0].Wait.Question, "too long") || !hasKind(as, EvEscalated) {
+		t.Errorf("goto with a long station accepted: %+v", step)
+	}
+}
