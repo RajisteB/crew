@@ -73,6 +73,28 @@ func TestOrchestratorBody_AnswersAndFailures(t *testing.T) {
 	}
 }
 
+func TestOrchestratorBody_AnswersOnlyOnPrincipalsSay(t *testing.T) {
+	body := OrchestratorBody()
+	i := strings.Index(body, "lists each item waiting")
+	if i < 0 {
+		t.Fatal("no waiting-items paragraph")
+	}
+	para := body[i:]
+	if j := strings.Index(para, "\n\n"); j > 0 {
+		para = para[:j]
+	}
+	for _, want := range []string{
+		"only after the principal has said, in this conversation, what to do about that item",
+		"ask them instead of choosing for them",
+		"the decision is theirs",
+		"a question about a piece that hasn't started takes only cancel",
+	} {
+		if !strings.Contains(para, want) {
+			t.Errorf("waiting-items paragraph lacks %q", want)
+		}
+	}
+}
+
 func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 	body := OrchestratorBody()
 	order := []string{"crew mission status", "crew domain list", "crew mission start", "crew mission amend", "crew automerge", "crew:changes"}
@@ -91,7 +113,7 @@ func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 		}
 	}
 	if n := strings.Count(body, "\n"); n > 100 {
-		t.Errorf("body is %d lines, want about 90 or fewer", n)
+		t.Errorf("body is %d lines, want 100 or fewer", n)
 	}
 }
 
