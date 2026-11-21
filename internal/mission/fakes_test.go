@@ -70,32 +70,32 @@ type fakeGit struct {
 	ahead int
 }
 
-func (g *fakeGit) Fetch(branch string) error {
+func (g *fakeGit) Fetch(_ context.Context, branch string) error {
 	g.log.add("Fetch %s", branch)
 	return g.fail.hit("Fetch")
 }
 
-func (g *fakeGit) AddWorktree(path, branch, from string) error {
+func (g *fakeGit) AddWorktree(_ context.Context, path, branch, from string) error {
 	g.log.add("AddWorktree %s %s %s", path, branch, from)
 	return g.fail.hit("AddWorktree")
 }
 
-func (g *fakeGit) RemoveWorktree(path string, force bool) error {
+func (g *fakeGit) RemoveWorktree(_ context.Context, path string, force bool) error {
 	g.log.add("RemoveWorktree %s force=%v", path, force)
 	return g.fail.hit("RemoveWorktree")
 }
 
-func (g *fakeGit) Dirty(worktree string) ([]string, error) {
+func (g *fakeGit) Dirty(_ context.Context, worktree string) ([]string, error) {
 	g.log.add("Dirty %s", worktree)
 	return slices.Clone(g.dirty), g.fail.hit("Dirty")
 }
 
-func (g *fakeGit) Ahead(worktree, base string) (int, error) {
+func (g *fakeGit) Ahead(_ context.Context, worktree, base string) (int, error) {
 	g.log.add("Ahead %s %s", worktree, base)
 	return g.ahead, g.fail.hit("Ahead")
 }
 
-func (g *fakeGit) Push(worktree, branch string) error {
+func (g *fakeGit) Push(_ context.Context, worktree, branch string) error {
 	g.log.add("Push %s %s", worktree, branch)
 	return g.fail.hit("Push")
 }

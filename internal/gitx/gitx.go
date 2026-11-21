@@ -4,6 +4,7 @@ package gitx
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,25 +12,60 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
-// stderrLines is how many trailing stderr lines an error carries.
-const stderrLines = 5
+const (
+	// stderrLines is how many trailing stderr lines an error carries.
+	stderrLines = 5
+	// networkTimeout bounds a git command that reaches the network (fetch,
+	// push, ls-remote); localTimeout bounds every other one.
+	networkTimeout = 2 * time.Minute
+	localTimeout   = 30 * time.Second
+	// waitDelay is how long a killed command's output pipes may stay open
+	// (an ssh child can outlive git) before they are closed.
+	waitDelay = 2 * time.Second
+)
 
 // Repo is a git repository's main checkout.
 type Repo struct{ Dir string }
 
-// git runs git in dir and returns stdout. Errors carry the tail of stderr.
-func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+// git runs git in dir with a deadline of timeout (and ctx's own) and returns
+// stdout. Errors carry the tail of stderr. Git never prompts for credentials:
+// a prompt would block the engine, so it fails instead. The principal's own
+// ssh configuration is left alone.
+func git(ctx context.Context, timeout time.Duration, dir string, args ...string) (string, error) {
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(cctx, "git", args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		if stopped := stoppedError(ctx, cctx, args[0], timeout, time.Since(start)); stopped != nil {
+			return "", stopped
+		}
 		return "", fmt.Errorf("git %s: %w: %s", args[0], err, tail(stderr.String()))
 	}
 	return stdout.String(), nil
+}
+
+// stoppedError says a command was cut short: cancelled by the caller or out
+// of time. It is nil when the context is still alive.
+func stoppedError(parent, cctx context.Context, name string, timeout, took time.Duration) error {
+	switch {
+	case cctx.Err() == nil:
+		return nil
+	case errors.Is(parent.Err(), context.Canceled):
+		return fmt.Errorf("git %s: cancelled", name)
+	case parent.Err() != nil: // the caller's own deadline
+		return fmt.Errorf("git %s: timed out after %s", name, took.Round(time.Millisecond))
+	}
+	return fmt.Errorf("git %s: timed out after %s", name, timeout)
 }
 
 func tail(s string) string {
@@ -49,8 +85,8 @@ func checkRef(kind, name string) error {
 }
 
 // Root returns the absolute path of the repository's top-level directory.
-func (r Repo) Root() (string, error) {
-	out, err := git(r.Dir, "rev-parse", "--show-toplevel")
+func (r Repo) Root(ctx context.Context) (string, error) {
+	out, err := git(ctx, localTimeout, r.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", err
 	}
@@ -58,31 +94,31 @@ func (r Repo) Root() (string, error) {
 }
 
 // Fetch runs `git fetch origin <branch>` so origin/<branch> is current.
-func (r Repo) Fetch(branch string) error {
+func (r Repo) Fetch(ctx context.Context, branch string) error {
 	if err := checkRef("branch", branch); err != nil {
 		return err
 	}
-	_, err := git(r.Dir, "fetch", "origin", branch)
+	_, err := git(ctx, networkTimeout, r.Dir, "fetch", "origin", branch)
 	return err
 }
 
 // AddWorktree creates a worktree at path on branch, started at from. An
 // existing branch is reset to from, so a failed start can be retried.
-func (r Repo) AddWorktree(path, branch, from string) error {
+func (r Repo) AddWorktree(ctx context.Context, path, branch, from string) error {
 	if err := checkRef("branch", branch); err != nil {
 		return err
 	}
 	if err := checkRef("start point", from); err != nil {
 		return err
 	}
-	_, err := git(r.Dir, "worktree", "add", "--no-track", "-B", branch, "--", path, from)
+	_, err := git(ctx, localTimeout, r.Dir, "worktree", "add", "--no-track", "-B", branch, "--", path, from)
 	return err
 }
 
 // RemoveWorktree removes the worktree at path. It returns nil when the
 // worktree is already gone. Without force, git refuses uncommitted changes.
-func (r Repo) RemoveWorktree(path string, force bool) error {
-	listed, err := r.Worktrees()
+func (r Repo) RemoveWorktree(ctx context.Context, path string, force bool) error {
+	listed, err := r.Worktrees(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,18 +138,18 @@ func (r Repo) RemoveWorktree(path string, force bool) error {
 		args = append(args, "--force")
 	}
 	args = append(args, "--", path)
-	if _, err := git(r.Dir, args...); err != nil {
-		return r.pruneIfMissing(abs, err)
+	if _, err := git(ctx, localTimeout, r.Dir, args...); err != nil {
+		return r.pruneIfMissing(ctx, abs, err)
 	}
 	return nil
 }
 
 // pruneIfMissing treats a worktree whose directory vanished as removed.
-func (r Repo) pruneIfMissing(abs string, cause error) error {
+func (r Repo) pruneIfMissing(ctx context.Context, abs string, cause error) error {
 	if _, statErr := os.Stat(abs); statErr == nil {
 		return cause
 	}
-	if _, err := git(r.Dir, "worktree", "prune"); err != nil {
+	if _, err := git(ctx, localTimeout, r.Dir, "worktree", "prune"); err != nil {
 		return errors.Join(cause, err)
 	}
 	return nil
@@ -136,8 +172,8 @@ func (r Repo) canonical(path string) string {
 }
 
 // Worktrees lists the absolute paths of all worktrees, main checkout first.
-func (r Repo) Worktrees() ([]string, error) {
-	out, err := git(r.Dir, "worktree", "list", "--porcelain")
+func (r Repo) Worktrees(ctx context.Context) ([]string, error) {
+	out, err := git(ctx, localTimeout, r.Dir, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +188,8 @@ func (r Repo) Worktrees() ([]string, error) {
 
 // Dirty lists paths with uncommitted changes, including untracked files but
 // not ignored ones.
-func (r Repo) Dirty(worktree string) ([]string, error) {
-	out, err := git(worktree, "status", "--porcelain", "-z", "--untracked-files=all")
+func (r Repo) Dirty(ctx context.Context, worktree string) ([]string, error) {
+	out, err := git(ctx, localTimeout, worktree, "status", "--porcelain", "-z", "--untracked-files=all")
 	if err != nil {
 		return nil, err
 	}
@@ -173,11 +209,11 @@ func (r Repo) Dirty(worktree string) ([]string, error) {
 }
 
 // Ahead counts the commits in base..HEAD of the worktree.
-func (r Repo) Ahead(worktree, base string) (int, error) {
+func (r Repo) Ahead(ctx context.Context, worktree, base string) (int, error) {
 	if err := checkRef("base", base); err != nil {
 		return 0, err
 	}
-	out, err := git(worktree, "rev-list", "--count", base+"..HEAD")
+	out, err := git(ctx, localTimeout, worktree, "rev-list", "--count", base+"..HEAD")
 	if err != nil {
 		return 0, err
 	}
@@ -189,20 +225,20 @@ func (r Repo) Ahead(worktree, base string) (int, error) {
 }
 
 // Push runs `git push -u origin <branch>` from the worktree.
-func (r Repo) Push(worktree, branch string) error {
+func (r Repo) Push(ctx context.Context, worktree, branch string) error {
 	if err := checkRef("branch", branch); err != nil {
 		return err
 	}
-	_, err := git(worktree, "push", "-u", "origin", branch)
+	_, err := git(ctx, networkTimeout, worktree, "push", "-u", "origin", branch)
 	return err
 }
 
 // RemoteURL returns the URL of the named remote.
-func (r Repo) RemoteURL(name string) (string, error) {
+func (r Repo) RemoteURL(ctx context.Context, name string) (string, error) {
 	if err := checkRef("remote", name); err != nil {
 		return "", err
 	}
-	out, err := git(r.Dir, "remote", "get-url", "--", name)
+	out, err := git(ctx, localTimeout, r.Dir, "remote", "get-url", "--", name)
 	if err != nil {
 		return "", err
 	}

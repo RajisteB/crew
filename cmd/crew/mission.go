@@ -84,7 +84,7 @@ func missionCmd(args []string, stdin io.Reader, out io.Writer) error {
 	if pos[0] == "setup" {
 		return missionSetup(env)
 	}
-	if env.repoRoot, err = (gitx.Repo{Dir: project}).Root(); err != nil {
+	if env.repoRoot, err = (gitx.Repo{Dir: project}).Root(context.Background()); err != nil {
 		return fmt.Errorf("crew mission needs a git repository: %w", err)
 	}
 	return dispatchMission(env, pos)
@@ -260,7 +260,7 @@ func startChecks(env missionEnv, store mission.Store) error {
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
-	return confirmRepo(env.crewDir, env.repoRoot, info)
+	return confirmRepo(context.Background(), env.crewDir, env.repoRoot, info)
 }
 
 func missionStart(env missionEnv, id string) error {

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type call struct {
@@ -161,5 +162,38 @@ func TestFindPR_ErrorsAreReported(t *testing.T) {
 	f = &fake{out: "not json"}
 	if _, _, err := f.client().FindPR(context.Background(), "b"); err == nil {
 		t.Fatal("want error for bad output")
+	}
+}
+
+// blockUntilDone is an Exec that hangs until its context ends.
+func blockUntilDone(ctx context.Context, _ string, _ []byte, _ string, _ ...string) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestClient_HungCallTimesOut(t *testing.T) {
+	c := Client{Dir: "/repo", Exec: blockUntilDone, Timeout: 50 * time.Millisecond}
+	start := time.Now()
+	_, err := c.PRState(context.Background(), 3)
+	if err == nil || !strings.Contains(err.Error(), "timed out after 50ms") || !strings.Contains(err.Error(), "gh pr view") {
+		t.Fatalf("err = %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatalf("took %s", time.Since(start))
+	}
+}
+
+func TestClient_CancelledParentIsNotATimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	_, err := Client{Dir: "/repo", Exec: blockUntilDone}.Repo(ctx)
+	if err == nil || strings.Contains(err.Error(), "timed out") || !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestClient_DefaultTimeoutIsSixtySeconds(t *testing.T) {
+	if callTimeout != 60*time.Second {
+		t.Fatalf("callTimeout = %s", callTimeout)
 	}
 }

@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,6 +61,8 @@ func newRepo(t *testing.T) (Repo, string) {
 	return Repo{Dir: dir}, origin
 }
 
+var ctx = context.Background()
+
 func realPath(t *testing.T, p string) string {
 	t.Helper()
 	r, err := filepath.EvalSymlinks(p)
@@ -71,11 +74,11 @@ func realPath(t *testing.T, p string) string {
 
 func TestAddWorktree_CreatesBranchFromBase(t *testing.T) {
 	repo, _ := newRepo(t)
-	if err := repo.Fetch("main"); err != nil {
+	if err := repo.Fetch(ctx, "main"); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "crew/m1/p1", "origin/main"); err != nil {
 		t.Fatal(err)
 	}
 	if got := run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"); got != "crew/m1/p1" {
@@ -84,14 +87,14 @@ func TestAddWorktree_CreatesBranchFromBase(t *testing.T) {
 	if run(t, wt, "rev-parse", "HEAD") != run(t, repo.Dir, "rev-parse", "origin/main") {
 		t.Fatal("worktree not at origin/main")
 	}
-	list, err := repo.Worktrees()
+	list, err := repo.Worktrees(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Contains(list, realPath(t, wt)) {
 		t.Fatalf("worktrees %v missing %s", list, wt)
 	}
-	root, err := repo.Root()
+	root, err := repo.Root(ctx)
 	if err != nil || root != realPath(t, repo.Dir) {
 		t.Fatalf("root = %q, %v", root, err)
 	}
@@ -99,17 +102,17 @@ func TestAddWorktree_CreatesBranchFromBase(t *testing.T) {
 
 func TestAddWorktree_ExistingBranchSucceeds(t *testing.T) {
 	repo, _ := newRepo(t)
-	if err := repo.Fetch("main"); err != nil {
+	if err := repo.Fetch(ctx, "main"); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "crew/m1/p1", "origin/main"); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.RemoveWorktree(wt, true); err != nil {
+	if err := repo.RemoveWorktree(ctx, wt, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "crew/m1/p1", "origin/main"); err != nil {
 		t.Fatalf("second add: %v", err)
 	}
 	if got := run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"); got != "crew/m1/p1" {
@@ -120,10 +123,10 @@ func TestAddWorktree_ExistingBranchSucceeds(t *testing.T) {
 func TestAddWorktree_RejectsDashBranch(t *testing.T) {
 	repo, _ := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "-evil", "main"); err == nil {
+	if err := repo.AddWorktree(ctx, wt, "-evil", "main"); err == nil {
 		t.Fatal("expected error for branch starting with -")
 	}
-	if err := repo.AddWorktree(wt, "ok", "--upload-pack=x"); err == nil {
+	if err := repo.AddWorktree(ctx, wt, "ok", "--upload-pack=x"); err == nil {
 		t.Fatal("expected error for ref starting with -")
 	}
 }
@@ -131,26 +134,26 @@ func TestAddWorktree_RejectsDashBranch(t *testing.T) {
 func TestRemoveWorktree_TwiceIsNil(t *testing.T) {
 	repo, _ := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "b1", "main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "b1", "main"); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 2 {
-		if err := repo.RemoveWorktree(wt, false); err != nil {
+		if err := repo.RemoveWorktree(ctx, wt, false); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
 	}
 	// Directory deleted by hand.
 	wt2 := filepath.Join(t.TempDir(), "wt2")
-	if err := repo.AddWorktree(wt2, "b2", "main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt2, "b2", "main"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(wt2); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.RemoveWorktree(wt2, false); err != nil {
+	if err := repo.RemoveWorktree(ctx, wt2, false); err != nil {
 		t.Fatalf("hand-deleted: %v", err)
 	}
-	list, _ := repo.Worktrees()
+	list, _ := repo.Worktrees(ctx)
 	if len(list) != 1 {
 		t.Fatalf("worktrees = %v", list)
 	}
@@ -159,18 +162,18 @@ func TestRemoveWorktree_TwiceIsNil(t *testing.T) {
 func TestRemoveWorktree_RefusesDirtyWithoutForce(t *testing.T) {
 	repo, _ := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "b1", "main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "b1", "main"); err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(wt, "a.txt"), "changed\n")
-	err := repo.RemoveWorktree(wt, false)
+	err := repo.RemoveWorktree(ctx, wt, false)
 	if err == nil || !strings.Contains(err.Error(), "use --force") {
 		t.Fatalf("expected git's refusal, got %v", err)
 	}
 	if _, statErr := os.Stat(wt); statErr != nil {
 		t.Fatal("worktree should still exist")
 	}
-	if err := repo.RemoveWorktree(wt, true); err != nil {
+	if err := repo.RemoveWorktree(ctx, wt, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(wt); !os.IsNotExist(statErr) {
@@ -180,14 +183,14 @@ func TestRemoveWorktree_RefusesDirtyWithoutForce(t *testing.T) {
 
 func TestDirty_ListsUntrackedAndModified(t *testing.T) {
 	repo, _ := newRepo(t)
-	got, err := repo.Dirty(repo.Dir)
+	got, err := repo.Dirty(ctx, repo.Dir)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("clean: %v %v", got, err)
 	}
 	write(t, filepath.Join(repo.Dir, "a.txt"), "changed\n")
 	write(t, filepath.Join(repo.Dir, "new.txt"), "n\n")
 	write(t, filepath.Join(repo.Dir, "ignored.log"), "x\n")
-	got, err = repo.Dirty(repo.Dir)
+	got, err = repo.Dirty(ctx, repo.Dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +202,7 @@ func TestDirty_ListsUntrackedAndModified(t *testing.T) {
 
 func TestAhead_CountsCommits(t *testing.T) {
 	repo, _ := newRepo(t)
-	n, err := repo.Ahead(repo.Dir, "origin/main")
+	n, err := repo.Ahead(ctx, repo.Dir, "origin/main")
 	if err != nil || n != 0 {
 		t.Fatalf("ahead = %d, %v", n, err)
 	}
@@ -208,7 +211,7 @@ func TestAhead_CountsCommits(t *testing.T) {
 		run(t, repo.Dir, "add", f)
 		run(t, repo.Dir, "commit", "-m", f)
 	}
-	n, err = repo.Ahead(repo.Dir, "origin/main")
+	n, err = repo.Ahead(ctx, repo.Dir, "origin/main")
 	if err != nil || n != 2 {
 		t.Fatalf("ahead = %d, %v", n, err)
 	}
@@ -217,44 +220,44 @@ func TestAhead_CountsCommits(t *testing.T) {
 func TestPush_SendsBranchToOrigin(t *testing.T) {
 	repo, origin := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "crew/m1/p1", "main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "crew/m1/p1", "main"); err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(wt, "f.txt"), "f")
 	run(t, wt, "add", "f.txt")
 	run(t, wt, "commit", "-m", "f")
-	if err := repo.Push(wt, "crew/m1/p1"); err != nil {
+	if err := repo.Push(ctx, wt, "crew/m1/p1"); err != nil {
 		t.Fatal(err)
 	}
 	if run(t, origin, "rev-parse", "crew/m1/p1") != run(t, wt, "rev-parse", "HEAD") {
 		t.Fatal("origin branch not at worktree HEAD")
 	}
-	if err := repo.Push(wt, "-bad"); err == nil {
+	if err := repo.Push(ctx, wt, "-bad"); err == nil {
 		t.Fatal("expected error for branch starting with -")
 	}
 }
 
 func TestRemoteURL_ReturnsOrigin(t *testing.T) {
 	repo, origin := newRepo(t)
-	got, err := repo.RemoteURL("origin")
+	got, err := repo.RemoteURL(ctx, "origin")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != origin {
 		t.Fatalf("got %q want %q", got, origin)
 	}
-	if _, err := repo.RemoteURL("nope"); err == nil {
+	if _, err := repo.RemoteURL(ctx, "nope"); err == nil {
 		t.Fatal("expected error for a missing remote")
 	}
 }
 
 func TestAddWorktree_HasNoUpstream(t *testing.T) {
 	repo, _ := newRepo(t)
-	if err := repo.Fetch("main"); err != nil {
+	if err := repo.Fetch(ctx, "main"); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+	if err := repo.AddWorktree(ctx, wt, "crew/m1/p1", "origin/main"); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "@{u}")

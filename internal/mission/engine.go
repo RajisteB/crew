@@ -197,12 +197,12 @@ func (t *tick) observeRun(p PieceState) {
 	if ro.State.Status != run.StatusDone {
 		return
 	}
-	dirty, err := t.e.Git.Dirty(p.Worktree)
+	dirty, err := t.e.Git.Dirty(t.ctx, p.Worktree)
 	if err != nil {
 		t.note(p.ID, "can't check the worktree: %v", err)
 		return
 	}
-	ahead, err := t.e.Git.Ahead(p.Worktree, "origin/"+t.s.Base)
+	ahead, err := t.e.Git.Ahead(t.ctx, p.Worktree, "origin/"+t.s.Base)
 	if err != nil {
 		t.note(p.ID, "can't count commits: %v", err)
 		return

@@ -85,7 +85,7 @@ func repoConfirm(store principal.Store, project string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	remote, err := gitx.Repo{Dir: project}.RemoteURL("origin")
+	remote, err := gitx.Repo{Dir: project}.RemoteURL(context.Background(), "origin")
 	if err != nil {
 		remote = "(no origin remote)"
 	}

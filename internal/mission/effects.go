@@ -59,22 +59,22 @@ func (t *tick) startPiece(a StartPiece) error {
 	wt := filepath.Join(e.RepoRoot, run.CrewDir, "worktrees", t.s.MissionID+"-"+p.ID)
 	branch := "crew/" + t.s.MissionID + "/" + p.ID
 	base := t.s.Base
-	if err := e.Git.Fetch(base); err != nil {
+	if err := e.Git.Fetch(t.ctx, base); err != nil {
 		t.note(p.ID, "can't start: fetch %s: %v", base, err)
 		return nil
 	}
-	if err := e.Git.RemoveWorktree(wt, true); err != nil {
+	if err := e.Git.RemoveWorktree(t.ctx, wt, true); err != nil {
 		t.note(p.ID, "can't start: clear leftover worktree: %v", err)
 		return nil
 	}
-	if err := e.Git.AddWorktree(wt, branch, "origin/"+base); err != nil {
+	if err := e.Git.AddWorktree(t.ctx, wt, branch, "origin/"+base); err != nil {
 		t.note(p.ID, "can't start: add worktree: %v", err)
 		return nil
 	}
 	runID, err := e.Runs.Start(p, PieceInput(t.s.MissionID, t.m, p, e.Domains[p.Domain]), wt)
 	if err != nil {
 		t.note(p.ID, "can't start: run: %v", err)
-		if rmErr := e.Git.RemoveWorktree(wt, true); rmErr != nil {
+		if rmErr := e.Git.RemoveWorktree(t.ctx, wt, true); rmErr != nil {
 			t.note(p.ID, "can't clean up the worktree after a failed start: %v", rmErr)
 		}
 		return nil
@@ -140,7 +140,7 @@ func (t *tick) openPR(a OpenPR) error {
 	if ok, err := t.repoAllowsPush(a.Piece); !ok {
 		return err
 	}
-	if err := e.Git.Push(ps.Worktree, ps.Branch); err != nil {
+	if err := e.Git.Push(t.ctx, ps.Worktree, ps.Branch); err != nil {
 		t.note(a.Piece, "can't push %s: %v", ps.Branch, err)
 		return nil
 	}
@@ -251,7 +251,7 @@ func (t *tick) removeWorktree(ps PieceState, force bool) {
 	if ps.Worktree == "" {
 		return
 	}
-	if err := t.e.Git.RemoveWorktree(ps.Worktree, force); err != nil {
+	if err := t.e.Git.RemoveWorktree(t.ctx, ps.Worktree, force); err != nil {
 		if force {
 			t.note(ps.ID, "can't remove the worktree: %v", err)
 		} else {

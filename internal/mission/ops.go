@@ -18,12 +18,12 @@ const (
 
 // GitOps is the git side of the engine. gitx.Repo satisfies it.
 type GitOps interface {
-	Fetch(branch string) error
-	AddWorktree(path, branch, from string) error
-	RemoveWorktree(path string, force bool) error
-	Dirty(worktree string) ([]string, error)
-	Ahead(worktree, base string) (int, error)
-	Push(worktree, branch string) error
+	Fetch(ctx context.Context, branch string) error
+	AddWorktree(ctx context.Context, path, branch, from string) error
+	RemoveWorktree(ctx context.Context, path string, force bool) error
+	Dirty(ctx context.Context, worktree string) ([]string, error)
+	Ahead(ctx context.Context, worktree, base string) (int, error)
+	Push(ctx context.Context, worktree, branch string) error
 }
 
 // GHOps is the GitHub side of the engine. gh.Client satisfies it.

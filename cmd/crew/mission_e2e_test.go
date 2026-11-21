@@ -171,7 +171,7 @@ func (r *e2eRig) launch() {
 	}
 	r.cmd("", "start", r.id)
 	r.cmd("", "go", r.id)
-	root, err := gitx.Repo{Dir: r.repo}.Root()
+	root, err := gitx.Repo{Dir: r.repo}.Root(context.Background())
 	if err != nil {
 		r.t.Fatal(err)
 	}

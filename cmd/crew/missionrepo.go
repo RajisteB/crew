@@ -14,8 +14,8 @@ import (
 // confirmRepo is the one repo check: the repo gh sees must be the repo that
 // origin points at, and it must be confirmed at its current visibility.
 // Start, go, resume and the engine's gate before every push all use it.
-func confirmRepo(crewDir, repoRoot string, info gh.RepoInfo) error {
-	if err := checkOriginMatches(repoRoot, info.Slug); err != nil {
+func confirmRepo(ctx context.Context, crewDir, repoRoot string, info gh.RepoInfo) error {
+	if err := checkOriginMatches(ctx, repoRoot, info.Slug); err != nil {
 		return err
 	}
 	return principal.CheckRepo(principal.Store{Dir: filepath.Join(crewDir, "principal")}, info)
@@ -29,7 +29,7 @@ func repoGate(crewDir, repoRoot string) func(context.Context) error {
 		if err != nil {
 			return fmt.Errorf("can't reach GitHub: %w", err)
 		}
-		return confirmRepo(crewDir, repoRoot, info)
+		return confirmRepo(ctx, crewDir, repoRoot, info)
 	}
 }
 
@@ -37,8 +37,8 @@ func repoGate(crewDir, repoRoot string) func(context.Context) error {
 // gh reports: pushes go to origin, the confirmation is about gh's repo. An
 // origin that has no owner/repo form (a local path) or can't be read is not
 // compared; a push to it fails visibly on its own.
-func checkOriginMatches(repoRoot, ghSlug string) error {
-	url, err := gitx.Repo{Dir: repoRoot}.RemoteURL("origin")
+func checkOriginMatches(ctx context.Context, repoRoot, ghSlug string) error {
+	url, err := gitx.Repo{Dir: repoRoot}.RemoteURL(ctx, "origin")
 	if err != nil {
 		return nil
 	}

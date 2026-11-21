@@ -98,7 +98,7 @@ func (r *missionRig) cmd(args ...string) (string, error) {
 
 func (r *missionRig) root() string {
 	r.t.Helper()
-	root, err := gitx.Repo{Dir: r.repo}.Root()
+	root, err := gitx.Repo{Dir: r.repo}.Root(context.Background())
 	if err != nil {
 		r.t.Fatal(err)
 	}

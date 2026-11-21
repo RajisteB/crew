@@ -11,12 +11,17 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
 	binary         = "gh"
 	stderrTailRows = 5
 	stateOpen      = "OPEN"
+	// callTimeout bounds each gh call; a dropped network or a stuck login
+	// must not hang the engine.
+	callTimeout = 60 * time.Second
+	waitDelay   = 2 * time.Second
 )
 
 // errMissing is returned when the gh binary is not installed.
@@ -25,10 +30,12 @@ var errMissing = errors.New("gh not found on PATH; install it and run gh auth lo
 // Exec runs a command in dir with stdin and returns its stdout.
 type Exec func(ctx context.Context, dir string, stdin []byte, name string, args ...string) (stdout []byte, err error)
 
-// Client runs gh in Dir. A nil Exec runs the real binary.
+// Client runs gh in Dir. A nil Exec runs the real binary. A zero Timeout
+// means callTimeout.
 type Client struct {
-	Dir  string
-	Exec Exec
+	Dir     string
+	Exec    Exec
+	Timeout time.Duration
 }
 
 // RepoInfo describes the repository in Dir. Visibility is lowercase.
@@ -128,8 +135,17 @@ func (c Client) run(ctx context.Context, stdin []byte, args ...string) ([]byte, 
 	if exe == nil {
 		exe = realExec
 	}
-	out, err := exe(ctx, c.Dir, stdin, binary, args...)
+	timeout := c.Timeout
+	if timeout <= 0 {
+		timeout = callTimeout
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	out, err := exe(cctx, c.Dir, stdin, binary, args...)
 	if err != nil {
+		if ctx.Err() == nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%s: timed out after %s", describe(args), timeout)
+		}
 		if errors.Is(err, exec.ErrNotFound) {
 			return nil, errMissing
 		}
@@ -143,6 +159,7 @@ func realExec(ctx context.Context, dir string, stdin []byte, name string, args .
 	cmd.Dir = dir
 	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
+	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
