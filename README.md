@@ -140,6 +140,21 @@ Each run lives in `<project>/.crew/runs/<id>/` (crew writes `.crew/.gitignore` s
 
 `crew compile` also writes a `foreman-<factory>` agent for every harness that can host one as the main session. Start it with `claude --agent foreman-ship-change` (in OpenCode, press Tab to pick it). It starts the run with `--detach`, polls `crew run status`, tells you what matters, passes what you say to the stations, and asks you at approval stops. It never runs a station, edits files or chooses routes: the engine does all of that, so a factory behaves the same with or without a foreman.
 
+## Missions
+
+A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub; crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands.
+
+```sh
+crew mission setup                    # once, for an older crew directory: missions.yaml and domains/
+crew repo confirm                     # once per repo, in a terminal
+crew mission plan @plan.md            # check a plan and create the mission
+crew mission start <id>               # run the start checks
+crew mission go <id>                  # your go: the engine starts
+crew mission status <id>              # what runs, and what waits on you
+```
+
+See [docs/missions.md](docs/missions.md) for setup, the commands, and what the safeguards do and don't cover.
+
 ## Source format
 
 Agents:
