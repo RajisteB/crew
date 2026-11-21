@@ -64,3 +64,34 @@ func TestHeld_MissingOrEmptyFile(t *testing.T) {
 		t.Fatal("an empty file holds nothing")
 	}
 }
+
+// A probe (Held) takes the flock for an instant. An Acquire landing in that
+// instant must not report a free lock as held.
+func TestAcquire_NotFooledByAProbe(t *testing.T) {
+	path := lockPath(t)
+	seed, err := Acquire(path, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed() // the file now exists with a live pid in it, so Held really probes
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				Held(path)
+			}
+		}
+	}()
+	defer func() { close(stop); <-done }()
+	for i := range 500 {
+		unlock, err := Acquire(path, 0o644)
+		if err != nil {
+			t.Fatalf("attempt %d: a probe made a free lock look held: %v", i, err)
+		}
+		unlock()
+	}
+}

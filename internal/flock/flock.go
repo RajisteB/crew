@@ -11,6 +11,15 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
+)
+
+const (
+	// A probe (Held) takes the flock for an instant, so one failed attempt
+	// doesn't prove the lock is held. Acquire tries a few times before it
+	// says so; a lock that is really held still fails within about 50ms.
+	acquireAttempts = 5
+	acquirePause    = 10 * time.Millisecond
 )
 
 // ErrHeld means another open file description holds the lock.
@@ -25,11 +34,8 @@ func Acquire(path string, mode os.FileMode) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := tryLock(f); err != nil {
 		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, ErrHeld
-		}
 		return nil, err
 	}
 	if err := f.Truncate(0); err == nil {
@@ -48,6 +54,23 @@ func Acquire(path string, mode os.FileMode) (func(), error) {
 			f.Close()
 		})
 	}, nil
+}
+
+// tryLock takes the flock without blocking, retrying while it looks held.
+func tryLock(f *os.File) error {
+	var err error
+	for i := range acquireAttempts {
+		if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
+			return nil
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			return err
+		}
+		if i < acquireAttempts-1 {
+			time.Sleep(acquirePause)
+		}
+	}
+	return ErrHeld
 }
 
 // Pid reads the pid written in the lock file; 0 when there is none.
