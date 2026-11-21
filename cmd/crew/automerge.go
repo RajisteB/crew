@@ -137,7 +137,7 @@ func automergeSet(req amRequest, out io.Writer) error {
 		if errors.Is(err, principal.ErrNotConfirmed) {
 			return fmt.Errorf("%s isn't confirmed; run crew repo confirm first", info.Slug)
 		}
-		return explainTampered(req.store, err)
+		return err
 	}
 	domains, err := resolveAMDomains(req)
 	if err != nil {
@@ -200,14 +200,14 @@ func requireChecks(req amRequest, info gh.RepoInfo, domains []string) error {
 	if err != nil || has || hasWorkflowFile(req.project) {
 		return err
 	}
-	d := "D"
-	if !req.all {
-		d = domains[0]
+	flagUsed := "--domain " + domains[0]
+	if req.all {
+		flagUsed = "--all"
 	}
 	return fmt.Errorf("%s has no checks: nothing ran on the latest commit of %s, and there is no workflow in .github/workflows.\n"+
 		"With auto-merge on, crew merges a pull request only after a check passes, so nothing would ever merge here.\n"+
-		"Add CI, or run crew automerge on --domain %s --without-checks to merge as soon as the factory finishes.",
-		info.Slug, info.DefaultBranch, d)
+		"Add CI, or run crew automerge on %s --without-checks to merge as soon as the factory finishes.",
+		info.Slug, info.DefaultBranch, flagUsed)
 }
 
 func hasWorkflowFile(project string) bool {

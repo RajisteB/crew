@@ -289,7 +289,31 @@ func TestAutomerge_Status(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := automergeCmd(r.args("status"), io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "automerge.json") {
+	if err == nil || !strings.Contains(err.Error(), "was edited outside crew") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAutomerge_DamagedRepoStoreIsNotBlamedOnSwitches(t *testing.T) {
+	r := newAMRig(t, true, "product")
+	r.confirmRepo(t)
+	if err := os.WriteFile(filepath.Join(r.store.Dir, "repos.json"), []byte("junk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fakeTTY(t, "acme/app product\n")
+	err := automergeCmd(r.args("on", "--domain", "product"), io.Discard)
+	if err == nil || strings.Contains(err.Error(), "automerge.json") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAutomerge_AllWithoutChecksNamesAllInAdvice(t *testing.T) {
+	r := newAMRig(t, false, "a", "b")
+	r.confirmRepo(t)
+	fakeTTY(t, "acme/app all\n")
+	err := automergeCmd(r.args("on", "--all"), io.Discard)
+	want := "Add CI, or run crew automerge on --all --without-checks to merge as soon as the factory finishes."
+	if err == nil || !strings.HasSuffix(err.Error(), want) {
 		t.Fatalf("err = %v", err)
 	}
 }
