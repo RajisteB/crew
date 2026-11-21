@@ -217,6 +217,12 @@ func TestEngine_ConflictMergedCleanly(t *testing.T) {
 	if !h.log.has("Fetch main") || !slices.Contains(h.kinds(), EvConflict) {
 		t.Fatalf("calls %v kinds %v", h.log.calls, h.kinds())
 	}
+	if evs := h.events(EvConflict); evs[0].Msg != "main was merged into the branch; checks run again" {
+		t.Fatalf("event = %+v", evs[0])
+	}
+	if evs := h.events(EvConflict); evs[0].Msg != "main was merged into the branch; checks run again" {
+		t.Fatalf("event = %+v", evs[0])
+	}
 }
 
 func TestEngine_ConflictAlreadyMergedDoesNothing(t *testing.T) {

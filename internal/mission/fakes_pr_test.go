@@ -2,6 +2,7 @@ package mission
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/crewfile-dev/crew/internal/gh"
@@ -37,7 +38,33 @@ func (g *fakeGit) MergeInto(_ context.Context, worktree, from string) ([]string,
 
 func (g *fakeGH) MergePR(_ context.Context, number int, method, headSHA string) error {
 	g.log.add("MergePR %d %s %s", number, method, headSHA)
-	return g.fail.hit("MergePR")
+	if err := g.fail.hit("MergePR"); err != nil {
+		return err
+	}
+	g.setState(number, "MERGED")
+	return nil
+}
+
+// queueGH accepts a merge without merging, as a merge queue does; with
+// stateErr set it also can't read the pull request after the merge call.
+type queueGH struct {
+	*fakeGH
+	stateErr bool
+	merged   bool
+}
+
+func (g *queueGH) MergePR(_ context.Context, number int, method, headSHA string) error {
+	g.log.add("MergePR %d %s %s", number, method, headSHA)
+	g.merged = true
+	return nil
+}
+
+func (g *queueGH) PRState(ctx context.Context, number int) (gh.PR, error) {
+	if g.stateErr && g.merged {
+		g.log.add("PRState %d", number)
+		return gh.PR{}, errors.New("PRState failed")
+	}
+	return g.fakeGH.PRState(ctx, number)
 }
 
 func (g *fakeGH) FailedLog(_ context.Context, check gh.Check) (string, error) {

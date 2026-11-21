@@ -87,13 +87,21 @@ func (t *tick) merge(a Merge) error {
 		return nil
 	}
 	auto, ok := t.freshMode(p, ps)
-	if !ok || auto.Mode == principal.AutoOff || (auto.Mode == principal.AutoOn && !a.Checked) {
+	if !ok {
+		t.note(a.Piece, "can't read the auto-merge switch or the changed files for PR #%d right now; not merging", ps.PR)
+		return nil
+	}
+	if auto.Mode == principal.AutoOff || (auto.Mode == principal.AutoOn && !a.Checked) {
 		t.note(a.Piece, "auto-merge for PR #%d was turned off; not merging", ps.PR)
 		return nil
 	}
 	method := cmp.Or(t.e.MergeMethod, defaultMergeMethod)
 	if err := t.e.GH.MergePR(t.ctx, ps.PR, method, a.Head); err != nil {
 		t.note(a.Piece, "can't merge PR #%d: %v (the merge method is %s; set merge_method in missions.yaml)", ps.PR, err, method)
+		return t.prWaits(a.Piece, fmt.Sprintf("PR #%d (%s): GitHub refused the merge; crew keeps trying, or merge it yourself", ps.PR, a.Piece))
+	}
+	if pr, err := t.e.GH.PRState(t.ctx, ps.PR); err != nil || pr.State != "MERGED" {
+		t.note(a.Piece, "GitHub accepted the merge of PR #%d but it isn't merged yet (a merge queue, or GitHub's own auto-merge); crew completes the piece when it is", ps.PR)
 		return nil
 	}
 	t.s = Merged(t.s, a.Piece)
@@ -151,7 +159,10 @@ func (t *tick) pushMerged(ps PieceState) error {
 	if head == ps.Head {
 		// crew already pushed this commit; GitHub has not caught up.
 		t.note(ps.ID, "GitHub reports a conflict on PR #%d, but origin/%s merges into the branch cleanly; waiting for GitHub to check again", ps.PR, t.s.Base)
-		return nil
+		if t.now.Sub(ps.PRSince) < checksPatience {
+			return nil
+		}
+		return t.prWaits(ps.ID, fmt.Sprintf("PR #%d (%s): GitHub still reports a conflict after 30m, though %s merges into the branch cleanly; it is waiting on you", ps.PR, ps.ID, t.s.Base))
 	}
 	if ok, err := t.repoAllowsPush(ps.ID); !ok {
 		return err
@@ -164,13 +175,13 @@ func (t *tick) pushMerged(ps PieceState) error {
 	if err := t.save(); err != nil {
 		return err
 	}
-	t.emit(Event{Kind: EvConflict, Piece: ps.ID, Msg: "main was merged into the branch; checks run again"})
+	t.emit(Event{Kind: EvConflict, Piece: ps.ID, Msg: t.s.Base + " was merged into the branch; checks run again"})
 	return nil
 }
 
 func (t *tick) conflictSendBack(p Piece, ps PieceState, conflicts []string) error {
 	base, files := t.s.Base, fileList(conflicts)
-	note := fmt.Sprintf("main has moved and these files conflict: %s. Merge origin/%s into this branch, resolve the conflicts and commit.", files, base)
+	note := fmt.Sprintf("%s has moved and these files conflict: %s. Merge origin/%s into this branch, resolve the conflicts and commit.", base, files, base)
 	if !t.reworkStep(p, ps, "", note) {
 		return nil
 	}
@@ -241,7 +252,37 @@ func (t *tick) forPR(sum Summary, failure string, ps PieceState) Summary {
 	case reasonChecksFailed:
 		return sum.ForPR(failure, t.checksProblem(ps.ID, ps))
 	case reasonConflict:
-		return sum.ForPR(failure, ps.Problem)
+		problem := "conflicts with " + t.s.Base
+		if strings.HasPrefix(ps.Problem, "conflicts with") {
+			problem = ps.Problem
+		}
+		return sum.ForPR(failure, problem)
 	}
 	return sum
+}
+
+// prWaits makes the piece's merge wait say question. A wait it opens is
+// recorded and notified like any other; a wait that only changes its text is
+// saved and nothing more.
+func (t *tick) prWaits(piece, question string) error {
+	next, opened := PRWaits(t.s, piece, question, t.now)
+	if !opened && !t.changed(next, piece) {
+		return nil
+	}
+	t.s = next
+	if err := t.save(); err != nil {
+		return err
+	}
+	if opened {
+		t.emit(Event{Kind: EvWaitingOnPrincipal, Piece: piece, Msg: WaitMerge + ": " + question})
+		t.notify(Notify{Title: "crew mission " + t.s.MissionID, Body: question})
+	}
+	return nil
+}
+
+// changed reports whether next differs from the state in the piece's wait text.
+func (t *tick) changed(next State, piece string) bool {
+	was, _ := t.s.Piece(piece)
+	now, _ := next.Piece(piece)
+	return was.Wait != nil && now.Wait != nil && was.Wait.Question != now.Wait.Question
 }
