@@ -3,6 +3,7 @@ package mission
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -37,6 +38,7 @@ type Settings struct {
 	Approval    string            `yaml:"mission_approval"`     // "on" | "off"
 	Harness     string            `yaml:"orchestrator_harness"` // harness that runs headless orchestrator calls
 	RemindAfter string            `yaml:"remind_after"`         // Go duration
+	MergeMethod string            `yaml:"merge_method"`         // "squash" | "merge" | "rebase"; empty means squash
 	Limits      Limits            `yaml:"limits"`
 	Repos       map[string]Limits `yaml:"repos"` // "owner/name" -> overrides; unset fields inherit
 }
@@ -74,6 +76,11 @@ func (s Settings) validate() error {
 		if _, err := time.ParseDuration(s.RemindAfter); err != nil {
 			return fmt.Errorf("remind_after: %w", err)
 		}
+	}
+	switch s.MergeMethod {
+	case "", "squash", "merge", "rebase":
+	default:
+		return fmt.Errorf(`merge_method must be "squash", "merge" or "rebase", got %q`, s.MergeMethod)
 	}
 	named := []struct {
 		key string
@@ -141,4 +148,9 @@ func (s Settings) Remind() time.Duration {
 // Allows reports whether n is within l. An unlimited limit allows anything.
 func Allows(l source.Limit, n int) bool {
 	return l.Unlimited || n <= l.N
+}
+
+// Method is the merge method crew uses: squash unless merge_method says otherwise.
+func (s Settings) Method() string {
+	return cmp.Or(s.MergeMethod, "squash")
 }

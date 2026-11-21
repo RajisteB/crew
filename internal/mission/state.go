@@ -77,6 +77,9 @@ type PieceState struct {
 	Decisions []Decision     `json:"decisions,omitempty"`
 	Wait      *Wait          `json:"wait,omitempty"`
 	Added     bool           `json:"added,omitempty"`
+	Head      string         `json:"head,omitempty"`     // the commit crew pushed to the pull request
+	PRSince   time.Time      `json:"pr_since,omitempty"` // when crew last pushed that head
+	Problem   string         `json:"problem,omitempty"`  // why the piece was last sent back from its pull request: names only, at most 300 runes
 }
 
 // State is state.json. It holds ids, counts and short messages only: never

@@ -127,7 +127,7 @@ func (t *tick) sendBack(a SendBack) error {
 		t.note(a.Piece, "can't send back to %s: %v", station, err)
 		return nil
 	}
-	t.s = SentBackDone(t.s, a.Piece, a.Reason)
+	t.s = SentBackDone(t.s, a.Piece, a.Reason, "")
 	return t.save()
 }
 
@@ -161,7 +161,7 @@ func (t *tick) openPR(a OpenPR) error {
 			return nil
 		}
 	}
-	t.s = PROpened(t.s, a.Piece, pr)
+	t.s = PROpened(t.s, a.Piece, pr, "", t.now)
 	if err := t.save(); err != nil {
 		return err
 	}

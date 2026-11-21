@@ -156,3 +156,20 @@ func TestLoadSettings_TemplateRunsOneAtATime(t *testing.T) {
 		t.Errorf("runs_at_once = %d, want 1", s.Limits.Concurrency.N)
 	}
 }
+
+func TestSettings_MergeMethod(t *testing.T) {
+	load := func(extra string) (Settings, error) {
+		return LoadSettings(writeSettings(t, validBody+extra))
+	}
+	s, err := load("")
+	if err != nil || s.Method() != "squash" {
+		t.Fatalf("unset: %v %q", err, s.Method())
+	}
+	s, err = load("merge_method: rebase\n")
+	if err != nil || s.Method() != "rebase" {
+		t.Fatalf("rebase: %v %q", err, s.Method())
+	}
+	if _, err = load("merge_method: fast-forward\n"); err == nil || !strings.Contains(err.Error(), "merge_method") {
+		t.Fatalf("fast-forward: %v", err)
+	}
+}

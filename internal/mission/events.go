@@ -32,6 +32,9 @@ const (
 	EvNotified           = "notified"
 	EvAnswered           = "answered"
 	EvNote               = "note"
+	EvChecksPassed       = "checks-passed"
+	EvChecksFailed       = "checks-failed"
+	EvConflict           = "conflict"
 )
 
 // Event is one line of events.jsonl. Messages are short; never file

@@ -15,6 +15,9 @@ const (
 	maxResumes     = 2
 	maxSummaryLen  = 200
 	reasonUncommit = "uncommitted"
+	// reasons a piece is sent back from its pull request
+	reasonConflict     = "conflict"
+	reasonChecksFailed = "checks-failed"
 )
 
 // RunObs is what the engine saw of a piece's run.

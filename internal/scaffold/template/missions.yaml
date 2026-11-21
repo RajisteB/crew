@@ -11,6 +11,7 @@ version: 1
 mission_approval: on
 orchestrator_harness: claude-code
 remind_after: 30m
+merge_method: squash        # how crew merges a pull request when auto-merge is on: squash, merge or rebase
 
 limits:
   runs_at_once: 1             # pieces run one at a time for now; a higher value is refused
