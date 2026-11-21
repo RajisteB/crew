@@ -18,7 +18,7 @@ This guide is for the owner of a crew setup who has used factories and has not u
 
 ## What stage 1 does and doesn't do
 
-Stage 1 runs one piece at a time. Each piece produces one pull request, and you merge it yourself on GitHub. When you do, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
+Stage 1 runs one piece at a time. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. Each piece produces one pull request, and you merge it yourself on GitHub. When you do, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
 
 Stage 1 does not merge for you, does not write to Jira, and does not run pieces in parallel. `crew automerge` and `crew release approve` don't exist yet, and `delegate: true` on a piece is refused.
 

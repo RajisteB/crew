@@ -357,3 +357,40 @@ func TestReducers_ReturnNewState(t *testing.T) {
 		t.Fatal("reducers modified an earlier result")
 	}
 }
+
+func TestDecide_WaitingMidRunPieceHoldsItsSlot(t *testing.T) {
+	m := mis(nil, "P1", "P2")
+	s := st(m, PieceWaiting, PieceQueued)
+	s.Pieces[0].Wait = &Wait{ID: "w1", Kind: WaitApproval, Back: PieceRunning, Since: t0}
+	_, as := Decide(m, s, obs(t0), limits(1, 3), 0)
+	if got := of[StartPiece](as); len(got) != 0 {
+		t.Fatalf("P1 is waiting on an answer mid-run and holds the only slot: %+v", got)
+	}
+	_, as = Decide(m, s, obs(t0), limits(2, 3), 0)
+	if got := of[StartPiece](as); len(got) != 1 {
+		t.Fatalf("with room P2 starts: %+v", got)
+	}
+}
+
+func TestDecide_PieceWaitingOnMergeDoesNotHoldASlot(t *testing.T) {
+	m := mis(nil, "P1", "P2")
+	s := st(m, PiecePROpen, PieceQueued)
+	s.Pieces[0].PR = 1
+	s.Pieces[0].Wait = &Wait{ID: "w1", Kind: WaitMerge, Since: t0}
+	o := obs(t0)
+	o.PRs["P1"] = gh.PR{Number: 1, State: "OPEN"}
+	_, as := Decide(m, s, o, limits(1, 3), 0)
+	if got := of[StartPiece](as); len(got) != 1 || got[0].Piece != "P2" {
+		t.Fatalf("P2 should start while P1 waits on its merge: %+v", got)
+	}
+}
+
+func TestDecide_QueuedPieceWaitingDoesNotHoldASlot(t *testing.T) {
+	m := mis(nil, "P1", "P2")
+	s := st(m, PieceWaiting, PieceQueued)
+	s.Pieces[0].Wait = &Wait{ID: "w1", Kind: WaitQuestion, Back: PieceQueued, Since: t0}
+	_, as := Decide(m, s, obs(t0), limits(1, 3), 0)
+	if got := of[StartPiece](as); len(got) != 1 || got[0].Piece != "P2" {
+		t.Fatalf("a piece that never started holds no slot: %+v", got)
+	}
+}
