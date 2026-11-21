@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -61,7 +62,7 @@ func TestCreatePR_SendsBodyOnStdin(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := PR{Number: 12, State: "OPEN", URL: "https://github.com/acme/app/pull/12"}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v want %+v", got, want)
 	}
 	c := f.calls[0]
@@ -95,7 +96,7 @@ func TestPRState_Merged(t *testing.T) {
 	if got.State != "MERGED" || got.Number != 12 {
 		t.Fatalf("got %+v", got)
 	}
-	if !slices.Equal(f.calls[0].args, []string{"pr", "view", "12", "--json", "number,state,url"}) {
+	if !slices.Equal(f.calls[0].args, []string{"pr", "view", "12", "--json", "number,state,url,mergeable,headRefOid,statusCheckRollup"}) {
 		t.Fatalf("args %v", f.calls[0].args)
 	}
 }
@@ -137,7 +138,7 @@ func TestFindPR_ReturnsExisting(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("got %v %v", ok, err)
 	}
-	if got != (PR{Number: 7, State: "OPEN", URL: "https://github.com/acme/app/pull/7"}) {
+	if !reflect.DeepEqual(got, PR{Number: 7, State: "OPEN", URL: "https://github.com/acme/app/pull/7"}) {
 		t.Fatalf("got %+v", got)
 	}
 	want := []string{"pr", "list", "--head=crew/m1/p1", "--state", "all", "--json", "number,state,url", "--limit", "1"}
@@ -149,7 +150,7 @@ func TestFindPR_ReturnsExisting(t *testing.T) {
 func TestFindPR_EmptyListIsNotFound(t *testing.T) {
 	f := &fake{out: "[]"}
 	got, ok, err := f.client().FindPR(context.Background(), "b")
-	if err != nil || ok || got != (PR{}) {
+	if err != nil || ok || !reflect.DeepEqual(got, PR{}) {
 		t.Fatalf("got %+v %v %v", got, ok, err)
 	}
 }

@@ -41,11 +41,16 @@ type Client struct {
 // RepoInfo describes the repository in Dir. Visibility is lowercase.
 type RepoInfo struct{ Slug, Visibility, DefaultBranch string }
 
-// PR is a pull request. State is OPEN, MERGED or CLOSED.
+// PR is a pull request. State is OPEN, MERGED or CLOSED. Mergeable is
+// MERGEABLE, CONFLICTING or UNKNOWN; CreatePR and FindPR leave it, HeadSHA
+// and Checks empty.
 type PR struct {
-	Number int
-	State  string
-	URL    string
+	Number    int
+	State     string
+	URL       string
+	Mergeable string
+	HeadSHA   string
+	Checks    []Check
 }
 
 // Repo returns the slug, visibility and default branch of the current repository.
@@ -87,22 +92,29 @@ func (c Client) CreatePR(ctx context.Context, head, base, title, body string) (P
 	return PR{Number: n, State: stateOpen, URL: url}, nil
 }
 
-// PRState returns the number, state and URL of pull request number.
+// PRState returns the state, mergeability, head commit and checks of pull request number.
 func (c Client) PRState(ctx context.Context, number int) (PR, error) {
-	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,state,url"}
+	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,state,url,mergeable,headRefOid,statusCheckRollup"}
 	out, err := c.run(ctx, nil, args...)
 	if err != nil {
 		return PR{}, err
 	}
 	var v struct {
-		Number int    `json:"number"`
-		State  string `json:"state"`
-		URL    string `json:"url"`
+		Number            int           `json:"number"`
+		State             string        `json:"state"`
+		URL               string        `json:"url"`
+		Mergeable         string        `json:"mergeable"`
+		HeadRefOid        string        `json:"headRefOid"`
+		StatusCheckRollup []rollupEntry `json:"statusCheckRollup"`
 	}
 	if err := json.Unmarshal(out, &v); err != nil || v.Number == 0 || v.State == "" {
 		return PR{}, unparseable(args, err)
 	}
-	return PR{Number: v.Number, State: v.State, URL: v.URL}, nil
+	return PR{
+		Number: v.Number, State: v.State, URL: v.URL,
+		Mergeable: v.Mergeable, HeadSHA: v.HeadRefOid,
+		Checks: checksFromRollup(v.StatusCheckRollup),
+	}, nil
 }
 
 // FindPR returns the pull request whose head is branch, in any state. An
