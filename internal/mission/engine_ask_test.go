@@ -82,7 +82,9 @@ func TestEngine_AnswerFromInboxApprovesRun(t *testing.T) {
 	if err := h.store.Drop("answer", Answer{Wait: "w1", Do: "approve", Words: "looks fine"}); err != nil {
 		t.Fatal(err)
 	}
+	observed := false
 	h.runs.onObserve = func() {
+		observed = true
 		items, _ := h.store.Inbox()
 		if len(items) != 1 {
 			t.Errorf("inbox emptied before the end of the tick: %d items", len(items))
@@ -92,6 +94,9 @@ func TestEngine_AnswerFromInboxApprovesRun(t *testing.T) {
 		}
 	}
 	h.tick()
+	if !observed {
+		t.Fatal("Observe was never called, so the checks inside it did not run")
+	}
 	if !h.log.has("Step " + runID + " approve") {
 		t.Fatalf("calls: %v", h.log.calls)
 	}
@@ -163,5 +168,23 @@ func TestEngine_AmendFromInboxAddsPiece(t *testing.T) {
 	}
 	if k := h.kinds(); !slices.Contains(k, EvAmendment) || !slices.Contains(k, EvPieceAdded) {
 		t.Fatalf("events = %v", k)
+	}
+}
+
+func TestEngine_SummaryOutageIsOneNoteAndNoException(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	runID := h.runPiece("P1")
+	h.runs.setRun(runID, limitHit(), false)
+	h.runs.summary = limitHit()
+	h.fail.failNext("Summary", 2)
+	h.orch.decisions = []OrchDecision{{Action: "goto", Station: "plan", Reason: "r"}}
+	h.tick()
+	h.tick()
+	if len(h.events(EvNote)) != 1 || len(h.events(EvException)) != 0 {
+		t.Fatalf("events = %v", h.kinds())
+	}
+	h.tick()
+	if len(h.events(EvException)) != 1 {
+		t.Fatalf("events = %v", h.kinds())
 	}
 }

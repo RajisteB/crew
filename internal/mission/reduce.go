@@ -50,3 +50,8 @@ func PROpened(s State, piece string, pr gh.PR) State {
 func Asked(s State, piece string) State {
 	return update(s, piece, func(p *PieceState) { p.Calls++ })
 }
+
+// CleanedUp records that the piece's worktree was removed.
+func CleanedUp(s State, piece string) State {
+	return update(s, piece, func(p *PieceState) { p.Worktree = "" })
+}

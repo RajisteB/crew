@@ -343,6 +343,9 @@ func TestReducers_ReturnNewState(t *testing.T) {
 	if p := piece(t, Asked(started, "P1"), "P1"); p.Calls != 1 {
 		t.Fatalf("Asked: %+v", p)
 	}
+	if p := piece(t, CleanedUp(started, "P1"), "P1"); p.Worktree != "" || piece(t, started, "P1").Worktree != "/wt" {
+		t.Fatalf("CleanedUp: %+v", p)
+	}
 	opened := PROpened(started, "P1", gh.PR{Number: 7, State: "OPEN", URL: "u"})
 	if p := piece(t, opened, "P1"); p.PR != 7 || p.PRURL != "u" || p.Status != PiecePROpen {
 		t.Fatalf("PROpened: %+v", p)

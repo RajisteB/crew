@@ -17,8 +17,8 @@ func (t *tick) pieceMission(id string) (Piece, PieceState, bool) {
 }
 
 // perform carries out each action in order. An effect that fails is a note
-// and its reducer is not called; only a failure to save or emit stops the
-// tick.
+// and its reducer is not called; only a failure to save stops the tick. A
+// failure to write an event is reported on Out and does not stop it.
 func (t *tick) perform(actions []Action) error {
 	for _, a := range actions {
 		var err error
@@ -58,6 +58,10 @@ func (t *tick) startPiece(a StartPiece) error {
 	base := t.s.Base
 	if err := e.Git.Fetch(base); err != nil {
 		t.note(p.ID, "can't start: fetch %s: %v", base, err)
+		return nil
+	}
+	if err := e.Git.RemoveWorktree(wt, true); err != nil {
+		t.note(p.ID, "can't start: clear leftover worktree: %v", err)
 		return nil
 	}
 	if err := e.Git.AddWorktree(wt, branch, "origin/"+base); err != nil {
@@ -164,12 +168,12 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 	if !ok || ps.RunID == "" {
 		return nil
 	}
-	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	rs, f, last, stepsDir, err := t.e.Runs.Summary(ps.RunID)
 	if err != nil {
 		t.note(a.Piece, "can't summarise the run for the orchestrator: %v", err)
 		return nil
 	}
+	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
 	d, err := t.decide(sum)
 	if err != nil {
@@ -225,10 +229,43 @@ func (t *tick) notify(a Notify) {
 
 func (t *tick) cleanup(a Cleanup) {
 	ps, ok := t.s.Piece(a.Piece)
-	if !ok || ps.Worktree == "" {
+	if !ok {
 		return
 	}
-	if err := t.e.Git.RemoveWorktree(ps.Worktree, a.Force); err != nil {
-		t.note(a.Piece, "can't remove the worktree: %v", err)
+	t.removeWorktree(ps, a.Force)
+}
+
+// removeWorktree removes the piece's worktree and records that it is gone.
+// A failure is a note; the worktree stays recorded so removal is retried
+// when the loop starts again.
+func (t *tick) removeWorktree(ps PieceState, force bool) {
+	if ps.Worktree == "" {
+		return
+	}
+	if err := t.e.Git.RemoveWorktree(ps.Worktree, force); err != nil {
+		if force {
+			t.note(ps.ID, "can't remove the worktree: %v", err)
+		} else {
+			t.note(ps.ID, "%s: worktree left at %s (uncommitted work); remove it by hand when done", ps.ID, ps.Worktree)
+		}
+		return
+	}
+	t.s = CleanedUp(t.s, ps.ID)
+	if err := t.save(); err != nil {
+		fmt.Fprintf(t.e.out(), "mission %s: can't save state: %v\n", t.s.MissionID, err)
+	}
+}
+
+// retryCleanups removes the worktrees of finished pieces that still have
+// one. Complete pieces are merged or empty, so removal is forced; a
+// cancelled piece's uncommitted work is left for the principal.
+func (t *tick) retryCleanups() {
+	for _, ps := range t.s.Pieces {
+		switch ps.Status {
+		case PieceComplete:
+			t.removeWorktree(ps, true)
+		case PieceCancelled:
+			t.removeWorktree(ps, false)
+		}
 	}
 }
