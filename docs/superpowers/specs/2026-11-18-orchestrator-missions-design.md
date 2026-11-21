@@ -33,7 +33,7 @@ The model is an organization, not a pipeline:
 - **One PR per piece.** A piece that depends on another waits until that piece is complete, then starts from the updated `main`.
 - **Work that isn't code is a first-class outcome.** A piece can end in a deliverable instead of, or as well as, a PR.
 - **Every piece is a Jira issue, assigned to the principal,** so the whole mission shows on their board and moves across it as it runs.
-- **Auto-merge that works unattended.** A per-repo switch only the principal can set. With it on, crew merges each PR once its checks pass and accepts each deliverable once it is posted.
+- **Auto-merge that works unattended, set per domain.** A switch for each domain in each repo, set only by the principal, so code can merge on its own while design still waits for them. With it on, crew merges each PR once its checks pass and accepts each deliverable once it is posted.
 - **The principal can always see what is waiting on them**, and is told when something starts waiting.
 - **Nothing is lost when a session or the engine dies.** Mission state is on disk and a mission can be resumed.
 - **Problems go to the nearest manager first:** a scoped orchestrator, then the main one, then the principal.
@@ -247,7 +247,7 @@ More than one mission may run in a repo. Hitting a mission's limit stops new wor
 - if it produced a deliverable, the deliverable is accepted, **and**
 - if it ends in a release (Project 2), the release has gone out.
 
-**Accepting a deliverable follows the auto-merge switch,** so one switch decides whether finished work needs the principal. With the switch off, the principal accepts by moving the Jira issue to Done, or with `crew mission answer`. With it on, the deliverable is accepted as soon as it is posted.
+**Accepting a deliverable follows the auto-merge switch of the piece's domain,** so one switch per domain decides whether its finished work needs the principal. With the switch off, the principal accepts by moving the Jira issue to Done, or with `crew mission answer`. With it on, the deliverable is accepted as soon as it is posted.
 
 A piece that produced nothing is complete at `done`. A delegated piece is complete when every one of its sub-pieces is. `waits_for` always means "wait until complete".
 
@@ -354,7 +354,9 @@ crew merges rather than rebases, so it never needs a force-push. A piece with no
 
 ### The auto-merge switch
 
-- **Set only by the principal:** `crew automerge on|off`, per repo, in a terminal, with a typed confirmation.
+- **Set only by the principal:** `crew automerge on|off --domain <name>`, in a terminal, with a typed confirmation that names the repo and the domain.
+- **One switch per domain in each repo.** Every domain starts off. `--all` sets every domain at once, and `crew automerge status` lists them.
+- **Which switch a PR follows.** The switch of the piece's domain. If the PR also changes files inside another domain's `paths`, that domain's switch must be on too, or the PR waits for the principal. So a product piece can't carry a design change past the principal.
 - **Three states:**
 
   | State | What crew does with a finished PR |
@@ -364,9 +366,9 @@ crew merges rather than rebases, so it never needs a force-push. A piece with no
   | `on --without-checks` | Merges as soon as the factory finishes. The factory's own review station is the only gate. |
 
 - **A repo with no checks.** `crew automerge on` refuses and explains the two ways forward: add CI, or use `--without-checks`. That flag has its own confirmation text naming the risk. *(My call: this keeps full automation available in a repo with no CI, as an explicit choice.)*
-- **Where it lives.** In `~/crew`, keyed by repo, with a fingerprint written each time `crew automerge` sets it. If the stored value changes any other way, crew treats the switch as off, refuses to merge, and tells the principal.
-- **Deliverables follow the same switch.** Off: the principal accepts each one. Either `on` state: a deliverable is accepted as soon as it is posted. The command keeps the name `automerge`.
-- **Project 2.** The switch becomes the `merge` kind of release setting: `off` maps to `review`, both `on` states map to `auto`.
+- **Where it lives.** In `~/crew`, keyed by repo and domain, with a fingerprint written each time `crew automerge` sets it. If the stored value changes any other way, crew treats the switch as off, refuses to merge, and tells the principal.
+- **Deliverables follow their domain's switch.** Off: the principal accepts each one. Either `on` state: a deliverable is accepted as soon as it is posted. The command keeps the name `automerge`.
+- **Project 2.** Each domain's switch becomes its `merge` release setting: `off` maps to `review`, both `on` states map to `auto`.
 
 ### Reaching the principal
 
@@ -409,16 +411,17 @@ The plan is the same in both:
 8. **A deliverable.** P5 finishes with a campaign brief, not code. crew attaches it to P5's issue and moves the issue to In Review. The principal reads it on the board and moves it to Done. P6 will get the brief as input.
 9. **And so on** until every PR is merged and every deliverable accepted. The wrap-up lists PRs, merges and decisions.
 
-### B. Auto-merge on
+### B. Auto-merge on for product and marketing, off for design
 
-1. **Once, beforehand.** The principal ran `crew automerge on` in `acme` and typed the confirmation.
+1. **Once, beforehand.** In `acme`, the principal ran `crew automerge on --domain product` and `crew automerge on --domain marketing`, typing the confirmation each time. Design stays off, because they want a say in the visuals.
 2. **Plan and start,** as above.
-3. **Merging.** P1 opens PR #12. Its checks pass and crew merges it. P2 starts from the updated `main`. Later, P5's campaign brief is posted to its issue and accepted at once. Nobody is asked, and the board shows each issue moving to Done.
-4. **A problem.** P3.2's review hits its limit. The design-scoped orchestrator sends it back to the planner once. It fails the same way. It can't choose the same action again, so it escalates, and the main orchestrator has no better option. The principal is notified: "use the dark variant, or drop 9:16?"
-5. **An amendment.** The principal answers, and adds "make it $15". P1 is already merged, so the orchestrator amends the mission: P7 (change the credit to $15) is added, with its own Jira issue, and P6, which hasn't started, gets a new brief. Both go in the change log.
-6. **An out-of-paths stop.** P2 finishes but also edited `brand/logo.svg`. No PR opens. The orchestrator sends it back to the builder, which drops the edit.
-7. **The release (Project 2).** P6 ends with release request #7: Meta Ads, three creatives, US 25–44, $200 a day, $2,000 cap. The principal reviews and approves it in a terminal.
-8. **The wrap-up.** PRs, merges, the release, the amendment, and each call the orchestrators made with its reason.
+3. **Merging.** P1 opens PR #12. Its checks pass and crew merges it. P2 starts from the updated `main`. Nobody is asked, and the board shows the issue moving to Done.
+4. **Design waits.** P3.1's badge is a design piece, so its PR sits in In Review and the principal is notified. They look at it, ask for nothing, and merge it. P3.2 starts. Later, P5's campaign brief is a marketing deliverable, so it is accepted as soon as it is posted.
+5. **A problem.** P3.2's review hits its limit. The design-scoped orchestrator sends it back to the planner once. It fails the same way. It can't choose the same action again, so it escalates, and the main orchestrator has no better option. The principal is notified: "use the dark variant, or drop 9:16?"
+6. **An amendment.** The principal answers, and adds "make it $15". P1 is already merged, so the orchestrator amends the mission: P7 (change the credit to $15) is added, with its own Jira issue, and P6, which hasn't started, gets a new brief. Both go in the change log.
+7. **An out-of-paths stop.** P2 finishes but also edited `brand/logo.svg`. No PR opens. The orchestrator sends it back to the builder, which drops the edit.
+8. **The release (Project 2).** P6 ends with release request #7: Meta Ads, three creatives, US 25–44, $200 a day, $2,000 cap. The principal reviews and approves it in a terminal.
+9. **The wrap-up.** PRs, merges, the release, the amendment, and each call the orchestrators made with its reason.
 
 ## Build order
 
