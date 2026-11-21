@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -280,10 +281,7 @@ func TestMission_EndToEnd_TwoPiecesOnePRWaits(t *testing.T) {
 		t.Fatalf("P2 is %s, want queued while P1's PR is open", got)
 	}
 
-	status := r.cmd("", "status", r.id)
-	if i, j := strings.Index(status, "Waiting on you"), strings.Index(status, "P1  PR open"); i < 0 || !strings.Contains(status[i:], "merge") || !strings.Contains(status, "pull/7") || (j >= 0 && j < i) {
-		t.Fatalf("status should lead with Waiting on you and the PR:\n%s", status)
-	}
+	assertWaitingFirst(t, r.cmd("", "status", r.id))
 
 	if err := os.WriteFile(filepath.Join(r.ghDir, "pr-state"), []byte("MERGED\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -293,5 +291,27 @@ func TestMission_EndToEnd_TwoPiecesOnePRWaits(t *testing.T) {
 	})
 	if _, err := os.Stat(p1.Worktree); err == nil {
 		t.Fatalf("worktree %s still exists", p1.Worktree)
+	}
+}
+
+// waitingLine matches a "Waiting on you" row: wait id, piece, kind and the PR
+// URL on one line (see printWaiting).
+var waitingLine = regexp.MustCompile(`(?m)^  w\d+  P1  merge  https://github\.com/acme/app/pull/7  waiting \S+$`)
+
+// assertWaitingFirst checks that status leads with the "Waiting on you"
+// section and that P1's merge wait names the PR on its own line.
+func assertWaitingFirst(t *testing.T, status string) {
+	t.Helper()
+	waiting := strings.Index(status, "\nWaiting on you:\n")
+	if waiting < 0 {
+		t.Fatalf("status has no Waiting on you section:\n%s", status)
+	}
+	for _, other := range []string{"Running", "Queued", "Complete", "Cancelled", "Events"} {
+		if i := strings.Index(status, "\n"+other+":\n"); i >= 0 && i < waiting {
+			t.Fatalf("%s comes before Waiting on you:\n%s", other, status)
+		}
+	}
+	if !waitingLine.MatchString(status[waiting:]) {
+		t.Fatalf("no line in Waiting on you carries the wait id, P1, merge and the PR URL:\n%s", status)
 	}
 }
