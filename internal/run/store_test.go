@@ -168,6 +168,29 @@ func TestStore_LockExclusive(t *testing.T) {
 	unlock()
 }
 
+// A lock file left behind by a process that is gone, whose pid now belongs to
+// an unrelated live process, is not a held lock: only a held flock is.
+func TestStore_LockFileNamingALivePidIsNotHeld(t *testing.T) {
+	_, s, _ := newRun(t)
+	if err := os.WriteFile(filepath.Join(s.Dir, "lock"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if pid, ok := s.LockedBy(); ok {
+		t.Fatalf("LockedBy = %d, true for a lock nobody holds", pid)
+	}
+	unlock, err := s.Lock()
+	if err != nil {
+		t.Fatalf("a leftover lock file must not block the run: %v", err)
+	}
+	defer unlock()
+	if pid, ok := s.LockedBy(); !ok || pid != os.Getpid() {
+		t.Fatalf("LockedBy after Lock = %d %v", pid, ok)
+	}
+	if _, err := s.Lock(); err == nil || !strings.Contains(err.Error(), "already being driven (pid "+strconv.Itoa(os.Getpid())+")") {
+		t.Fatalf("second lock = %v", err)
+	}
+}
+
 func TestStore_EventsSince(t *testing.T) {
 	_, s, _ := newRun(t)
 	e1, _ := s.Emit(run.Event{Kind: "start"})

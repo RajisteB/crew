@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crewfile-dev/crew/internal/flock"
 	"github.com/crewfile-dev/crew/internal/source"
 )
 
@@ -254,39 +255,20 @@ func (s Store) TakeGoto() (string, error) {
 
 // ---------- lock: one engine per run ----------
 
-// Lock makes this process the run's only driver. A lock left by a process
-// that no longer exists is taken over.
+// Lock makes this process the run's only driver by holding an flock on the
+// lock file until unlock is called or the process dies. Only a held flock
+// counts: a lock file left by a process that is gone, even one whose pid now
+// belongs to another process, is taken over.
 func (s Store) Lock() (func(), error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		f, err := os.OpenFile(s.path("lock"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-		if err == nil {
-			fmt.Fprint(f, os.Getpid())
-			f.Close()
-			return func() { os.Remove(s.path("lock")) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		if pid, alive := s.LockedBy(); alive {
-			return nil, fmt.Errorf("run %s is already being driven (pid %d)", filepath.Base(s.Dir), pid)
-		}
-		os.Remove(s.path("lock"))
+	unlock, err := flock.Acquire(s.path("lock"), 0o644)
+	if errors.Is(err, flock.ErrHeld) {
+		return nil, fmt.Errorf("run %s is already being driven (pid %d)", filepath.Base(s.Dir), flock.Pid(s.path("lock")))
 	}
-	return nil, fmt.Errorf("run %s: couldn't take the lock", filepath.Base(s.Dir))
+	return unlock, err
 }
 
-// LockedBy reports the pid driving the run, if that process is alive.
-func (s Store) LockedBy() (int, bool) {
-	b, err := os.ReadFile(s.path("lock"))
-	if err != nil {
-		return 0, false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return 0, false
-	}
-	return pid, syscall.Kill(pid, 0) == nil
-}
+// LockedBy reports the pid driving the run, if some process holds its lock.
+func (s Store) LockedBy() (int, bool) { return flock.Held(s.path("lock")) }
 
 func WriteAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")

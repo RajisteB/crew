@@ -12,10 +12,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
+	"github.com/crewfile-dev/crew/internal/flock"
 	"github.com/crewfile-dev/crew/internal/gh"
 	"github.com/crewfile-dev/crew/internal/run"
 )
@@ -157,73 +156,21 @@ func (s Store) SaveState(st State) error {
 // driver never leaves a lock behind. The file itself is never removed, so no
 // process can lock a stale inode.
 func (s Store) Lock() (func(), error) {
-	f, err := os.OpenFile(s.path("lock"), os.O_CREATE|os.O_RDWR, fileMode)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		if !errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, err
-		}
+	unlock, err := flock.Acquire(s.path("lock"), fileMode)
+	if errors.Is(err, flock.ErrHeld) {
 		holder := "pid unknown"
-		if pid, _ := s.readPid(); pid > 0 {
+		if pid := flock.Pid(s.path("lock")); pid > 0 {
 			holder = fmt.Sprintf("pid %d", pid)
 		}
 		return nil, fmt.Errorf("mission %s is already being driven (%s)", filepath.Base(s.Dir), holder)
 	}
-	if err := f.Truncate(0); err == nil {
-		_, err = f.WriteAt([]byte(strconv.Itoa(os.Getpid())), 0)
-	}
-	if err != nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
-		return nil, err
-	}
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			f.Truncate(0)
-			syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-			f.Close()
-		})
-	}, nil
-}
-
-func (s Store) readPid() (int, error) {
-	b, err := os.ReadFile(s.path("lock"))
-	if err != nil {
-		return 0, err
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return 0, errors.New("no pid in lock file")
-	}
-	return pid, nil
+	return unlock, err
 }
 
 // LockedBy reports the pid in the lock file and whether a driver is alive.
 // If nobody holds the flock, the pid left in the file is not a live driver
 // (the process crashed, or its pid was reused).
-func (s Store) LockedBy() (int, bool) {
-	pid, err := s.readPid()
-	if err != nil {
-		return 0, false
-	}
-	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
-		return pid, false
-	}
-	f, err := os.OpenFile(s.path("lock"), os.O_RDONLY, 0)
-	if err != nil {
-		return pid, false
-	}
-	defer f.Close()
-	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		return pid, false
-	}
-	return pid, true
-}
+func (s Store) LockedBy() (int, bool) { return flock.Held(s.path("lock")) }
 
 // ---------- inbox: requests from other commands ----------
 
