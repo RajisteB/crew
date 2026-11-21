@@ -31,30 +31,32 @@ func Check(m Mission, in CheckInput) []error {
 	if !Allows(in.Limits.Pieces, len(m.Pieces)) {
 		errs = append(errs, fmt.Errorf("%d pieces is more than the limit of %d", len(m.Pieces), in.Limits.Pieces.N))
 	}
-	errs = append(errs, checkIDs(m.Pieces)...)
-	for _, p := range m.Pieces {
+	index := pieceIndex(m.Pieces)
+	seen := map[string]bool{}
+	for i, p := range m.Pieces {
+		errs = append(errs, checkID(i, p, seen)...)
 		errs = append(errs, checkPiece(p, in)...)
+		errs = append(errs, checkWaits(p, index)...)
 	}
-	errs = append(errs, checkWaits(m.Pieces)...)
+	for _, ring := range waitCircles(m.Pieces, index) {
+		errs = append(errs, fmt.Errorf("%s wait on each other", joinIDs(ring)))
+	}
 	return errs
 }
 
 func label(p Piece) string { return "piece " + p.ID }
 
-func checkIDs(pieces []Piece) []error {
+func checkID(i int, p Piece, seen map[string]bool) []error {
 	var errs []error
-	seen := map[string]bool{}
-	for i, p := range pieces {
-		switch {
-		case p.ID == "":
-			errs = append(errs, fmt.Errorf("piece %d has no id", i+1))
-		case !idPattern.MatchString(p.ID):
-			errs = append(errs, fmt.Errorf("%s: id must be letters, digits, '-' or '_' and start with a letter or digit", label(p)))
-		case seen[p.ID]:
-			errs = append(errs, fmt.Errorf("%s: id is used more than once", label(p)))
-		}
-		seen[p.ID] = true
+	switch {
+	case p.ID == "":
+		errs = append(errs, fmt.Errorf("piece %d has no id", i+1))
+	case !idPattern.MatchString(p.ID):
+		errs = append(errs, fmt.Errorf("%s: id must be letters, digits, '-' or '_' and start with a letter or digit", label(p)))
+	case seen[p.ID]:
+		errs = append(errs, fmt.Errorf("%s: id is used more than once", label(p)))
 	}
+	seen[p.ID] = true
 	return errs
 }
 
@@ -120,25 +122,24 @@ func checkWatch(p Piece, f source.Factory) []error {
 	return errs
 }
 
-func checkWaits(pieces []Piece) []error {
+func pieceIndex(pieces []Piece) map[string]int {
 	index := map[string]int{}
 	for i, p := range pieces {
 		if _, ok := index[p.ID]; !ok {
 			index[p.ID] = i
 		}
 	}
+	return index
+}
+
+func checkWaits(p Piece, index map[string]int) []error {
 	var errs []error
-	for _, p := range pieces {
-		for _, w := range p.WaitsFor {
-			if w == p.ID {
-				errs = append(errs, fmt.Errorf("%s: waits for itself", label(p)))
-			} else if _, ok := index[w]; !ok {
-				errs = append(errs, fmt.Errorf("%s: waits_for %q, which is not a piece", label(p), w))
-			}
+	for _, w := range p.WaitsFor {
+		if w == p.ID {
+			errs = append(errs, fmt.Errorf("%s: waits for itself", label(p)))
+		} else if _, ok := index[w]; !ok {
+			errs = append(errs, fmt.Errorf("%s: waits_for %q, which is not a piece", label(p), w))
 		}
-	}
-	for _, ring := range waitCircles(pieces, index) {
-		errs = append(errs, fmt.Errorf("%s wait on each other", joinIDs(ring)))
 	}
 	return errs
 }

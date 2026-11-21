@@ -179,3 +179,29 @@ func TestCheck_ReturnsEveryErrorInFileOrder(t *testing.T) {
 		t.Errorf("errors:\n%s", messages(errs))
 	}
 }
+
+func TestCheck_MixedErrorsComeOutPieceByPiece(t *testing.T) {
+	m := acme()
+	m.Request = ""
+	m.Pieces[0].Domain = "legal"
+	m.Pieces[0].WaitsFor = []string{"P9"}
+	m.Pieces[1].ID = "P1"
+	m.Pieces[2].WaitsFor = []string{"P5"}
+	m.Pieces[3].WaitsFor = []string{"P4"}
+	in := baseInput()
+	in.Limits.Pieces = source.Limit{Set: true, N: 4}
+	want := []string{
+		"the request is empty",
+		"5 pieces is more than the limit of 4",
+		`piece P1: unknown domain "legal"`,
+		`piece P1: waits_for "P9", which is not a piece`,
+		"piece P1: id is used more than once",
+		"piece P1: waits for itself",
+		`piece P6: waits_for "P2", which is not a piece`,
+		"P4 and P5 wait on each other",
+	}
+	got := strings.Split(messages(Check(m, in)), "\n")
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
