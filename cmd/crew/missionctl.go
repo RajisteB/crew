@@ -70,6 +70,13 @@ func missionAnswer(env missionEnv, id string, args []string) error {
 	return nil
 }
 
+// missionStarted says whether the principal's go was ever given: the
+// approved plan is saved when a mission is launched.
+func missionStarted(store mission.Store) bool {
+	_, err := os.Stat(filepath.Join(store.Dir, "approved.md"))
+	return err == nil
+}
+
 func missionAmend(env missionEnv, id string, args []string) error {
 	if env.flags.words == "" {
 		return usageError{"--words is required: what the principal said, word for word"}
@@ -85,6 +92,12 @@ func missionAmend(env missionEnv, id string, args []string) error {
 	store, st, m, err := openForDryRun(env, id)
 	if err != nil {
 		return err
+	}
+	if !missionStarted(store) || st.Status == mission.StatusPlanned || st.Status == mission.StatusAwaitingGo {
+		return fmt.Errorf("mission %s hasn't started; make a new plan with crew mission plan instead of amending this one", id)
+	}
+	if st.Status != mission.StatusRunning && st.Status != mission.StatusStopped {
+		return fmt.Errorf("mission %s is %s; only a running or stopped mission can be amended", id, st.Status)
 	}
 	chk, err := loadChecks(env.crewDir, st.Repo)
 	if err != nil {
@@ -204,7 +217,7 @@ func missionResume(env missionEnv, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, statErr := os.Stat(filepath.Join(store.Dir, "approved.md")); statErr != nil {
+	if !missionStarted(store) {
 		hint := "go"
 		if st.Status == mission.StatusPlanned {
 			hint = "start"

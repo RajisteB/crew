@@ -243,6 +243,9 @@ func TestMissionAnswer_QueuesWhenValid(t *testing.T) {
 func TestMissionAmend_QueuesWithWords(t *testing.T) {
 	r := newMissionRig(t)
 	id := r.plan()
+	if err := r.store(id).SaveApproved(); err != nil {
+		t.Fatal(err)
+	}
 	r.edit(id, func(s *mission.State) { s.Status = mission.StatusRunning })
 	unlock, err := r.store(id).Lock()
 	if err != nil {
@@ -259,6 +262,21 @@ func TestMissionAmend_QueuesWithWords(t *testing.T) {
 	}
 	items, _ := r.store(id).Inbox()
 	if len(items) != 1 || items[0].Kind != "amend" || !strings.Contains(string(items[0].Body), "also add P3") {
+		t.Fatalf("inbox = %+v", items)
+	}
+}
+
+func TestMissionAmend_BeforeGoIsRefused(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	r.edit(id, func(s *mission.State) { s.Status = mission.StatusAwaitingGo })
+	r.stdin = string(planFile("Build the thing.", designPiece("P1"), designPiece("P2", "P1"), designPiece("P3", "P2")))
+	_, err := r.cmd("amend", id, "-", "--words", "also add P3")
+	want := "mission " + id + " hasn't started; make a new plan with crew mission plan instead of amending this one"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v\nwant %s", err, want)
+	}
+	if items, _ := r.store(id).Inbox(); len(items) != 0 {
 		t.Fatalf("inbox = %+v", items)
 	}
 }
