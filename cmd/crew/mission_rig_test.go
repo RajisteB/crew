@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/gh"
 	"github.com/crewfile-dev/crew/internal/gitx"
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/notify"
@@ -40,6 +41,7 @@ type missionRig struct {
 	stdin         string
 	starts        []startCall
 	startErr      error
+	onGH          func() // runs once, before the next gh call
 }
 
 func newMissionRig(t *testing.T) *missionRig {
@@ -56,6 +58,20 @@ func newMissionRig(t *testing.T) *missionRig {
 		t.Fatal(err)
 	}
 	fakeGH(t, "private")
+	baseGH := ghClient
+	ghClient = func(dir string) gh.Client {
+		c := baseGH(dir)
+		inner := c.Exec
+		c.Exec = func(ctx context.Context, d string, in []byte, name string, args ...string) ([]byte, error) {
+			if hook := r.onGH; hook != nil {
+				r.onGH = nil // one shot
+				hook()
+			}
+			return inner(ctx, d, in, name, args...)
+		}
+		return c
+	}
+	t.Cleanup(func() { ghClient = baseGH })
 	oldStart, oldNotifier, oldTick, oldRunner := startDetached, newNotifier, tickEvery, newRunner
 	newRunner = func(*config.Registry) run.Runner { return noStations{t} }
 	startDetached = func(id, dir, project, logPath string) (int, error) {
