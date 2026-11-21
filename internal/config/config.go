@@ -188,18 +188,32 @@ func decodeStrict(path string, out any) error {
 	if err != nil {
 		return err
 	}
+	return decodeStrictBytes(filepath.Base(path), b, out)
+}
+
+// DecodeRegistry decodes harnesses.yaml content that isn't on disk (yet) with
+// the same strict rules as LoadRegistry. name is used in error messages.
+func DecodeRegistry(name string, b []byte) (*Registry, error) {
+	var r Registry
+	if err := decodeStrictBytes(name, b, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func decodeStrictBytes(name string, b []byte, out any) error {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(out); err != nil {
 		if errors.Is(err, io.EOF) {
-			return fmt.Errorf("%s: file is empty", filepath.Base(path))
+			return fmt.Errorf("%s: file is empty", name)
 		}
-		return fmt.Errorf("%s: %s", filepath.Base(path), typeName.ReplaceAllString(err.Error(), "unknown key $1"))
+		return fmt.Errorf("%s: %s", name, typeName.ReplaceAllString(err.Error(), "unknown key $1"))
 	}
 	// Reject multi-document files: a stray second document is almost always a mistake.
 	var extra any
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("%s: multiple YAML documents are not allowed", filepath.Base(path))
+		return fmt.Errorf("%s: multiple YAML documents are not allowed", name)
 	}
 	return nil
 }

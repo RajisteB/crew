@@ -41,7 +41,11 @@ If you created your crew directory before missions existed, run this (add `--dir
 crew mission setup
 ```
 
-It writes `missions.yaml` and `domains/` if they are missing and prints what it wrote, or `already set up`. It does not touch your `harnesses.yaml`, so you add the missions parts by hand. Until you do, `crew mission start` refuses, and `crew verify -v` prints one note per harness that can't apply deny rules. The note is an info line, so plain `crew verify` leaves it out; `-v` shows it:
+It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, and the orchestrator launch line and allow list. Your comments and every value you already have stay as they are. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
+
+The one case it leaves alone is a `headless.command` you changed by hand. It prints a `skipped` line for that harness; add `--settings "{settings}"` to the command yourself and run `crew mission setup` again.
+
+Until a harness has these parts, `crew mission start` refuses and prints `run crew mission setup to add the missions parts to harnesses.yaml`, and `crew verify -v` prints one note per harness that can't apply deny rules. The note is an info line, so plain `crew verify` leaves it out; `-v` shows it:
 
 ```
 info   crew.yaml: harness opencode: can't apply deny rules, so it can't run mission pieces
@@ -49,9 +53,11 @@ info   crew.yaml: harness opencode: can't apply deny rules, so it can't run miss
 
 Plain `crew run` keeps working on such a harness. Only missions need the deny rules.
 
-Copy these blocks from the template (`internal/scaffold/template/harnesses.yaml`) into the `claude-code` entry of your own `harnesses.yaml`.
+#### What setup adds to `claude-code`
 
-In `headless:`, add `--settings "{settings}"` to the command and `deny_via: settings-file`:
+These are the blocks, for reference, as they appear in the template (`internal/scaffold/template/harnesses.yaml`).
+
+In `headless:`, the command gets `--settings "{settings}"` to the command and the entry gets `deny_via: settings-file`:
 
 ```yaml
     headless:
@@ -62,7 +68,7 @@ In `headless:`, add `--settings "{settings}"` to the command and `deny_via: sett
       output: claude-json
 ```
 
-Under `foreman:`, add the two orchestrator lines:
+Under `foreman:`, the two orchestrator lines:
 
 ```yaml
     foreman:
@@ -73,7 +79,7 @@ Under `foreman:`, add the two orchestrator lines:
 
 `orchestrator_allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, and reading and searching files. Any other command, `crew run approve` included, makes it ask you first, as it would in any session.
 
-Next to `foreman:`, add the `deny:` block:
+Next to `foreman:`, the `deny:` block:
 
 ```yaml
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory
@@ -177,7 +183,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 
 | Command | What it does |
 | --- | --- |
-| `crew mission setup` | Writes `missions.yaml` and `domains/` if they are missing. |
+| `crew mission setup` | Writes `missions.yaml` and `domains/` if they are missing, and adds the missions parts to `harnesses.yaml`. |
 | `crew mission plan [-\|@FILE]` | Checks a plan and creates the mission. Reads the plan from standard input, or from a file. |
 | `crew mission start <id>` | Runs the start checks. With approval on, stops at "awaiting go". |
 | `crew mission go <id>` | Your go. Re-runs the checks, then starts the engine. |

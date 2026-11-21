@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -20,7 +21,7 @@ import (
 )
 
 const missionUsage = `usage:
-  crew mission setup                                   write missions.yaml and domains/ if they're missing
+  crew mission setup                                   write missions.yaml and domains/ if missing, and add the missions parts to harnesses.yaml
   crew mission plan [-|@FILE]                          check a plan and create the mission
   crew mission start <id>                              run the start checks; wait for go, or go
   crew mission go <id>                                 the principal's go
@@ -128,12 +129,19 @@ func missionSetup(env missionEnv) error {
 	if err != nil {
 		return err
 	}
-	if len(wrote) == 0 {
-		fmt.Fprintln(env.out, "already set up")
-		return nil
-	}
 	for _, w := range wrote {
 		fmt.Fprintf(env.out, "wrote %s\n", filepath.Join(env.crewDir, w))
+	}
+	up, err := scaffold.UpgradeHarnesses(env.crewDir)
+	if err != nil {
+		return err
+	}
+	printUpgrade(env.out, env.crewDir, up)
+	switch {
+	case len(wrote) == 0 && up.Backup == "" && len(up.Skipped) == 0:
+		fmt.Fprintln(env.out, "already set up")
+	case len(wrote) > 0 || up.Backup != "":
+		fmt.Fprintln(env.out, "next: crew compile")
 	}
 	return nil
 }
@@ -181,6 +189,9 @@ func repoInfo(env missionEnv) (gh.RepoInfo, error) {
 func printCheckErrors(out io.Writer, errs []error) error {
 	for _, e := range errs {
 		fmt.Fprintln(out, e)
+	}
+	if slices.ContainsFunc(errs, func(e error) bool { return errors.Is(e, mission.ErrNoDeny) }) {
+		fmt.Fprintln(out, "run crew mission setup to add the missions parts to harnesses.yaml")
 	}
 	return fmt.Errorf("the plan has %d problem(s); nothing was created", len(errs))
 }

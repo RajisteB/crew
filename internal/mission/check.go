@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -11,6 +12,16 @@ import (
 	"github.com/crewfile-dev/crew/internal/run"
 	"github.com/crewfile-dev/crew/internal/source"
 )
+
+// ErrNoDeny matches (errors.Is) the check error for a station whose harness
+// can't apply deny rules.
+var ErrNoDeny = errors.New("harness can't apply deny rules")
+
+// noDenyError keeps its own text and unwraps to ErrNoDeny.
+type noDenyError struct{ msg string }
+
+func (e noDenyError) Error() string { return e.msg }
+func (e noDenyError) Unwrap() error { return ErrNoDeny }
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
@@ -105,7 +116,7 @@ func checkDeny(p Piece, f source.Factory, reg *config.Registry) []error {
 			h = reg.Harnesses[name]
 		}
 		if !run.CanDeny(h) {
-			errs = append(errs, fmt.Errorf("%s: station %q runs on harness %q, which can't apply deny rules", label(p), st, name))
+			errs = append(errs, noDenyError{fmt.Sprintf("%s: station %q runs on harness %q, which can't apply deny rules", label(p), st, name)})
 		}
 	}
 	return errs
