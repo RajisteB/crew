@@ -84,6 +84,9 @@ func (e *Engine) Tick(ctx context.Context) (State, error) {
 	if err != nil {
 		return State{}, err
 	}
+	if t.s.Status != StatusRunning {
+		return t.s, nil // a mission that isn't running applies no answers and starts nothing
+	}
 	defer func() { e.lastNotes = t.notes }()
 	lim := t.lim
 
