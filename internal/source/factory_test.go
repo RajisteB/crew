@@ -173,3 +173,24 @@ func TestParseFactory_FileDirect(t *testing.T) {
 		t.Fatalf("ParseFactory = %+v, %v", f, err)
 	}
 }
+
+func TestParseFactory_Rework(t *testing.T) {
+	content := strings.Replace(shipChange, "start: plan\n", "start: plan\nrework: build\n", 1)
+	f, err := loadOne(t, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Rework != "build" || f.ReworkStation() != "build" {
+		t.Fatalf("rework = %q, station = %q", f.Rework, f.ReworkStation())
+	}
+}
+
+func TestReworkStation_DefaultsToStart(t *testing.T) {
+	f, err := loadOne(t, shipChange)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Rework != "" || f.ReworkStation() != "plan" {
+		t.Fatalf("rework = %q, station = %q", f.Rework, f.ReworkStation())
+	}
+}

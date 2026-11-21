@@ -44,6 +44,7 @@ func AfterStation(f source.Factory, s State, v Verdict) (State, Decision) {
 	key := c.Current + "." + v.Route
 	c.RouteCounts[key]++
 	if r.Max.Set && !r.Max.Unlimited && c.RouteCounts[key] > r.Max.N {
+		c.LimitRoute = key
 		return failState(c, fmt.Sprintf("route %s hit its limit (%d)", key, r.Max.N))
 	}
 	if st.Approve {
@@ -63,6 +64,7 @@ func Approve(f source.Factory, s State, gotoStation string) (State, Decision, er
 	c := cloneState(s)
 	p := *c.Pending
 	c.Pending = nil
+	c.LimitRoute = ""
 	c.Status = StatusRunning
 	if gotoStation != "" {
 		if _, ok := f.Stations[gotoStation]; !ok {
@@ -79,14 +81,28 @@ func Approve(f source.Factory, s State, gotoStation string) (State, Decision, er
 // Goto sends the run to a station on the user's request. On a live run it
 // takes effect before the next station; a stopped run reopens there.
 func Goto(f source.Factory, s State, station string) (State, error) {
+	return redirect(f, s, station, "redirected to "+station+" by the user", false)
+}
+
+// GotoFresh is Goto with a clean slate: route counts reset and the reason is
+// the one given. Used when a finished run is reworked.
+func GotoFresh(f source.Factory, s State, station, reason string) (State, error) {
+	return redirect(f, s, station, reason, true)
+}
+
+func redirect(f source.Factory, s State, station, reason string, fresh bool) (State, error) {
 	if _, ok := f.Stations[station]; !ok {
 		return s, fmt.Errorf("no station %q in factory %s", station, f.Name)
 	}
 	c := cloneState(s)
 	c.Current = station
 	c.Pending = nil
-	c.Reason = "redirected to " + station + " by the user"
+	c.Reason = reason
 	c.Retryable = false
+	c.LimitRoute = ""
+	if fresh {
+		c.RouteCounts = map[string]int{}
+	}
 	if c.Status != StatusRunning {
 		// A stopped run (paused, failed, done, interrupted) reopens: the next
 		// resume runs the chosen station.
@@ -140,6 +156,7 @@ func Resume(f source.Factory, s State) (State, Decision) {
 	c.InStation = false
 	c.Status = StatusRunning
 	c.Retryable = false
+	c.LimitRoute = ""
 	return c, Decision{Kind: RunStation, Station: c.Current}
 }
 

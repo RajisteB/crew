@@ -79,6 +79,18 @@ func TestAfterStation_LimitExceeded(t *testing.T) {
 	}
 }
 
+func TestAfterStation_LimitSetsLimitRoute(t *testing.T) {
+	f := shipChange()
+	s, _ := walk(t, f, "ready", "done", "fix", "done", "fix", "done", "redesign", "ready", "done", "redesign")
+	if s.Status != run.StatusFailed || s.LimitRoute != "review.redesign" {
+		t.Fatalf("redesign limit: %+v", s)
+	}
+	s, _ = walk(t, f, "ready", "replan", "ready", "replan", "ready", "replan")
+	if s.LimitRoute != "build.replan" {
+		t.Fatalf("LimitRoute = %q", s.LimitRoute)
+	}
+}
+
 func TestAfterStation_UnlimitedNeverFails(t *testing.T) {
 	f := shipChange()
 	s, _ := walk(t, f, "ready", "done")
@@ -300,5 +312,63 @@ func TestResume_RunningBetweenStationsKeepsDriftCheck(t *testing.T) {
 	done, _ := run.AfterStation(f, run.MarkInStation(s), v("done"))
 	if done.InStation {
 		t.Fatal("AfterStation must clear InStation")
+	}
+}
+
+func limitFailed(t *testing.T, f source.Factory) run.State {
+	t.Helper()
+	s, _ := walk(t, f, "ready", "done", "redesign", "ready", "done", "redesign")
+	if s.Status != run.StatusFailed || s.LimitRoute != "review.redesign" {
+		t.Fatalf("setup: %+v", s)
+	}
+	return s
+}
+
+func TestGotoFresh_ClearsCountsAndReopens(t *testing.T) {
+	f := shipChange()
+	failed := limitFailed(t, f)
+	failed.RouteCounts["review.fix"] = 3
+	s, err := run.GotoFresh(f, failed, "plan", "rework requested")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Status != run.StatusInterrupted || s.Current != "plan" || len(s.RouteCounts) != 0 ||
+		s.Reason != "rework requested" || s.LimitRoute != "" || s.Retryable {
+		t.Fatalf("GotoFresh = %+v", s)
+	}
+	if _, d := run.Resume(f, s); d.Kind != run.RunStation || d.Station != "plan" {
+		t.Fatalf("resume = %+v", d)
+	}
+	if _, err := run.GotoFresh(f, failed, "zz", "x"); err == nil {
+		t.Fatal("unknown station must error")
+	}
+}
+
+func TestGotoFresh_DoesNotMutateInput(t *testing.T) {
+	f := shipChange()
+	s := limitFailed(t, f)
+	s.Snapshot = map[string]string{"a": "1"}
+	before := run.State{RunID: s.RunID, Status: s.Status, Current: s.Current, Reason: s.Reason, LimitRoute: s.LimitRoute}
+	counts := map[string]int{}
+	for k, v := range s.RouteCounts {
+		counts[k] = v
+	}
+	if _, err := run.GotoFresh(f, s, "plan", "r"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.RouteCounts, counts) || len(s.RouteCounts) == 0 {
+		t.Fatalf("counts mutated: %v want %v", s.RouteCounts, counts)
+	}
+	if s.RunID != before.RunID || s.Status != before.Status || s.Current != before.Current ||
+		s.Reason != before.Reason || s.LimitRoute != before.LimitRoute || s.Snapshot["a"] != "1" {
+		t.Fatalf("state mutated: %+v", s)
+	}
+}
+
+func TestGoto_ClearsLimitRoute(t *testing.T) {
+	f := shipChange()
+	s, err := run.Goto(f, limitFailed(t, f), "plan")
+	if err != nil || s.LimitRoute != "" {
+		t.Fatalf("%+v %v", s, err)
 	}
 }

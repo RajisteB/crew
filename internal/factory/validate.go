@@ -31,6 +31,9 @@ func Validate(f source.Factory) []Issue {
 	case !ok:
 		errf("start %q is not a station", f.Start)
 	}
+	if _, ok := f.Stations[f.Rework]; f.Rework != "" && !ok {
+		errf("rework %q is not a station", f.Rework)
+	}
 	for _, n := range f.StationNames() {
 		checkStation(f, n, errf, infof)
 	}

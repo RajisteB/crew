@@ -141,3 +141,15 @@ func TestIsBackEdge(t *testing.T) {
 		t.Fatal("plan.ready is on the plan→build→plan cycle")
 	}
 }
+
+func TestValidate_ReworkUnknownStation(t *testing.T) {
+	f := shipChange()
+	f.Rework = "nowhere"
+	errs := errorsOf(factory.Validate(f))
+	for _, e := range errs {
+		if strings.Contains(e, `rework "nowhere" is not a station`) {
+			return
+		}
+	}
+	t.Fatalf("want rework error, got %v", errs)
+}
