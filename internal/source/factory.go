@@ -26,6 +26,7 @@ type Factory struct {
 	Name        string             `yaml:"name"`
 	Description string             `yaml:"description"`
 	Start       string             `yaml:"start"`
+	Rework      string             `yaml:"rework"`  // station that handles rework; defaults to start
 	Harness     string             `yaml:"harness"` // default station harness for crew run
 	Watch       []string           `yaml:"watch"`   // drift roots relative to the project; default ["."]
 	Timeout     string             `yaml:"timeout"` // Go duration
@@ -33,6 +34,14 @@ type Factory struct {
 
 	Body string `yaml:"-"`
 	Path string `yaml:"-"`
+}
+
+// ReworkStation is the station rework goes to: Rework, or Start when unset.
+func (f Factory) ReworkStation() string {
+	if f.Rework != "" {
+		return f.Rework
+	}
+	return f.Start
 }
 
 type Station struct {

@@ -1,0 +1,104 @@
+package build
+
+import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/crewfile-dev/crew/internal/config"
+	"github.com/crewfile-dev/crew/internal/mission"
+	"github.com/crewfile-dev/crew/internal/run"
+	"github.com/crewfile-dev/crew/internal/source"
+	"github.com/crewfile-dev/crew/internal/verify"
+)
+
+const (
+	orchestratorSettingsFile = mission.OrchestratorName + ".settings.json"
+	kindOrchestratorSettings = "orchestrator-settings"
+)
+
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
+
+// hasOrchestratorLaunch: the harness says how to start the orchestrator.
+func hasOrchestratorLaunch(h config.Harness) bool {
+	return h.Foreman != nil && h.Foreman.OrchestratorLaunch != ""
+}
+
+// canHostOrchestrator: the harness can host it, start it, and apply deny
+// rules. The orchestrator has a shell, so without a deny list a session could
+// run commands only the owner may run.
+func canHostOrchestrator(h config.Harness) bool {
+	return canHostForeman(h) && hasOrchestratorLaunch(h) && run.CanDeny(h)
+}
+
+// orchestratorSettingsPath is always under the build directory: the file holds
+// absolute paths of this machine and isn't an agent file.
+func orchestratorSettingsPath(crewDir, hn string, o Opts) string {
+	return filepath.Join(BuildDir(crewDir, o), hn, "agents", orchestratorSettingsFile)
+}
+
+// OrchestratorLaunch is the line that starts the orchestrator on harness hn,
+// with the agent name and the absolute settings path filled in. It reports
+// false when the harness doesn't get an orchestrator.
+func OrchestratorLaunch(p *verify.Project, hn string, o Opts) (string, bool) {
+	h := p.Registry.Harnesses[hn]
+	if !canHostOrchestrator(h) {
+		return "", false
+	}
+	crewDir, err := filepath.Abs(p.Dir)
+	if err != nil {
+		return "", false
+	}
+	line := strings.ReplaceAll(h.Foreman.OrchestratorLaunch, "{name}", mission.OrchestratorName)
+	return strings.ReplaceAll(line, "{settings}", shellQuote(orchestratorSettingsPath(crewDir, hn, o))), true
+}
+
+// shellQuote single-quotes s unless it only has characters a shell leaves alone.
+func shellQuote(s string) string {
+	if shellSafe.MatchString(s) {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// orchestratorOutputs renders the orchestrator agent like a foreman, and the
+// settings file that carries its allow and deny rules.
+func orchestratorOutputs(p *verify.Project, hn, crewDir, dir string, link bool, o Opts) ([]File, error) {
+	h := foremanHarness(p.Registry.Harnesses[hn])
+	a := mission.OrchestratorAgent()
+	content, err := renderAgent(p.Registry, h, verify.Selected{Agent: a, Model: source.ModelInherit})
+	if err != nil {
+		return nil, fmt.Errorf("[%s] orchestrator: %w", hn, err)
+	}
+	settings, err := orchestratorSettings(p, hn, crewDir)
+	if err != nil {
+		return nil, err
+	}
+	out := []File{{Path: orchestratorSettingsPath(crewDir, hn, o), Root: filepath.Join(BuildDir(crewDir, o), hn, "agents"),
+		Content: settings, Kind: kindOrchestratorSettings, Name: a.Name, Harnesses: []string{hn}}}
+	dest := filepath.Join(dir, a.Name+h.Agents.Ext)
+	if !link {
+		return append(out, File{Path: dest, Root: dir, Content: content, Kind: "agent", Name: a.Name, Harnesses: []string{hn}}), nil
+	}
+	built := filepath.Join(BuildDir(crewDir, o), hn, "agents", a.Name+h.Agents.Ext)
+	return append(out,
+		File{Path: built, Root: filepath.Dir(built), Content: content, Kind: "agent-build", Name: a.Name, Harnesses: []string{hn}},
+		File{Path: dest, Root: dir, Link: built, Kind: "agent", Name: a.Name, Harnesses: []string{hn}}), nil
+}
+
+// orchestratorSettings is {"permissions": {"allow": [...], "deny": [...]}}.
+// The deny list is never empty: an orchestrator without one isn't written.
+func orchestratorSettings(p *verify.Project, hn, crewDir string) ([]byte, error) {
+	deny := run.DenyRules(p.Registry, hn, crewDir, false)
+	if len(deny) == 0 {
+		return nil, fmt.Errorf("[%s] orchestrator: harness can apply deny rules but defines none, so the orchestrator isn't built", hn)
+	}
+	allow := append([]string{}, p.Registry.Harnesses[hn].Foreman.Allow...)
+	b, err := json.MarshalIndent(map[string]any{"permissions": map[string]any{"allow": allow, "deny": deny}}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("[%s] orchestrator settings: %w", hn, err)
+	}
+	return append(b, '\n'), nil
+}

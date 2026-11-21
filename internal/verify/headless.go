@@ -9,14 +9,15 @@ import (
 
 var (
 	headlessToken = regexp.MustCompile(`\{[^{}]*\}`)
-	knownTokens   = map[string]bool{"{agent}": true, "{prompt}": true, "{allowed}": true}
+	knownTokens   = map[string]bool{"{agent}": true, "{prompt}": true, "{allowed}": true, "{settings}": true}
 	// Words and flags that mark a permission bypass or blanket auto-approval.
 	// crew never runs a station that way.
 	bypassWords = []string{"danger", "bypass", "skip-permissions", "yolo"}
 	bypassArgs  = map[string]bool{"--auto": true, "--full-auto": true, "--auto-approve": true}
 )
 
-func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
+func checkHeadless(at string, hs *config.Harness, rep *Report) {
+	h := hs.Headless
 	if h == nil {
 		return
 	}
@@ -38,7 +39,7 @@ func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
 		}
 		for _, tok := range headlessToken.FindAllString(arg, -1) {
 			if !knownTokens[tok] {
-				rep.errf(at, "unknown token %q (known: {agent}, {prompt}, {allowed})", tok)
+				rep.errf(at, "unknown token %q (known: {agent}, {prompt}, {allowed}, {settings})", tok)
 			}
 			seen[tok] = true
 		}
@@ -68,5 +69,34 @@ func checkHeadless(at string, h *config.HeadlessSpec, rep *Report) {
 	case "agent-file":
 	default:
 		rep.errf(at, "allow_via must be \"flag\" or \"agent-file\" (got %q)", h.AllowVia)
+	}
+	checkDenyVia(at, hs, seen["{settings}"], rep)
+}
+
+func checkDenyVia(at string, h *config.Harness, hasToken bool, rep *Report) {
+	switch h.Headless.DenyVia {
+	case "":
+		if hasToken {
+			rep.errf(at, "a {settings} token in command needs deny_via: settings-file")
+		}
+	case "settings-file":
+		if !hasToken {
+			rep.errf(at, "deny_via: settings-file needs a {settings} token in command")
+		}
+		if len(h.Deny.All) == 0 {
+			rep.errf(at, "deny_via: settings-file needs a non-empty deny.all in the harness")
+		}
+	default:
+		rep.errf(at, "deny_via must be \"settings-file\" or empty (got %q)", h.Headless.DenyVia)
+	}
+}
+
+// noteNoDeny says which enabled harnesses can run stations but not apply deny
+// rules, so they can't run mission pieces. Plain `crew run` still works there.
+func noteNoDeny(rep *Report, at string, r *config.Registry, enabled []string) {
+	for _, hn := range enabled {
+		if h := r.Harnesses[hn]; h.Headless != nil && h.Headless.DenyVia == "" {
+			rep.infof(at, "harness %s: can't apply deny rules, so it can't run mission pieces", hn)
+		}
 	}
 }

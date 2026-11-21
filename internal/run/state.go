@@ -43,7 +43,8 @@ type State struct {
 	Reason        string            `json:"reason,omitempty"`
 	SkipDriftOnce bool              `json:"skip_drift_once,omitempty"`
 	Retryable     bool              `json:"retryable,omitempty"`
-	InStation     bool              `json:"in_station,omitempty"` // a station was running when this was saved
+	LimitRoute    string            `json:"limit_route,omitempty"` // "station.route" whose limit ended the run
+	InStation     bool              `json:"in_station,omitempty"`  // a station was running when this was saved
 }
 
 // Terminal reports whether nothing more will run without a resume.

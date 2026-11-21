@@ -80,6 +80,8 @@ type Project struct {
 	Skills   []source.Skill
 	// Factories from factories/*.md.
 	Factories []source.Factory
+	// Domains from domains/*.md.
+	Domains []source.Domain
 	// Enabled harness names, sorted.
 	Enabled []string
 	// Selection[harness] = agents that harness receives, sorted by name.
@@ -130,6 +132,11 @@ func Run(dir string) (*Project, *Report) {
 		rep.errf("", "%v", e)
 	}
 	p.Factories = factories
+	domains, errs := source.LoadDomains(dir)
+	for _, e := range errs {
+		rep.errf("", "%v", e)
+	}
+	p.Domains = domains
 
 	for _, s := range source.StrayEntries(dir, source.AgentsDir) {
 		rep.errf(s, "only one .md file per definition is allowed directly inside %s/", source.AgentsDir)
@@ -152,6 +159,7 @@ func Run(dir string) (*Project, *Report) {
 	checkSources(p, rep)
 	checkCrew(p, rep)
 	checkFactories(p, rep)
+	checkDomains(p, rep)
 	return p, rep
 }
 
@@ -212,7 +220,7 @@ func checkHarness(r *config.Registry, name string, h config.Harness, rep *Report
 	if h.Display == "" {
 		rep.errf(at, "display is required")
 	}
-	checkHeadless(at, h.Headless, rep)
+	checkHeadless(at, &h, rep)
 	if c := h.Catalog; c != nil {
 		if len(c.Providers) == 0 {
 			rep.errf(at+".catalog", "providers must list at least one models.dev provider")
@@ -415,6 +423,10 @@ func checkModels(r *config.Registry, m *config.Models, rep *Report) {
 
 // ---------------- sources ----------------
 
+// reservedOrchestratorName must match mission.OrchestratorName. verify can't
+// import mission (mission imports verify), so it keeps its own copy.
+const reservedOrchestratorName = "orchestrator"
+
 func checkSources(p *Project, rep *Report) {
 	r := p.Registry
 	capSet := setOf(r.Capabilities)
@@ -425,6 +437,9 @@ func checkSources(p *Project, rep *Report) {
 	}
 	for _, a := range p.Agents {
 		checkCommon(rep, a.Path, a.Name, a.Description, a.Body)
+		if a.Name == reservedOrchestratorName {
+			rep.errf(a.Path, "agent %q clashes with the orchestrator crew generates; rename the agent", a.Name)
+		}
 		if skillNames[a.Name] {
 			rep.errf(a.Path, "name %q is also used by a skill; keep names unique across agents and skills", a.Name)
 		}
@@ -563,6 +578,7 @@ func checkCrew(p *Project, rep *Report) {
 		}
 	}
 	sort.Strings(p.Enabled)
+	noteNoDeny(rep, w, r, p.Enabled)
 	if len(p.Enabled) == 0 {
 		rep.errf(w, "no harness is enabled")
 	}

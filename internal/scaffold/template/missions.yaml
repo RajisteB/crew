@@ -1,0 +1,21 @@
+# missions.yaml — settings for missions: whether a plan needs approval, which
+# harness runs the orchestrator, and the limits crew enforces on every mission.
+# Limits are a number or "*" (no limit). Add a repos: section to override
+# limits for one repo; limits you leave out there use the values below.
+#
+#   repos:
+#     acme/app:
+#       pieces: 20
+
+version: 1
+mission_approval: on
+orchestrator_harness: claude-code
+remind_after: 30m
+
+limits:
+  runs_at_once: 1             # pieces run one at a time for now; a higher value is refused
+  delegation_depth: 2
+  pieces: 12
+  steps: 60
+  orchestrator_calls_per_piece: 3
+  orchestrator_additions: 2

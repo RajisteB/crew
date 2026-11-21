@@ -66,12 +66,33 @@ harnesses:
     headless:                     # how `crew run` runs one station non-interactively
       # dontAsk denies anything not pre-approved; --allowedTools pre-approves
       # exactly the agent's capabilities. Never a bypass mode.
-      command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --permission-mode, dontAsk, --output-format, json]
+      command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --settings, "{settings}", --permission-mode, dontAsk, --output-format, json]
       prompt_via: stdin
       allow_via: flag
+      deny_via: settings-file     # deny rules go in a temp settings file at {settings}
       output: claude-json         # reply = .result; refused tool calls (.permission_denials) become run notes
     foreman:                      # factories' foremen run as the main session
       launch: "claude --agent {name}"
+      orchestrator_launch: "claude --agent {name} --settings {settings}"
+      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"]
+    deny:                         # refused in every session crew starts; {crew_dir} = this config directory
+      all:
+        - "Bash(gh pr merge:*)"
+        - "Bash(gh pr close:*)"
+        - "Bash(git push --force:*)"
+        - "Bash(git push -f:*)"
+        - "Bash(git push origin main:*)"
+        - "Bash(git push origin HEAD:main:*)"
+        - "Bash(crew automerge:*)"
+        - "Bash(crew repo confirm:*)"
+        - "Bash(crew release approve:*)"
+        # Two leading slashes mean an absolute path in Claude Code rules (one
+        # means relative to the settings file); {crew_dir} is already absolute.
+        - "Edit(/{crew_dir}/**)"
+        - "Write(/{crew_dir}/**)"
+      stations:                   # extra, for stations and headless orchestrator calls
+        - "Bash(crew run:*)"
+        - "Bash(crew mission:*)"
     rules:
       name_max: 64
       name_forbidden: [claude, anthropic]

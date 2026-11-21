@@ -41,6 +41,9 @@ Usage:
   crew run <factory> --input TEXT|@FILE [--detach]   run a factory (see crew run --help)
   crew run status|say|goto|approve|resume <id> …    watch and steer a run
   crew factory list | diagram <name>     list factories, or print one as a Mermaid flowchart
+  crew domain list [--dir D]              list domains (name, factory count, description)
+  crew repo confirm|status [--project P] confirm a repo for missions (in a terminal), or show its status
+  crew mission setup|plan|start|go|status|answer|amend|stop|resume   run a mission (see crew mission)
   crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
                                          move an old crewfile setup to crew's names
 
@@ -83,6 +86,24 @@ func main() {
 	}
 	if cmd == "factory" {
 		if err := factoryCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
+	if cmd == "domain" {
+		if err := domainCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
+	if cmd == "repo" {
+		if err := repoCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
+	if cmd == "mission" {
+		if err := missionCmd(os.Args[2:], os.Stdin, os.Stdout); err != nil {
 			fail(1, "%v", err)
 		}
 		return
@@ -137,11 +158,12 @@ func main() {
 		if _, _, err := build.Plan(p, opts(f)); err != nil {
 			fail(1, "output collision:\n%v", err)
 		}
+		printLaunches(os.Stdout, p, opts(f))
 	case "plan":
 		withNotes := f
 		withNotes.verbose = true // plan is for reviewing, so show every note
 		p, _ := runVerify(dir, withNotes)
-		printMatrix(os.Stdout, p)
+		printMatrix(os.Stdout, p, opts(f))
 		files, notes, err := build.Plan(p, opts(f))
 		if err != nil {
 			fail(1, "%v", err)
@@ -164,6 +186,7 @@ func main() {
 			fail(1, "%v", err)
 		}
 		printNotes(notes)
+		printLaunches(os.Stdout, p, opts(f))
 		printActions(acts, f.verbose || f.dryRun)
 		if f.dryRun {
 			fmt.Println("dry run: nothing written")
@@ -210,12 +233,13 @@ func runVerify(dir string, f flags) (*verify.Project, *verify.Report) {
 	return p, rep
 }
 
-func printMatrix(w io.Writer, p *verify.Project) {
+func printMatrix(w io.Writer, p *verify.Project, o build.Opts) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for _, hn := range p.Enabled {
 		h := p.Registry.Harnesses[hn]
 		fmt.Fprintf(tw, "\n%s (%s) — %d skills\n", h.Display, hn, len(p.Skills))
 		printForemen(tw, h, p)
+		printOrchestrator(tw, hn, p, o)
 		sel := p.Selection[hn]
 		if !h.Agents.Supported {
 			fmt.Fprintln(tw, "  no custom agents in this harness")
@@ -252,6 +276,24 @@ func printForemen(w io.Writer, h config.Harness, p *verify.Project) {
 		names = append(names, fmt.Sprintf("%s (launch: %s)", n, strings.ReplaceAll(h.Foreman.Launch, "{name}", n)))
 	}
 	fmt.Fprintf(w, "  foremen: %s\n", strings.Join(names, ", "))
+}
+
+// printOrchestrator prints the line that starts the orchestrator, if this
+// harness gets one.
+func printOrchestrator(w io.Writer, hn string, p *verify.Project, o build.Opts) {
+	if line, ok := build.OrchestratorLaunch(p, hn, o); ok {
+		fmt.Fprintf(w, "  orchestrator: %s\n", line)
+	}
+}
+
+// printLaunches prints, for each enabled harness that gets an orchestrator,
+// the line that starts it. verify and compile use it.
+func printLaunches(w io.Writer, p *verify.Project, o build.Opts) {
+	for _, hn := range p.Enabled {
+		if line, ok := build.OrchestratorLaunch(p, hn, o); ok {
+			fmt.Fprintf(w, "%s:\n  orchestrator: %s\n", hn, line)
+		}
+	}
 }
 
 func printNotes(notes []build.Note) {

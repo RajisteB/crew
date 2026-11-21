@@ -50,3 +50,36 @@ func Init(dir string) ([]string, error) {
 	})
 	return created, err
 }
+
+// MissionDefaults writes the mission settings file and the domains folder
+// from the template into dir, each only when it is missing. It returns what
+// it wrote, relative to dir. It never overwrites.
+func MissionDefaults(dir string) ([]string, error) {
+	var wrote []string
+	settings := filepath.Join(dir, "missions.yaml")
+	if _, err := os.Stat(settings); os.IsNotExist(err) {
+		b, err := tmpl.ReadFile("template/missions.yaml")
+		if err != nil {
+			return nil, err
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(settings, b, 0o644); err != nil {
+			return nil, err
+		}
+		wrote = append(wrote, "missions.yaml")
+	} else if err != nil {
+		return nil, err
+	}
+	domains := filepath.Join(dir, "domains")
+	if _, err := os.Stat(domains); os.IsNotExist(err) {
+		if err := os.MkdirAll(domains, 0o755); err != nil {
+			return nil, err
+		}
+		wrote = append(wrote, "domains/")
+	} else if err != nil {
+		return nil, err
+	}
+	return wrote, nil
+}

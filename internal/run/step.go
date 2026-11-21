@@ -113,6 +113,7 @@ func (e *Engine) request(st State, inbox []string) (StationRequest, PromptInput,
 	return StationRequest{
 		Harness: harness, Agent: station.Agent, Prompt: BuildPrompt(in), WorkDir: e.Project,
 		Allowed: AllowedTools(e.Registry, harness, agent), Timeout: timeout,
+		Deny: DenyRules(e.Registry, harness, e.CrewDir, true),
 	}, in, nil
 }
 

@@ -285,3 +285,65 @@ func TestHeadless_RejectsAutoApproveModes(t *testing.T) {
 	edit(t, filepath.Join(dir, "harnesses.yaml"), "--permission-mode, dontAsk,", "--permission-mode, auto,")
 	expectError(t, dir, "headless commands may not bypass permissions")
 }
+
+func TestVerify_DenyViaNeedsSettingsToken(t *testing.T) {
+	cases := []struct{ name, old, new, want string }{
+		{"missing token", `--settings, "{settings}", `, ``, "deny_via: settings-file needs a {settings} token"},
+		{"bad deny_via", "deny_via: settings-file", "deny_via: env", `deny_via must be "settings-file"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := fresh(t)
+			edit(t, filepath.Join(dir, "harnesses.yaml"), c.old, c.new)
+			expectError(t, dir, c.want)
+		})
+	}
+}
+
+func TestVerify_DenyViaNeedsDenyAll(t *testing.T) {
+	dir := fresh(t)
+	path := filepath.Join(dir, "harnesses.yaml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	from, to := strings.Index(s, "      all:\n"), strings.Index(s, "      stations:")
+	if from < 0 || to < from {
+		t.Fatal("deny block not found in the template")
+	}
+	if err := os.WriteFile(path, []byte(s[:from]+"      all: []\n"+s[to:]), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, dir, "deny_via: settings-file needs a non-empty deny.all")
+}
+
+func TestVerify_NoDenyViaIsInfoNote(t *testing.T) {
+	dir := fresh(t)
+	_, rep := verify.Run(dir)
+	for _, i := range rep.Issues {
+		if strings.Contains(i.Msg, "harness opencode: can't apply deny rules, so it can't run mission pieces") {
+			if i.Level != verify.Info {
+				t.Fatalf("note level = %v, want Info", i.Level)
+			}
+			if !rep.OK(false) {
+				t.Fatalf("report should still be OK: %+v", rep.Issues)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected the no-deny note for opencode, got %+v", rep.Issues)
+}
+
+func TestVerify_AgentNamedOrchestratorIsError(t *testing.T) {
+	dir := fresh(t)
+	src, err := os.ReadFile(filepath.Join(dir, "agents", "code-explorer.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.Replace(string(src), "name: code-explorer", "name: orchestrator", 1)
+	if err := os.WriteFile(filepath.Join(dir, "agents", "orchestrator.md"), []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, dir, `agent "orchestrator" clashes with the orchestrator crew generates`)
+}

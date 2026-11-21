@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crewfile-dev/crew/internal/flock"
 	"github.com/crewfile-dev/crew/internal/source"
 )
 
@@ -31,7 +32,7 @@ func (s Store) path(name string) string { return filepath.Join(s.Dir, name) }
 // NewRun creates the run folder, freezing a copy of the factory source so
 // edits to the factory can't change a run already in progress.
 func NewRun(project string, f source.Factory, factorySrc []byte, input string, now time.Time) (Store, State, error) {
-	if err := ensureCrewDir(project); err != nil {
+	if err := EnsureCrewDir(project); err != nil {
 		return Store{}, State{}, err
 	}
 	id, err := newRunID(f.Name, now)
@@ -51,9 +52,9 @@ func NewRun(project string, f source.Factory, factorySrc []byte, input string, n
 	return s, st, s.SaveState(st)
 }
 
-// ensureCrewDir creates <project>/.crew with a .gitignore that ignores it, so
+// EnsureCrewDir creates <project>/.crew with a .gitignore that ignores it, so
 // runs never end up in the project's history and its .gitignore is untouched.
-func ensureCrewDir(project string) error {
+func EnsureCrewDir(project string) error {
 	dir := filepath.Join(project, CrewDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -139,7 +140,7 @@ func (s Store) SaveState(st State) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(s.path("state.json"), b)
+	return WriteAtomic(s.path("state.json"), b)
 }
 
 func stepDir(s Store, n int, station string) string {
@@ -238,7 +239,7 @@ func (s Store) DrainInbox() ([]string, error) {
 }
 
 func (s Store) RequestGoto(station string) error {
-	return writeAtomic(s.path("goto"), []byte(station))
+	return WriteAtomic(s.path("goto"), []byte(station))
 }
 
 func (s Store) TakeGoto() (string, error) {
@@ -254,41 +255,22 @@ func (s Store) TakeGoto() (string, error) {
 
 // ---------- lock: one engine per run ----------
 
-// Lock makes this process the run's only driver. A lock left by a process
-// that no longer exists is taken over.
+// Lock makes this process the run's only driver by holding an flock on the
+// lock file until unlock is called or the process dies. Only a held flock
+// counts: a lock file left by a process that is gone, even one whose pid now
+// belongs to another process, is taken over.
 func (s Store) Lock() (func(), error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		f, err := os.OpenFile(s.path("lock"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-		if err == nil {
-			fmt.Fprint(f, os.Getpid())
-			f.Close()
-			return func() { os.Remove(s.path("lock")) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		if pid, alive := s.LockedBy(); alive {
-			return nil, fmt.Errorf("run %s is already being driven (pid %d)", filepath.Base(s.Dir), pid)
-		}
-		os.Remove(s.path("lock"))
+	unlock, err := flock.Acquire(s.path("lock"), 0o644)
+	if errors.Is(err, flock.ErrHeld) {
+		return nil, fmt.Errorf("run %s is already being driven (pid %d)", filepath.Base(s.Dir), flock.Pid(s.path("lock")))
 	}
-	return nil, fmt.Errorf("run %s: couldn't take the lock", filepath.Base(s.Dir))
+	return unlock, err
 }
 
-// LockedBy reports the pid driving the run, if that process is alive.
-func (s Store) LockedBy() (int, bool) {
-	b, err := os.ReadFile(s.path("lock"))
-	if err != nil {
-		return 0, false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return 0, false
-	}
-	return pid, syscall.Kill(pid, 0) == nil
-}
+// LockedBy reports the pid driving the run, if some process holds its lock.
+func (s Store) LockedBy() (int, bool) { return flock.Held(s.path("lock")) }
 
-func writeAtomic(path string, b []byte) error {
+func WriteAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return err
@@ -309,7 +291,7 @@ func writeAtomic(path string, b []byte) error {
 // RecordChild remembers the station process (its own process group), so a
 // later driver can stop it if this one died without cleaning up.
 func (s Store) RecordChild(pid int) error {
-	return writeAtomic(s.path("child"), []byte(strconv.Itoa(pid)))
+	return WriteAtomic(s.path("child"), []byte(strconv.Itoa(pid)))
 }
 
 func (s Store) ClearChild() error {

@@ -2,6 +2,7 @@ package run_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -154,5 +155,26 @@ func TestHeadlessRunner_ClaudeJSON(t *testing.T) {
 	t.Setenv("FAKE_MODE", "jsonerr")
 	if _, err := (run.HeadlessRunner{Registry: reg}).Run(context.Background(), req("p")); err == nil || !strings.Contains(err.Error(), "API overloaded") {
 		t.Fatalf("is_error must fail the station: %v", err)
+	}
+}
+
+func readFile(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestExpandCommand_DropsSettingsFlagWhenNoRules(t *testing.T) {
+	h := config.HeadlessSpec{Command: []string{"x", "--agent", "{agent}", "--settings", "{settings}", "--mode", "dontAsk"}}
+	got := run.ExpandCommandForTest(h, run.StationRequest{Agent: "a"}, "")
+	if want := "x --agent a --mode dontAsk"; strings.Join(got, " ") != want {
+		t.Fatalf("got %q, want %q", strings.Join(got, " "), want)
+	}
+	got = run.ExpandCommandForTest(h, run.StationRequest{Agent: "a"}, "/tmp/s.json")
+	if want := "x --agent a --settings /tmp/s.json --mode dontAsk"; strings.Join(got, " ") != want {
+		t.Fatalf("got %q, want %q", strings.Join(got, " "), want)
 	}
 }
