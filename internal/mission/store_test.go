@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -122,29 +125,81 @@ func TestStore_LockExclusiveAndStaleTakenOver(t *testing.T) {
 		t.Errorf("LockedBy = %d %v", pid, alive)
 	}
 	_, err = s.Lock()
-	if err == nil || !strings.Contains(err.Error(), "is already being driven (pid") {
+	if err == nil || !strings.Contains(err.Error(), "is already being driven (pid "+strconv.Itoa(os.Getpid())+")") {
 		t.Errorf("second lock err = %v", err)
 	}
 	unlock()
-	if _, err := os.Stat(filepath.Join(s.Dir, "lock")); err == nil {
-		t.Error("lock not removed")
+	unlock() // twice is safe
+	if _, alive := s.LockedBy(); alive {
+		t.Error("alive after unlock")
 	}
-	// a dead pid is taken over
+	// a lock file left behind with a dead pid, no flock held, is taken
 	if err := os.WriteFile(filepath.Join(s.Dir, "lock"), []byte("2147483646"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, alive := s.LockedBy(); alive {
-		t.Skip("pid unexpectedly alive")
+		t.Error("stale lock reported alive")
 	}
 	unlock2, err := s.Lock()
 	if err != nil {
 		t.Fatalf("stale lock not taken over: %v", err)
 	}
-	// unlock only removes our own pid
-	os.WriteFile(filepath.Join(s.Dir, "lock"), []byte("1"), 0o600)
 	unlock2()
-	if _, err := os.Stat(filepath.Join(s.Dir, "lock")); err != nil {
-		t.Error("unlock removed a lock it no longer owned")
+}
+
+func TestStore_LockConcurrentOneWinner(t *testing.T) {
+	_, s, _ := newTestStore(t)
+	const n = 16
+	var wins, fails atomic.Int32
+	var unlocks sync.Map
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			unlock, err := Store{Dir: s.Dir}.Lock()
+			if err != nil {
+				fails.Add(1)
+				return
+			}
+			wins.Add(1)
+			unlocks.Store(i, unlock)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if wins.Load() != 1 || fails.Load() != n-1 {
+		t.Errorf("wins = %d, fails = %d", wins.Load(), fails.Load())
+	}
+	unlocks.Range(func(_, u any) bool { u.(func())(); return true })
+}
+
+func TestStore_EmitConcurrentSeqsAreUniqueAndGapless(t *testing.T) {
+	_, s, _ := newTestStore(t)
+	const workers, each = 8, 10
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range each {
+				if _, err := (Store{Dir: s.Dir}).Emit(Event{Kind: EvNote}); err != nil {
+					t.Error(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	all, err := s.EventsSince(0)
+	if err != nil || len(all) != workers*each {
+		t.Fatalf("got %d events, %v", len(all), err)
+	}
+	for i, e := range all {
+		if e.Seq != i+1 {
+			t.Fatalf("event %d has seq %d", i, e.Seq)
+		}
 	}
 }
 
