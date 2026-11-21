@@ -117,12 +117,12 @@ func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 	}
 }
 
-var exampleBlock = regexp.MustCompile("(?s)<<'EOF'\n(.*?)\nEOF\n")
+var exampleBlock = regexp.MustCompile("(?s)<<'CREW_PLAN'\n(.*?)\nCREW_PLAN\n")
 
 func TestOrchestratorBody_ExamplePlanParsesAndChecks(t *testing.T) {
 	m := exampleBlock.FindStringSubmatch(OrchestratorBody())
 	if m == nil {
-		t.Fatal("no quoted heredoc example in the body")
+		t.Fatal("no quoted CREW_PLAN heredoc example in the body")
 	}
 	mis, err := Parse([]byte(m[1] + "\n"))
 	if err != nil {
@@ -140,5 +140,57 @@ func TestOrchestratorBody_ExamplePlanParsesAndChecks(t *testing.T) {
 	}
 	if errs := Check(mis, in); len(errs) > 0 {
 		t.Fatalf("example fails Check: %v", errs)
+	}
+}
+
+func TestOrchestratorBody_StartOfSessionHandlesADeadEngine(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{"`engine not running`", "offer `crew mission resume <id>`", "when they say so"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
+	}
+	if strings.Index(body, "engine not running") > strings.Index(body, "To plan, run") {
+		t.Error("the dead-engine rule belongs to point 1, before planning")
+	}
+}
+
+func TestOrchestratorBody_AmendKeepsTheRequestAndNamesTheFile(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{
+		"keeps the request text exactly as it is in the current plan, changing only the pieces",
+		"`.crew/missions/<id>/mission.md`",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
+	}
+}
+
+func TestOrchestratorBody_ExplainsEachChoiceAndDoesNotLetItGuess(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{
+		"retry runs the failed station again", "goto restarts from the station named",
+		"cancel gives up on the piece", "approve lets a station that asked for approval continue",
+		"If crew says the choice doesn't fit the item, tell the principal which choices it lists.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "If you pick a wrong choice") {
+		t.Error("the agent must not be told to pick a choice and correct it")
+	}
+}
+
+func TestOrchestratorBody_HeredocDelimiterIsChosenNotEOF(t *testing.T) {
+	body := OrchestratorBody()
+	if strings.Contains(body, "<<'EOF'") {
+		t.Error("the example must not use EOF as its delimiter")
+	}
+	for _, want := range []string{"<<'CREW_PLAN'", "pick a delimiter that doesn't appear as a line in the request"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
 	}
 }
