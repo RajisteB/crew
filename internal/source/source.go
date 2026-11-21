@@ -369,6 +369,7 @@ var (
 	allowedKeys  = map[string]string{
 		"source.Agent":   "name, description, model, effort, per_harness, capabilities, skills",
 		"source.Factory": "name, description, start, harness, watch, timeout, stations",
+		"source.Domain":  "name, description, factories, paths, releases",
 		"source.Station": "agent, harness, approve, on_drift, timeout, routes",
 	}
 )

@@ -41,6 +41,7 @@ Usage:
   crew run <factory> --input TEXT|@FILE [--detach]   run a factory (see crew run --help)
   crew run status|say|goto|approve|resume <id> …    watch and steer a run
   crew factory list | diagram <name>     list factories, or print one as a Mermaid flowchart
+  crew domain list [--dir D]              list domains (name, factory count, description)
   crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
                                          move an old crewfile setup to crew's names
 
@@ -83,6 +84,12 @@ func main() {
 	}
 	if cmd == "factory" {
 		if err := factoryCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
+	if cmd == "domain" {
+		if err := domainCmd(os.Args[2:], os.Stdout); err != nil {
 			fail(1, "%v", err)
 		}
 		return
