@@ -83,8 +83,10 @@ harnesses:
         - "Bash(crew automerge:*)"
         - "Bash(crew repo confirm:*)"
         - "Bash(crew release approve:*)"
-        - "Edit({crew_dir}/**)"
-        - "Write({crew_dir}/**)"
+        # Two leading slashes mean an absolute path in Claude Code rules (one
+        # means relative to the settings file); {crew_dir} is already absolute.
+        - "Edit(/{crew_dir}/**)"
+        - "Write(/{crew_dir}/**)"
       stations:                   # extra, for stations and headless orchestrator calls
         - "Bash(crew run:*)"
         - "Bash(crew mission:*)"

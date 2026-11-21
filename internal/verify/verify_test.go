@@ -317,3 +317,20 @@ func TestVerify_DenyViaNeedsDenyAll(t *testing.T) {
 	}
 	expectError(t, dir, "deny_via: settings-file needs a non-empty deny.all")
 }
+
+func TestVerify_NoDenyViaIsInfoNote(t *testing.T) {
+	dir := fresh(t)
+	_, rep := verify.Run(dir)
+	for _, i := range rep.Issues {
+		if strings.Contains(i.Msg, "harness opencode: can't apply deny rules, so it can't run mission pieces") {
+			if i.Level != verify.Info {
+				t.Fatalf("note level = %v, want Info", i.Level)
+			}
+			if !rep.OK(false) {
+				t.Fatalf("report should still be OK: %+v", rep.Issues)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected the no-deny note for opencode, got %+v", rep.Issues)
+}

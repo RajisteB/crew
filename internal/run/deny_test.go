@@ -10,6 +10,7 @@ import (
 
 	"github.com/crewfile-dev/crew/internal/config"
 	"github.com/crewfile-dev/crew/internal/run"
+	"github.com/crewfile-dev/crew/internal/scaffold"
 )
 
 func denyRegistry() *config.Registry {
@@ -17,7 +18,7 @@ func denyRegistry() *config.Registry {
 		"fake": {
 			Headless: &config.HeadlessSpec{DenyVia: "settings-file"},
 			Deny: config.DenySpec{
-				All:      []string{"Bash(gh pr merge:*)", "Edit({crew_dir}/**)"},
+				All:      []string{"Bash(gh pr merge:*)", "Edit(/{crew_dir}/**)"},
 				Stations: []string{"Bash(crew run:*)"},
 			},
 		},
@@ -28,14 +29,14 @@ func denyRegistry() *config.Registry {
 func TestDenyRules_ExpandsCrewDirAndAddsStationRules(t *testing.T) {
 	reg := denyRegistry()
 	all := run.DenyRules(reg, "fake", "/cfg/crew", false)
-	if want := []string{"Bash(gh pr merge:*)", "Edit(/cfg/crew/**)"}; !slices.Equal(all, want) {
+	if want := []string{"Bash(gh pr merge:*)", "Edit(//cfg/crew/**)"}; !slices.Equal(all, want) {
 		t.Fatalf("all = %v, want %v", all, want)
 	}
 	st := run.DenyRules(reg, "fake", "/cfg/crew", true)
-	if want := []string{"Bash(gh pr merge:*)", "Edit(/cfg/crew/**)", "Bash(crew run:*)"}; !slices.Equal(st, want) {
+	if want := []string{"Bash(gh pr merge:*)", "Edit(//cfg/crew/**)", "Bash(crew run:*)"}; !slices.Equal(st, want) {
 		t.Fatalf("station = %v, want %v", st, want)
 	}
-	if reg.Harnesses["fake"].Deny.All[1] != "Edit({crew_dir}/**)" {
+	if reg.Harnesses["fake"].Deny.All[1] != "Edit(/{crew_dir}/**)" {
 		t.Fatal("DenyRules mutated the registry")
 	}
 }
@@ -99,7 +100,10 @@ func TestHeadlessRunner_RemovesSettingsFileOnFailure(t *testing.T) {
 	if _, err := (run.HeadlessRunner{Registry: reg}).Run(context.Background(), r); err == nil {
 		t.Fatal("expected the station to fail")
 	}
-	pathBytes, _ := os.ReadFile(copyTo + ".path")
+	pathBytes, err := os.ReadFile(copyTo + ".path")
+	if err != nil || strings.TrimSpace(string(pathBytes)) == "" {
+		t.Fatalf("the fake harness never received --settings (err=%v)", err)
+	}
 	if _, err := os.Stat(strings.TrimSpace(string(pathBytes))); !os.IsNotExist(err) {
 		t.Fatalf("settings file still exists after a failed station (err=%v)", err)
 	}
@@ -123,8 +127,31 @@ func TestEngine_StationRequestCarriesDenyRules(t *testing.T) {
 	if len(fr.reqs) == 0 {
 		t.Fatal("no station ran")
 	}
-	want := []string{"Bash(gh pr merge:*)", "Edit(/cfg/crew/**)", "Bash(crew run:*)"}
+	want := []string{"Bash(gh pr merge:*)", "Edit(//cfg/crew/**)", "Bash(crew run:*)"}
 	if got := fr.reqs[0].Deny; !slices.Equal(got, want) {
 		t.Fatalf("Deny = %v, want %v", got, want)
+	}
+}
+
+func TestDenyRules_ScaffoldTemplateUsesAbsolutePaths(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "crewcfg")
+	if _, err := scaffold.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := config.LoadRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, r := range run.DenyRules(reg, "claude-code", "/cfg/crew", false) {
+		if strings.HasPrefix(r, "Edit(") || strings.HasPrefix(r, "Write(") {
+			found++
+			if !strings.Contains(r, "(//cfg/crew/**)") {
+				t.Fatalf("rule %q is not an absolute-path rule", r)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatalf("found %d Edit/Write rules, want 2", found)
 	}
 }

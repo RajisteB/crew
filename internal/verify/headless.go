@@ -90,3 +90,13 @@ func checkDenyVia(at string, h *config.Harness, hasToken bool, rep *Report) {
 		rep.errf(at, "deny_via must be \"settings-file\" or empty (got %q)", h.Headless.DenyVia)
 	}
 }
+
+// noteNoDeny says which enabled harnesses can run stations but not apply deny
+// rules, so they can't run mission pieces. Plain `crew run` still works there.
+func noteNoDeny(rep *Report, at string, r *config.Registry, enabled []string) {
+	for _, hn := range enabled {
+		if h := r.Harnesses[hn]; h.Headless != nil && h.Headless.DenyVia == "" {
+			rep.infof(at, "harness %s: can't apply deny rules, so it can't run mission pieces", hn)
+		}
+	}
+}

@@ -571,6 +571,7 @@ func checkCrew(p *Project, rep *Report) {
 		}
 	}
 	sort.Strings(p.Enabled)
+	noteNoDeny(rep, w, r, p.Enabled)
 	if len(p.Enabled) == 0 {
 		rep.errf(w, "no harness is enabled")
 	}
