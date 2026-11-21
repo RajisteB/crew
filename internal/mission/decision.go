@@ -16,6 +16,8 @@ const (
 	decisionTag      = "decision"
 	invalidPrefix    = "the orchestrator's decision couldn't be used: "
 	maxCheckMessages = 3
+	maxReasonRunes   = 500
+	maxNameRunes     = 100
 )
 
 // OrchDecision is the orchestrator's reply.
@@ -28,6 +30,24 @@ type OrchDecision struct {
 	Quote   string `json:"quote"`   // add: the part of the request it serves
 	Note    string `json:"note"`    // goto: for the station; escalate: the question
 	Reason  string `json:"reason"`
+}
+
+// cutDecision limits the model's free text before anything is stored: state,
+// events and notifications hold short messages only. Brief and Piece are plan
+// content and stay whole.
+func cutDecision(d OrchDecision) OrchDecision {
+	d.Reason = cutText(d.Reason, maxReasonRunes)
+	d.Note = cutText(d.Note, maxReasonRunes)
+	d.Action = cutText(d.Action, maxNameRunes)
+	d.Station = cutText(d.Station, maxNameRunes)
+	d.Target = cutText(d.Target, maxNameRunes)
+	d.Quote = cutText(d.Quote, maxNameRunes)
+	return d
+}
+
+// cutText cuts s to n runes and makes it valid UTF-8.
+func cutText(s string, n int) string {
+	return cutRunes(strings.ToValidUTF8(s, "\uFFFD"), n)
 }
 
 // RunStep is what the engine should do to a piece's run.
@@ -92,6 +112,7 @@ type applier struct {
 // can't be used, or repeats an earlier one for the same stop, becomes a
 // question for the principal instead. m and s are never modified.
 func ApplyDecision(m Mission, s State, piece, failure string, d OrchDecision, by string, in CheckInput, now time.Time) (Mission, State, []Action, *RunStep) {
+	d = cutDecision(d)
 	a := &applier{decider: decider{m: m, s: s.Clone(), o: Obs{Now: now}}, in: in, by: by, piece: piece, failure: failure}
 	if a.ps(piece) == nil {
 		return m, a.s, nil, nil
@@ -248,15 +269,15 @@ func (a *applier) rebrief(d OrchDecision) {
 			a.m.Pieces[i].Brief = d.Brief
 		}
 	}
-	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvRebrief, Piece: d.Target, By: a.by, Msg: d.Reason}})
+	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvRebrief, Piece: d.Target, By: a.by, Msg: "brief changed"}})
 }
 
 func (a *applier) addPiece(d OrchDecision) {
 	a.m = a.next
 	a.s.Pieces = append(a.s.Pieces, PieceState{ID: d.Piece.ID, Status: PieceQueued, Added: true})
 	a.s.Additions++
-	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvPieceAdded, Piece: d.Piece.ID, By: a.by, Msg: d.Reason}})
-	a.notify(fmt.Sprintf("added piece %s: %s", d.Piece.ID, d.Reason))
+	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvPieceAdded, Piece: d.Piece.ID, By: a.by, Msg: "added by the orchestrator"}})
+	a.notify("added piece " + d.Piece.ID)
 }
 
 // cancelPiece cancels a piece and clears its wait. It returns a stop step

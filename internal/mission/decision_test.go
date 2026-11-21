@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func exState() State {
@@ -240,6 +241,48 @@ func TestApply_DoesNotMutateInput(t *testing.T) {
 		ApplyDecision(m, s, "P1", "failed", d, "orchestrator", exInput(), t0)
 		if !reflect.DeepEqual(s, sBefore) || !reflect.DeepEqual(m, mBefore) {
 			t.Fatalf("%s mutated its input", d.Action)
+		}
+	}
+}
+
+// longStrings lists every string the returned state and actions hold.
+func longStrings(s State, as []Action) []string {
+	var out []string
+	for _, p := range s.Pieces {
+		for _, d := range p.Decisions {
+			out = append(out, d.Failure, d.Action, d.Station, d.Note, d.Reason)
+		}
+		if p.Wait != nil {
+			out = append(out, p.Wait.Question)
+		}
+	}
+	for _, a := range as {
+		switch v := a.(type) {
+		case Record:
+			out = append(out, v.Event.Msg, v.Event.Piece, v.Event.By)
+		case Notify:
+			out = append(out, v.Title, v.Body)
+		}
+	}
+	return out
+}
+
+func TestApplyDecision_ModelTextIsCut(t *testing.T) {
+	long := strings.Repeat("é", 5000)
+	for name, d := range map[string]OrchDecision{
+		"escalate": {Action: "escalate", Note: long, Reason: long},
+		"goto":     {Action: "goto", Station: "plan", Note: long, Reason: long},
+		"unknown":  {Action: long, Note: long, Reason: long},
+		"noaction": {Reason: long},
+	} {
+		_, s, as, step := apply(t, d)
+		for _, str := range longStrings(s, as) {
+			if n := len([]rune(str)); n > 600 || !utf8.ValidString(str) {
+				t.Errorf("%s: stored string has %d runes (valid %v)", name, n, utf8.ValidString(str))
+			}
+		}
+		if name == "goto" && (step == nil || len([]rune(step.Note)) != 500) {
+			t.Errorf("goto step = %+v", step)
 		}
 	}
 }

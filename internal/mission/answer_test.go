@@ -101,10 +101,17 @@ func TestApplyAnswer_WordsCutOnRuneBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, a := range as {
-		if r, ok := a.(Record); ok && r.Event.Kind == EvAnswered && r.Event.Msg != strings.Repeat("é", 500) {
-			t.Errorf("msg has %d bytes", len(r.Event.Msg))
+		if r, ok := a.(Record); ok && r.Event.Kind == EvAnswered {
+			found = true
+			if r.Event.Msg != strings.Repeat("é", 500) {
+				t.Errorf("msg has %d bytes", len(r.Event.Msg))
+			}
 		}
+	}
+	if !found {
+		t.Error("no answered record")
 	}
 }
 
@@ -123,7 +130,9 @@ func TestApplyAnswer_UnknownWaitIsError(t *testing.T) {
 func TestApplyAnswer_DoesNotMutateInput(t *testing.T) {
 	s := waiting(WaitLimit, PieceRunning)
 	before := s.Clone()
-	answer(s, Answer{Do: "cancel", Words: "stop"})
+	if _, _, _, _, err := answer(s, Answer{Do: "cancel", Words: "stop"}); err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(s, before) {
 		t.Error("state mutated")
 	}
