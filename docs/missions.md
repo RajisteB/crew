@@ -68,8 +68,10 @@ Under `foreman:`, add the two orchestrator lines:
     foreman:
       launch: "claude --agent {name}"
       orchestrator_launch: "claude --agent {name} --settings {settings}"
-      orchestrator_allow: ["Bash(crew:*)", "Read", "Grep", "Glob"]
+      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"]
 ```
+
+`orchestrator_allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, and reading and searching files. Any other command, `crew run approve` included, makes it ask you first, as it would in any session.
 
 Next to `foreman:`, add the `deny:` block:
 

@@ -74,7 +74,7 @@ harnesses:
     foreman:                      # factories' foremen run as the main session
       launch: "claude --agent {name}"
       orchestrator_launch: "claude --agent {name} --settings {settings}"
-      orchestrator_allow: ["Bash(crew:*)", "Read", "Grep", "Glob"]
+      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"]
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory
       all:
         - "Bash(gh pr merge:*)"
