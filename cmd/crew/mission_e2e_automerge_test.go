@@ -5,12 +5,35 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/principal"
 )
+
+// stepClock is the engine's clock in the auto-merge tests: every reading moves
+// it forward by step, so the one-minute settle passes in a few ticks without
+// real waiting. The step stays far below the 2-minute and 30-minute rules,
+// which these tests never meet: their checks are always present and never pending.
+type stepClock struct {
+	mu   sync.Mutex
+	now  time.Time
+	step time.Duration
+}
+
+func (c *stepClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(c.step)
+	return c.now
+}
+
+// useStepClock gives the engine a clock that moves 40 seconds per reading.
+func (r *e2eRig) useStepClock() {
+	r.engine.Now = (&stepClock{now: time.Now(), step: 40 * time.Second}).Now
+}
 
 // switchOn writes the design domain's switch the way only crew automerge
 // does in the product; a test may write it directly.
@@ -61,6 +84,7 @@ func TestMission_EndToEnd_AutoMergeOn(t *testing.T) {
 	r.switchOn()
 	r.writeChecks("pass")
 	r.launch()
+	r.useStepClock()
 
 	var p1Head string
 	st := r.tickUntil("both pieces complete and the mission done", func(s mission.State) bool {
@@ -95,6 +119,7 @@ func TestMission_EndToEnd_ChecksFailThenPass(t *testing.T) {
 	r.switchOn()
 	r.writeChecks("fail")
 	r.launch()
+	r.useStepClock()
 
 	st := r.tickUntil("P1 sent back for failed checks", func(s mission.State) bool {
 		return piece(t, s, "P1").SentBack["checks-failed"] == 1
