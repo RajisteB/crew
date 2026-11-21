@@ -43,6 +43,7 @@ Usage:
   crew factory list | diagram <name>     list factories, or print one as a Mermaid flowchart
   crew domain list [--dir D]              list domains (name, factory count, description)
   crew repo confirm|status [--project P] confirm a repo for missions (in a terminal), or show its status
+  crew mission setup|plan|start|go|status|answer|amend|stop|resume   run a mission (see crew mission)
   crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
                                          move an old crewfile setup to crew's names
 
@@ -97,6 +98,12 @@ func main() {
 	}
 	if cmd == "repo" {
 		if err := repoCmd(os.Args[2:], os.Stdout); err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
+	if cmd == "mission" {
+		if err := missionCmd(os.Args[2:], os.Stdin, os.Stdout); err != nil {
 			fail(1, "%v", err)
 		}
 		return
