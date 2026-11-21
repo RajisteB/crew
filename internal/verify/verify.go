@@ -220,7 +220,7 @@ func checkHarness(r *config.Registry, name string, h config.Harness, rep *Report
 	if h.Display == "" {
 		rep.errf(at, "display is required")
 	}
-	checkHeadless(at, h.Headless, rep)
+	checkHeadless(at, &h, rep)
 	if c := h.Catalog; c != nil {
 		if len(c.Providers) == 0 {
 			rep.errf(at+".catalog", "providers must list at least one models.dev provider")

@@ -28,6 +28,20 @@ jsonerr)
   cat > /dev/null
   printf '{"type":"result","is_error":true,"result":"API overloaded","permission_denials":[]}\n'
   exit 0 ;;
+copysettings)
+  cat > /dev/null
+  prev=""
+  for a in "$@"; do
+    if [ "$prev" = "--settings" ]; then
+      cp "$a" "$FAKE_COPY_TO"
+      printf '%s' "$a" > "$FAKE_COPY_TO.path"
+      ls -l "$a" | cut -c2-10 | awk '{m=0; for(i=0;i<3;i++){s=substr($0,i*3+1,3); v=0; if(substr(s,1,1)=="r")v+=4; if(substr(s,2,1)=="w")v+=2; if(substr(s,3,1)=="x")v+=1; m=m v}; print m}' > "$FAKE_COPY_TO.mode"
+    fi
+    prev="$a"
+  done
+  [ -n "$FAKE_EXIT" ] && { echo "boom" >&2; exit "$FAKE_EXIT"; }
+  printf 'ok'
+  exit 0 ;;
 esac
 dir="$FAKE_REPLY_DIR"
 n=$(cat "$dir/counter" 2>/dev/null || echo 0)

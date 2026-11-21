@@ -18,6 +18,7 @@ import (
 type StationRequest struct {
 	Harness, Agent, Prompt, WorkDir string
 	Allowed                         []string
+	Deny                            []string // native deny rules the harness must enforce (see DenyRules)
 	Timeout                         time.Duration
 	OnStart                         func(pid int) // called once the station's process exists
 }
@@ -47,7 +48,12 @@ func (r HeadlessRunner) Run(ctx context.Context, req StationRequest) (Reply, err
 	if !ok || h.Headless == nil {
 		return Reply{}, fmt.Errorf("%s: no headless: command in harnesses.yaml", req.Harness)
 	}
-	argv := expandCommand(*h.Headless, req)
+	settings, cleanup, err := writeSettings(req.Harness, *h.Headless, req.Deny)
+	if err != nil {
+		return Reply{}, err
+	}
+	defer cleanup()
+	argv := expandCommand(*h.Headless, req, settings)
 	if _, err := exec.LookPath(argv[0]); err != nil {
 		return Reply{}, fmt.Errorf("%s: command %q not found on PATH (headless.command in harnesses.yaml)", req.Harness, argv[0])
 	}
@@ -102,9 +108,10 @@ func (r HeadlessRunner) exec(ctx context.Context, req StationRequest, h config.H
 	return stdout.String(), nil
 }
 
-// expandCommand fills in {agent}, {prompt} and {allowed}. An empty
-// allowlist drops the {allowed} argument and the flag right before it.
-func expandCommand(h config.HeadlessSpec, req StationRequest) []string {
+// expandCommand fills in {agent}, {prompt}, {allowed} and {settings}. An empty
+// allowlist (or an empty settings path) drops that argument and the flag
+// right before it.
+func expandCommand(h config.HeadlessSpec, req StationRequest, settings string) []string {
 	join := h.AllowJoin
 	if join == "" {
 		join = ","
@@ -112,7 +119,7 @@ func expandCommand(h config.HeadlessSpec, req StationRequest) []string {
 	allowed := strings.Join(req.Allowed, join)
 	var out []string
 	for _, a := range h.Command {
-		if a == "{allowed}" && allowed == "" {
+		if (a == "{allowed}" && allowed == "") || (a == "{settings}" && settings == "") {
 			if n := len(out); n > 0 && strings.HasPrefix(out[n-1], "-") {
 				out = out[:n-1]
 			}
@@ -120,6 +127,7 @@ func expandCommand(h config.HeadlessSpec, req StationRequest) []string {
 		}
 		a = strings.ReplaceAll(a, "{agent}", req.Agent)
 		a = strings.ReplaceAll(a, "{allowed}", allowed)
+		a = strings.ReplaceAll(a, "{settings}", settings)
 		a = strings.ReplaceAll(a, "{prompt}", req.Prompt)
 		out = append(out, a)
 	}

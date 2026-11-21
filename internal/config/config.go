@@ -50,6 +50,7 @@ type Harness struct {
 	Capabilities map[string][]string `yaml:"capabilities"` // capability → native tool names
 	Rules        Rules               `yaml:"rules"`
 	Notes        string              `yaml:"notes"`
+	Deny         DenySpec            `yaml:"deny"`     // rules every session crew starts must carry; needs headless.deny_via
 	Headless     *HeadlessSpec       `yaml:"headless"` // how crew run starts one agent non-interactively; nil = can't run stations
 	Foreman      *ForemanSpec        `yaml:"foreman"`  // can host a factory's foreman as the main session; nil = no foremen
 }
@@ -60,13 +61,20 @@ type ForemanSpec struct {
 	Launch string         `yaml:"launch"` // how the user starts it; {name} is the foreman's name
 }
 
+// DenySpec lists native deny-rule strings for a harness.
+type DenySpec struct {
+	All      []string `yaml:"all"`      // native rule strings for every session; {crew_dir} is expanded
+	Stations []string `yaml:"stations"` // extra rules for stations and headless orchestrator calls
+}
+
 // HeadlessSpec is the command crew run uses to run one station. Tokens in
-// Command: {agent}, {prompt}, {allowed}.
+// Command: {agent}, {prompt}, {allowed}, {settings}.
 type HeadlessSpec struct {
 	Command   []string `yaml:"command"`
 	PromptVia string   `yaml:"prompt_via"` // "stdin" | "arg"
 	AllowVia  string   `yaml:"allow_via"`  // "flag" ({allowed} token) | "agent-file" (compiled tools list restricts)
 	AllowJoin string   `yaml:"allow_join"` // separator for {allowed}; default ","
+	DenyVia   string   `yaml:"deny_via"`   // "settings-file" ({settings} token) | "" (this harness can't apply deny rules)
 	Output    string   `yaml:"output"`     // "text" (default: stdout is the reply) | "claude-json" (result + permission_denials)
 }
 

@@ -285,3 +285,35 @@ func TestHeadless_RejectsAutoApproveModes(t *testing.T) {
 	edit(t, filepath.Join(dir, "harnesses.yaml"), "--permission-mode, dontAsk,", "--permission-mode, auto,")
 	expectError(t, dir, "headless commands may not bypass permissions")
 }
+
+func TestVerify_DenyViaNeedsSettingsToken(t *testing.T) {
+	cases := []struct{ name, old, new, want string }{
+		{"missing token", `--settings, "{settings}", `, ``, "deny_via: settings-file needs a {settings} token"},
+		{"bad deny_via", "deny_via: settings-file", "deny_via: env", `deny_via must be "settings-file"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := fresh(t)
+			edit(t, filepath.Join(dir, "harnesses.yaml"), c.old, c.new)
+			expectError(t, dir, c.want)
+		})
+	}
+}
+
+func TestVerify_DenyViaNeedsDenyAll(t *testing.T) {
+	dir := fresh(t)
+	path := filepath.Join(dir, "harnesses.yaml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	from, to := strings.Index(s, "      all:\n"), strings.Index(s, "      stations:")
+	if from < 0 || to < from {
+		t.Fatal("deny block not found in the template")
+	}
+	if err := os.WriteFile(path, []byte(s[:from]+"      all: []\n"+s[to:]), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, dir, "deny_via: settings-file needs a non-empty deny.all")
+}

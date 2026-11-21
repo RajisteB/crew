@@ -248,11 +248,15 @@ func drive(store run.Store, dir, project string, out io.Writer) error {
 	for _, a := range p.Agents {
 		agents[a.Name] = a
 	}
+	crewDir, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	e := &run.Engine{
 		Store: store, Factory: fac, Agents: agents, Registry: p.Registry,
-		Runner: run.HeadlessRunner{Registry: p.Registry}, Snap: run.Snapshot, Project: project, Out: out,
+		Runner: run.HeadlessRunner{Registry: p.Registry}, Snap: run.Snapshot, Project: project, CrewDir: crewDir, Out: out,
 	}
 	st, err := e.Drive(ctx)
 	switch {

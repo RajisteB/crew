@@ -21,6 +21,7 @@ type Engine struct {
 	Runner   Runner
 	Snap     func(project string, watch []string) (map[string]string, error)
 	Project  string
+	CrewDir  string    // absolute crew config directory; {crew_dir} in deny rules
 	Out      io.Writer // human-readable events; nil = silent
 }
 
