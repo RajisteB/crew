@@ -255,12 +255,13 @@ func (r Repo) Head(ctx context.Context, worktree string) (string, error) {
 }
 
 // ChangedFiles lists the files the worktree's branch changed since it left
-// base: git diff --name-only base...HEAD.
+// base: git diff --name-only --no-renames base...HEAD, so a moved file lists
+// both its old and new path.
 func (r Repo) ChangedFiles(ctx context.Context, worktree, base string) ([]string, error) {
 	if err := checkRef("base", base); err != nil {
 		return nil, err
 	}
-	return nameList(ctx, worktree, "diff", "--name-only", "-z", base+"...HEAD")
+	return nameList(ctx, worktree, "diff", "--name-only", "-z", "--no-renames", base+"...HEAD", "--")
 }
 
 // nameList runs a git command that prints NUL-separated paths.
