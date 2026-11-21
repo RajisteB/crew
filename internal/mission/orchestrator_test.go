@@ -30,7 +30,7 @@ func TestOrchestratorBody_NamesEveryCommandItMayRun(t *testing.T) {
 	body := OrchestratorBody()
 	for _, c := range []string{
 		"crew mission status", "crew mission plan -", "crew mission start", "crew mission go",
-		"crew mission amend", "crew mission answer", "crew domain list", "crew factory list",
+		"crew mission amend", "crew mission answer", "crew mission stop", "crew mission resume", "crew domain list", "crew factory list",
 	} {
 		if !strings.Contains(body, c) {
 			t.Errorf("body does not name %q", c)
@@ -43,11 +43,33 @@ func TestOrchestratorBody_ForbidsPrincipalCommands(t *testing.T) {
 	if !strings.Contains(body, "Never run `crew automerge`, `crew repo confirm` or `crew release approve`") {
 		t.Error("body must forbid the three owner commands in one sentence")
 	}
-	if !strings.Contains(body, "in a terminal") {
-		t.Error("body must tell the principal to run them in a terminal")
+	if !strings.Contains(body, "own terminal") {
+		t.Error("body must tell the principal to run them in their own terminal")
+	}
+	if strings.Contains(body, "crew refuses") {
+		t.Error("body must not claim crew refuses the commands; the session's deny rules do")
 	}
 	if !strings.Contains(body, "only when the principal has said to in this conversation") {
 		t.Error("body must tie crew mission go to the principal saying go")
+	}
+}
+
+func TestOrchestratorBody_WordsArePassedInlineNotByFile(t *testing.T) {
+	body := OrchestratorBody()
+	if !strings.Contains(body, "--words '") {
+		t.Error("body must show --words with single quotes")
+	}
+	if strings.Contains(body, "@FILE") {
+		t.Error("body must not use the @FILE form")
+	}
+}
+
+func TestOrchestratorBody_AnswersAndFailures(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{"kind", "--station", "--note", "`merge`", "instead of inventing"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
 	}
 }
 
@@ -68,7 +90,7 @@ func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 			t.Errorf("last paragraph lacks %q:\n%s", want, tail)
 		}
 	}
-	if n := strings.Count(body, "\n"); n > 95 {
+	if n := strings.Count(body, "\n"); n > 100 {
 		t.Errorf("body is %d lines, want about 90 or fewer", n)
 	}
 }
