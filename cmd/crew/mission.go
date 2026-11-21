@@ -260,7 +260,7 @@ func startChecks(env missionEnv, store mission.Store) error {
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
-	return confirmRepo(env.crewDir, info)
+	return confirmRepo(env.crewDir, env.repoRoot, info)
 }
 
 func missionStart(env missionEnv, id string) error {

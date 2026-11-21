@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -108,5 +109,46 @@ func TestMissionStart_StatusChangedDuringChecksIsRefused(t *testing.T) {
 	}
 	if after := len(r.eventKinds(id)); after != before {
 		t.Fatalf("events grew from %d to %d", before, after)
+	}
+}
+
+func addOrigin(t *testing.T, repo, url string) {
+	t.Helper()
+	if out, err := exec.Command("git", "-C", repo, "remote", "add", "origin", url).CombinedOutput(); err != nil {
+		t.Fatalf("git remote add: %v\n%s", err, out)
+	}
+}
+
+func TestMissionStart_OriginDifferentFromGhRepoRefused(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	addOrigin(t, r.repo, "git@github.com:me/app.git") // gh says acme/app
+	_, err := r.cmd("start", id)
+	if err == nil || !strings.Contains(err.Error(), "me/app") || !strings.Contains(err.Error(), "acme/app") ||
+		!strings.Contains(err.Error(), "gh repo set-default") {
+		t.Fatalf("err = %v", err)
+	}
+	if r.status(id) != mission.StatusPlanned || len(r.starts) != 0 {
+		t.Fatalf("status = %s, starts = %d", r.status(id), len(r.starts))
+	}
+}
+
+func TestMissionStart_OriginSameSlugInOtherCasePasses(t *testing.T) {
+	r := newMissionRig(t)
+	r.setApproval("off")
+	id := r.plan()
+	addOrigin(t, r.repo, "https://github.com/ACME/App.git")
+	if out, err := r.cmd("start", id); err != nil {
+		t.Fatalf("start: %v\n%s", err, out)
+	}
+}
+
+func TestMissionStart_OriginWithoutSlugIsSkipped(t *testing.T) {
+	r := newMissionRig(t)
+	r.setApproval("off")
+	id := r.plan()
+	addOrigin(t, r.repo, "/tmp/some/local/origin.git")
+	if out, err := r.cmd("start", id); err != nil {
+		t.Fatalf("start: %v\n%s", err, out)
 	}
 }
