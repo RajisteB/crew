@@ -244,3 +244,62 @@ func (r Repo) RemoteURL(ctx context.Context, name string) (string, error) {
 	}
 	return strings.TrimSpace(out), nil
 }
+
+// Head returns the commit the worktree's HEAD points at.
+func (r Repo) Head(ctx context.Context, worktree string) (string, error) {
+	out, err := git(ctx, localTimeout, worktree, "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// ChangedFiles lists the files the worktree's branch changed since it left
+// base: git diff --name-only base...HEAD.
+func (r Repo) ChangedFiles(ctx context.Context, worktree, base string) ([]string, error) {
+	if err := checkRef("base", base); err != nil {
+		return nil, err
+	}
+	return nameList(ctx, worktree, "diff", "--name-only", "-z", base+"...HEAD")
+}
+
+// nameList runs a git command that prints NUL-separated paths.
+func nameList(ctx context.Context, dir string, args ...string) ([]string, error) {
+	out, err := git(ctx, localTimeout, dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
+// MergeInto merges from into the worktree's branch with --no-edit. When the
+// merge conflicts it collects the conflicted paths, runs git merge --abort,
+// and returns the paths with a nil error. A clean merge, or nothing to
+// merge, returns no paths. A merge that stops for any other reason is an
+// error, and the worktree is not left mid-merge.
+func (r Repo) MergeInto(ctx context.Context, worktree, from string) ([]string, error) {
+	if err := checkRef("merge source", from); err != nil {
+		return nil, err
+	}
+	_, mergeErr := git(ctx, localTimeout, worktree, "merge", "--no-edit", from)
+	if mergeErr == nil {
+		return nil, nil
+	}
+	if _, err := git(ctx, localTimeout, worktree, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err != nil {
+		return nil, mergeErr // no merge in progress: nothing to undo
+	}
+	conflicts, listErr := nameList(ctx, worktree, "diff", "--name-only", "-z", "--diff-filter=U")
+	if _, err := git(ctx, localTimeout, worktree, "merge", "--abort"); err != nil {
+		return nil, errors.Join(mergeErr, listErr, err)
+	}
+	if listErr != nil || len(conflicts) == 0 {
+		return nil, errors.Join(mergeErr, listErr)
+	}
+	return conflicts, nil
+}

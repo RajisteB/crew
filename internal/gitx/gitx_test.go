@@ -266,3 +266,125 @@ func TestAddWorktree_HasNoUpstream(t *testing.T) {
 		t.Fatalf("the piece branch tracks %q; it must have no upstream", strings.TrimSpace(string(out)))
 	}
 }
+
+// commitFile writes content to rel in dir and commits it.
+func commitFile(t *testing.T, dir, rel, content string) {
+	t.Helper()
+	p := filepath.Join(dir, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, p, content)
+	run(t, dir, "add", rel)
+	run(t, dir, "commit", "-m", "change "+rel)
+}
+
+func TestHead_IsTheCommit(t *testing.T) {
+	repo, _ := newRepo(t)
+	got, err := repo.Head(ctx, repo.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := run(t, repo.Dir, "rev-parse", "HEAD"); got != want {
+		t.Fatalf("Head = %q, want %q", got, want)
+	}
+}
+
+func TestChangedFiles_ListsBranchFilesOnly(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	commitFile(t, repo.Dir, "a/x.txt", "x\n")
+	commitFile(t, repo.Dir, "b/y.txt", "y\n")
+	run(t, repo.Dir, "checkout", "main")
+	commitFile(t, repo.Dir, "c/z.txt", "z\n")
+	run(t, repo.Dir, "checkout", "piece")
+	got, err := repo.ChangedFiles(ctx, repo.Dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a/x.txt", "b/y.txt"}; !slices.Equal(got, want) {
+		t.Fatalf("ChangedFiles = %v, want %v", got, want)
+	}
+	if _, err := repo.ChangedFiles(ctx, repo.Dir, "--x"); err == nil {
+		t.Fatal("expected error for base starting with -")
+	}
+}
+
+func TestMergeInto_Clean(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	commitFile(t, repo.Dir, "p.txt", "p\n")
+	run(t, repo.Dir, "checkout", "main")
+	commitFile(t, repo.Dir, "m.txt", "m\n")
+	run(t, repo.Dir, "checkout", "piece")
+	conflicts, err := repo.MergeInto(ctx, repo.Dir, "main")
+	if err != nil || len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, err = %v", conflicts, err)
+	}
+	if got := run(t, repo.Dir, "rev-list", "--parents", "-n", "1", "HEAD"); len(strings.Fields(got)) != 3 {
+		t.Fatalf("HEAD is not a merge commit: %q", got)
+	}
+	if dirty, _ := repo.Dirty(ctx, repo.Dir); len(dirty) != 0 {
+		t.Fatalf("dirty = %v", dirty)
+	}
+}
+
+func TestMergeInto_ConflictIsUndone(t *testing.T) {
+	repo, _ := newRepo(t)
+	commitFile(t, repo.Dir, "f.txt", "base\n")
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	commitFile(t, repo.Dir, "f.txt", "piece\n")
+	run(t, repo.Dir, "checkout", "main")
+	commitFile(t, repo.Dir, "f.txt", "main\n")
+	run(t, repo.Dir, "checkout", "piece")
+	before := run(t, repo.Dir, "rev-parse", "HEAD")
+	conflicts, err := repo.MergeInto(ctx, repo.Dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(conflicts, []string{"f.txt"}) {
+		t.Fatalf("conflicts = %v", conflicts)
+	}
+	if after := run(t, repo.Dir, "rev-parse", "HEAD"); after != before {
+		t.Fatal("HEAD moved")
+	}
+	if dirty, _ := repo.Dirty(ctx, repo.Dir); len(dirty) != 0 {
+		t.Fatalf("dirty = %v", dirty)
+	}
+	if _, err := os.Stat(filepath.Join(repo.Dir, ".git", "MERGE_HEAD")); !os.IsNotExist(err) {
+		t.Fatalf("MERGE_HEAD still exists (err %v)", err)
+	}
+}
+
+func TestMergeInto_UpToDate(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	commitFile(t, repo.Dir, "p.txt", "p\n")
+	before := run(t, repo.Dir, "rev-parse", "HEAD")
+	conflicts, err := repo.MergeInto(ctx, repo.Dir, "main")
+	if err != nil || len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, err = %v", conflicts, err)
+	}
+	if run(t, repo.Dir, "rev-parse", "HEAD") != before {
+		t.Fatal("HEAD moved")
+	}
+}
+
+func TestMergeInto_OtherFailureIsAnErrorAndLeavesNoMerge(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	run(t, repo.Dir, "checkout", "main")
+	commitFile(t, repo.Dir, "n.txt", "tracked on main\n")
+	run(t, repo.Dir, "checkout", "piece")
+	write(t, filepath.Join(repo.Dir, "n.txt"), "untracked\n")
+	conflicts, err := repo.MergeInto(ctx, repo.Dir, "main")
+	if err == nil || len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, err = %v; want an error", conflicts, err)
+	}
+	if _, err := os.Stat(filepath.Join(repo.Dir, ".git", "MERGE_HEAD")); !os.IsNotExist(err) {
+		t.Fatal("MERGE_HEAD exists after a failed merge")
+	}
+	if _, err := repo.MergeInto(ctx, repo.Dir, "-x"); err == nil {
+		t.Fatal("expected error for ref starting with -")
+	}
+}
