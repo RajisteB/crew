@@ -195,3 +195,15 @@ func (r Repo) Push(worktree, branch string) error {
 	_, err := git(worktree, "push", "-u", "origin", branch)
 	return err
 }
+
+// RemoteURL returns the URL of the named remote.
+func (r Repo) RemoteURL(name string) (string, error) {
+	if err := checkRef("remote", name); err != nil {
+		return "", err
+	}
+	out, err := git(r.Dir, "remote", "get-url", "--", name)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}

@@ -213,3 +213,17 @@ func TestPush_SendsBranchToOrigin(t *testing.T) {
 		t.Fatal("expected error for branch starting with -")
 	}
 }
+
+func TestRemoteURL_ReturnsOrigin(t *testing.T) {
+	repo, origin := newRepo(t)
+	got, err := repo.RemoteURL("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != origin {
+		t.Fatalf("got %q want %q", got, origin)
+	}
+	if _, err := repo.RemoteURL("nope"); err == nil {
+		t.Fatal("expected error for a missing remote")
+	}
+}
