@@ -40,6 +40,7 @@ type Engine struct {
 	RepoGate func(ctx context.Context) error
 
 	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
+	streaks   map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
 }
 
 func (e *Engine) notifier() notify.Notifier {
@@ -78,24 +79,32 @@ type tick struct {
 	halted bool // the mission was stopped during this tick; no further actions run
 }
 
-// Tick runs one round. The caller holds the mission lock.
+// Tick runs one round. The caller holds the mission lock. A failure that
+// repeats tick after tick is told to the principal once (see trackFailures).
 func (e *Engine) Tick(ctx context.Context) (State, error) {
 	t, err := e.newTick(ctx)
 	if err != nil {
+		e.trackFailures(nil, err)
 		return State{}, err
 	}
 	if t.s.Status != StatusRunning {
 		return t.s, nil // a mission that isn't running applies no answers and starts nothing
 	}
-	defer func() { e.lastNotes = t.notes }()
-	lim := t.lim
+	st, err := t.run()
+	e.lastNotes = t.notes
+	e.trackFailures(t.notes, err)
+	return st, err
+}
 
+// run is the body of a tick: inbox, observe, decide, act, save.
+func (t *tick) run() (State, error) {
+	e := t.e
 	acked, err := t.applyInbox()
 	if err != nil {
 		return t.s, err
 	}
 	t.observe()
-	next, actions := Decide(t.m, t.s, t.obs, lim, e.Settings.Remind())
+	next, actions := Decide(t.m, t.s, t.obs, t.lim, e.Settings.Remind())
 	t.s = next
 	if err := t.perform(actions); err != nil {
 		return t.s, err
@@ -285,6 +294,7 @@ func (e *Engine) retryCleanups(ctx context.Context) {
 	}
 	t.retryCleanups()
 	e.lastNotes = t.notes
+	e.trackFailures(t.notes, nil)
 }
 
 func (e *Engine) emit(ev Event) {
