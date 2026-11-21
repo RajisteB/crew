@@ -24,7 +24,7 @@ mission_approval: on
 orchestrator_harness: claude-code
 remind_after: 30m
 limits:
-  runs_at_once: 3
+  runs_at_once: 1
   delegation_depth: 2
   pieces: 12
   steps: 60
@@ -109,5 +109,50 @@ func TestAllows_StarAndNumber(t *testing.T) {
 	}
 	if !Allows(three, 3) || Allows(three, 4) {
 		t.Error("number limit boundary wrong")
+	}
+}
+
+func loadWith(t *testing.T, body string) error {
+	t.Helper()
+	_, err := LoadSettings(writeSettings(t, body))
+	return err
+}
+
+func wantOneAtATime(t *testing.T, err error) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), "runs_at_once") || !strings.Contains(err.Error(), "one at a time") {
+		t.Fatalf("err = %v, want a runs_at_once error saying pieces run one at a time", err)
+	}
+}
+
+func TestLoadSettings_RunsAtOnceAboveOneIsRefused(t *testing.T) {
+	wantOneAtATime(t, loadWith(t, strings.Replace(validBody, "runs_at_once: 1", "runs_at_once: 3", 1)))
+}
+
+func TestLoadSettings_RunsAtOnceStarIsRefused(t *testing.T) {
+	wantOneAtATime(t, loadWith(t, strings.Replace(validBody, "runs_at_once: 1", `runs_at_once: "*"`, 1)))
+}
+
+func TestLoadSettings_RepoOverrideRunsAtOnceAboveOneIsRefused(t *testing.T) {
+	wantOneAtATime(t, loadWith(t, validBody+"repos:\n  acme/app:\n    runs_at_once: 2\n"))
+}
+
+func TestLoadSettings_RepoOverrideRunsAtOnceOneIsAccepted(t *testing.T) {
+	if err := loadWith(t, validBody+"repos:\n  acme/app:\n    runs_at_once: 1\n"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadSettings_TemplateRunsOneAtATime(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "scaffold", "template", SettingsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSettings(writeSettings(t, string(b)))
+	if err != nil {
+		t.Fatalf("the scaffolded missions.yaml must load: %v", err)
+	}
+	if s.Limits.Concurrency.N != 1 {
+		t.Errorf("runs_at_once = %d, want 1", s.Limits.Concurrency.N)
 	}
 }
