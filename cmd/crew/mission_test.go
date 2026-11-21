@@ -390,3 +390,36 @@ func TestMissionRun_SupervisorGivesUpAndMarksStopped(t *testing.T) {
 		t.Fatalf("events = %s", kinds)
 	}
 }
+
+func TestMissionStatus_ListSaysDeadEngine(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	r.edit(id, func(s *mission.State) { s.Status = mission.StatusRunning })
+	want := "engine not running; crew mission resume " + id
+	out, err := r.cmd("status")
+	if err != nil || !strings.Contains(out, want) {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	unlock, err := r.store(id).Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if out, _ = r.cmd("status"); strings.Contains(out, "engine not running") {
+		t.Fatalf("a live engine was called dead:\n%s", out)
+	}
+}
+
+func TestMissionStatus_DetailSaysDeadEngine(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	r.edit(id, func(s *mission.State) { s.Status = mission.StatusRunning })
+	out, err := r.cmd("status", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := strings.SplitN(out, "\n", 2)[0]
+	if !strings.Contains(header, "engine not running; crew mission resume "+id) || strings.Contains(header, "running  not running") {
+		t.Fatalf("header = %q", header)
+	}
+}

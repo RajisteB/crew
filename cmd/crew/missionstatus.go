@@ -36,9 +36,30 @@ func missionList(env missionEnv) error {
 		return nil
 	}
 	for _, st := range states {
-		fmt.Fprintf(env.out, "%s  %s  %d pieces, %d waiting on you\n", st.MissionID, st.Status, len(st.Pieces), waitingCount(st))
+		fmt.Fprintf(env.out, "%s  %s  %d pieces, %d waiting on you%s\n", st.MissionID, st.Status, len(st.Pieces), waitingCount(st), deadEngineSuffix(env, st))
 	}
 	return nil
+}
+
+// deadEngineText is what a running mission without a live engine says.
+func deadEngineText(id string) string {
+	return "engine not running; crew mission resume " + id
+}
+
+// deadEngineSuffix is "  engine not running; …" for a mission whose status
+// is running but whose engine is gone (after a reboot, say), else "".
+func deadEngineSuffix(env missionEnv, st mission.State) string {
+	if st.Status != mission.StatusRunning {
+		return ""
+	}
+	store, err := mission.Open(env.repoRoot, st.MissionID)
+	if err != nil {
+		return ""
+	}
+	if _, live := store.LockedBy(); live {
+		return ""
+	}
+	return "  " + deadEngineText(st.MissionID)
 }
 
 func missionStatus(env missionEnv, id string) error {
@@ -53,6 +74,8 @@ func missionStatus(env missionEnv, id string) error {
 	live := "not running"
 	if pid, ok := store.LockedBy(); ok {
 		live = fmt.Sprintf("live, pid %d", pid)
+	} else if st.Status == mission.StatusRunning {
+		live = deadEngineText(id)
 	}
 	out := env.out
 	fmt.Fprintf(out, "mission %s  %s  %s  (%s, base %s)\n", id, st.Status, live, st.Repo, st.Base)
