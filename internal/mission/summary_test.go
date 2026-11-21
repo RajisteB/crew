@@ -63,3 +63,22 @@ func TestSummary_UnlimitedShowsStar(t *testing.T) {
 		t.Errorf("left = %q, %q", sum.CallsLeft, sum.AdditionsLeft)
 	}
 }
+
+func TestSummary_PromptCarriesAmendmentsInOrder(t *testing.T) {
+	m := amendedMission()
+	m.Pieces = []Piece{{ID: "P1", Domain: "product", Factory: "feature", Brief: "b"}}
+	sum := BuildSummary("m-1", m, PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0)
+	if len(sum.Changes) != 2 {
+		t.Fatalf("changes = %q", sum.Changes)
+	}
+	p := sum.Prompt()
+	heading := "## " + principalChangesTitle
+	i, j, k := strings.Index(p, heading), strings.Index(p, "make it $15"), strings.Index(p, "drop the landing page")
+	if i < 0 || !(i < j && j < k) || strings.Contains(p, "the model's own reason") {
+		t.Fatalf("prompt:\n%s", p)
+	}
+	plain := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0)
+	if strings.Contains(plain.Prompt(), principalChangesTitle) {
+		t.Error("no amendments, no section")
+	}
+}

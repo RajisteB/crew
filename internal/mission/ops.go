@@ -57,6 +57,9 @@ func PieceInput(id string, m Mission, p Piece, d source.Domain) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Your piece: %s (mission %s)\n\n%s\n\n", p.ID, id, strings.TrimSpace(p.Brief))
 	fmt.Fprintf(&b, "## The whole request (for context; do only your piece)\n\n%s\n\n", m.Request)
+	if changes := m.PrincipalChanges(); len(changes) > 0 {
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", principalChangesTitle, bulletList(changes))
+	}
 	fmt.Fprintf(&b, "## Domain briefing: %s\n\n%s\n\n", p.Domain, strings.TrimSpace(d.Body))
 	fmt.Fprintf(&b, "## Commit\n\n%s\n", inputCommitRule)
 	return b.String()
@@ -79,6 +82,15 @@ func PRText(id string, m Mission, p Piece, last run.StepRecord) (title, body str
 		fmt.Fprintf(&b, "\nLast step summary:\n\n%s\n", cutRunes(s, maxPRNoteRunes))
 	}
 	return title, b.String()
+}
+
+// bulletList is one "- " line per item.
+func bulletList(items []string) string {
+	lines := make([]string, len(items))
+	for i, it := range items {
+		lines[i] = "- " + strings.TrimSpace(it)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func firstLine(s string) string {

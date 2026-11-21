@@ -191,3 +191,27 @@ func (m Mission) WithChange(c Change) Mission {
 	out.Changes = append(append([]Change(nil), m.Changes...), c)
 	return out
 }
+
+// principalChangesTitle heads the list of the principal's amendments in a
+// piece's input and in the orchestrator's prompt.
+const principalChangesTitle = "Changes the principal made after the start (where they differ from the request, the latest change wins)"
+
+// PrincipalChanges returns what the principal said in each amendment, in
+// order. The orchestrator's own additions and re-briefs are not included. An
+// amendment that made several changes logs its words once per change, so
+// consecutive entries made at the same time with the same words count once.
+func (m Mission) PrincipalChanges() []string {
+	var out []string
+	var lastTime time.Time
+	for _, c := range m.Changes {
+		if c.By != principalBy {
+			continue
+		}
+		if n := len(out); n > 0 && c.Time.Equal(lastTime) && out[n-1] == c.Why {
+			continue
+		}
+		out = append(out, c.Why)
+		lastTime = c.Time
+	}
+	return out
+}
