@@ -276,7 +276,7 @@ There are five kinds:
 | `limit` | A piece used up its orchestrator calls. | `retry`, `goto` or `cancel`. |
 | `pr-closed` | The pull request was closed without being merged. | `retry` (after you reopen it, crew goes back to watching it) or `cancel`. |
 
-A `question` about a piece that hasn't started yet takes only `cancel`. This happens when a queued piece waits for a piece that was cancelled: the piece can never start, so either cancel it too or change the mission with `amend` (see below).
+A `question` about a piece that hasn't started yet takes only `cancel`. This happens when a queued piece waits for a piece that was cancelled: the piece can never start, so either cancel it too or change the mission with `amend` (see below), for example by dropping the dependency. Amending the piece clears the question and puts it back in the queue.
 
 To answer, pass the wait's id and what you said. `--words` is required: it records your answer word for word.
 

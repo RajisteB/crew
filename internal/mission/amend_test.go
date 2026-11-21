@@ -257,3 +257,42 @@ func TestAmend_RecordCutsWords(t *testing.T) {
 		t.Fatalf("record = %+v", r)
 	}
 }
+
+// P1 was cancelled, so P2 (which waits for it) is parked with a question that
+// went back to queued. Amending P2 is allowed: it never started.
+func TestAmend_WaitingBackToQueuedPieceCanBeChanged(t *testing.T) {
+	s := exState()
+	s.Pieces[0] = PieceState{ID: "P1", Status: PieceCancelled}
+	s.Pieces[1] = PieceState{ID: "P2", Status: PieceWaiting,
+		Wait: &Wait{ID: "w1", Kind: WaitQuestion, Question: "P2 waits for P1, which was cancelled", Since: t0, Back: PieceQueued}}
+	m, s2, _, _, err := amendWith(t, s, func(n *Mission) { n.Pieces[1].WaitsFor = nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := piece(t, s2, "P2"); p.Status != PieceQueued || p.Wait != nil {
+		t.Fatalf("P2 = %+v", p)
+	}
+	if got := piece(t, s, "P2"); got.Status != PieceWaiting || got.Wait == nil {
+		t.Fatal("Amend modified its argument")
+	}
+	if len(m.Changes) != 1 || m.Changes[0].What != "P2: waits_for changed" {
+		t.Fatalf("changes = %+v", m.Changes)
+	}
+	_, as := Decide(m, s2, obs(t0), limits(3, 3), 0)
+	started := false
+	for _, a := range of[StartPiece](as) {
+		started = started || a.Piece == "P2"
+	}
+	if !started {
+		t.Fatalf("P2 should start on the next Decide: %+v", as)
+	}
+}
+
+func TestAmend_WaitingMidRunPieceStillCantBeChanged(t *testing.T) {
+	s := exState()
+	s.Pieces[1] = PieceState{ID: "P2", Status: PieceWaiting, RunID: "r2",
+		Wait: &Wait{ID: "w1", Kind: WaitApproval, Since: t0, Back: PieceRunning}}
+	if _, _, _, _, err := amendWith(t, s, func(n *Mission) { n.Pieces[1].Brief = "other" }); err == nil {
+		t.Fatal("expected an error")
+	}
+}

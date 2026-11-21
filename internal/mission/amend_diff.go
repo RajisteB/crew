@@ -59,7 +59,7 @@ func changesFor(m Mission, s State, p Piece) ([]pieceChange, error) {
 	switch {
 	case len(fields) == 0:
 		return nil, nil
-	case ps.Status != PieceQueued:
+	case !notStarted(ps):
 		return nil, fmt.Errorf("piece %s is %s and can't be changed; only a queued piece can (changed: %s)", p.ID, ps.Status, strings.Join(fields, ", "))
 	}
 	var out []pieceChange
@@ -71,6 +71,12 @@ func changesFor(m Mission, s State, p Piece) ([]pieceChange, error) {
 		out = append(out, pieceChange{Kind: chEdit, Piece: p.ID, Edit: p.ID + ": " + strings.Join(fields, ", ") + " changed"})
 	}
 	return out, nil
+}
+
+// notStarted says whether a piece hasn't started: queued, or parked with a
+// wait that goes back to queued (it waited for a piece that was cancelled).
+func notStarted(ps PieceState) bool {
+	return ps.Status == PieceQueued || (ps.Status == PieceWaiting && ps.Wait != nil && ps.Wait.Back == PieceQueued)
 }
 
 // removal is the change for a piece missing from the new plan.

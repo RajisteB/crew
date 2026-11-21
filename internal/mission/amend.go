@@ -74,7 +74,10 @@ func (d *decider) applyChanges(changes []pieceChange, words string) []RunStep {
 			d.s.Pieces = append(d.s.Pieces, PieceState{ID: c.Piece, Status: PieceQueued})
 			d.add(Record{Event: Event{Time: d.o.Now, Kind: EvPieceAdded, Piece: c.Piece, By: principalBy, Msg: "added by an amendment"}})
 		case chRebrief:
+			d.unpark(c.Piece)
 			d.add(Record{Event: Event{Time: d.o.Now, Kind: EvRebrief, Piece: c.Piece, By: principalBy, Msg: "brief changed"}})
+		case chEdit:
+			d.unpark(c.Piece)
 		case chCancel:
 			if step := d.cancelPiece(c.Piece, principalBy); step != nil {
 				steps = append(steps, *step)
@@ -83,6 +86,14 @@ func (d *decider) applyChanges(changes []pieceChange, words string) []RunStep {
 	}
 	d.notify("amendment applied: " + summarise(changes))
 	return steps
+}
+
+// unpark puts a piece that was parked on a wait it never started from back
+// in the queue, so the next Decide looks at its changed plan afresh.
+func (d *decider) unpark(id string) {
+	if p := d.ps(id); p != nil && p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceQueued {
+		p.Status, p.Wait = PieceQueued, nil
+	}
 }
 
 // changeLog is one change-log entry per change.
