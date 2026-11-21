@@ -78,7 +78,7 @@ func missionStatus(env missionEnv, id string) error {
 		live = deadEngineText(id)
 	}
 	out := env.out
-	fmt.Fprintf(out, "mission %s  %s  %s  (%s, base %s)\n", id, st.Status, live, st.Repo, st.Base)
+	fmt.Fprintln(out, safeText(fmt.Sprintf("mission %s  %s  %s  (%s, base %s)", id, st.Status, live, st.Repo, st.Base)))
 	printWaiting(out, st)
 	printRunning(out, env.repoRoot, st)
 	printQueued(out, m, st)
@@ -93,7 +93,7 @@ func section(out io.Writer, title string, lines []string) {
 	}
 	fmt.Fprintf(out, "\n%s:\n", title)
 	for _, l := range lines {
-		fmt.Fprintf(out, "  %s\n", l)
+		fmt.Fprintf(out, "  %s\n", safeText(l))
 	}
 }
 
@@ -206,9 +206,9 @@ func printEvents(out io.Writer, store mission.Store, since int) error {
 }
 
 func eventLine(e mission.Event) string {
-	parts := []string{fmt.Sprint(e.Seq), e.Time.Format("15:04:05"), e.Kind}
+	parts := []string{fmt.Sprint(e.Seq), e.Time.Format("15:04:05"), oneLine(e.Kind)}
 	if e.Piece != "" {
-		parts = append(parts, e.Piece)
+		parts = append(parts, oneLine(e.Piece))
 	}
 	if e.Msg != "" {
 		parts = append(parts, oneLine(e.Msg))
@@ -216,8 +216,23 @@ func eventLine(e mission.Event) string {
 	return strings.Join(parts, "  ")
 }
 
+// oneLine collapses whitespace, newlines included, and makes the text safe
+// to print.
 func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
+	return safeText(strings.Join(strings.Fields(s), " "))
+}
+
+// safeText replaces the control characters of s (below 0x20 except tab, 0x7f
+// and the C1 range) with "?". Mission text written by a model reaches the
+// terminal through it, so an escape sequence can't rewrite what the
+// principal sees.
+func safeText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if (r < 0x20 && r != '\t') || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return '?'
+		}
+		return r
+	}, s)
 }
 
 // sinceText is how long ago t was, like 2h10m.

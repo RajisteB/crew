@@ -423,3 +423,31 @@ func TestMissionStatus_DetailSaysDeadEngine(t *testing.T) {
 		t.Fatalf("header = %q", header)
 	}
 }
+
+func TestMissionStatus_ModelTextCarriesNoControlCharacters(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	evil := "\x1b[2K\r\x1b]0;owned\x07nothing to see\u009b31m\x7f"
+	r.edit(id, func(s *mission.State) {
+		s.Status = mission.StatusRunning
+		s.Pieces[0].Status = mission.PieceWaiting
+		s.Pieces[0].Wait = &mission.Wait{ID: "w1", Kind: mission.WaitQuestion, Question: "which database?" + evil, Since: time.Now()}
+	})
+	if _, err := r.store(id).Emit(mission.Event{Kind: mission.EvNote, Piece: "P1", By: "engine", Msg: "failed" + evil + "\nsecond line"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.cmd("status", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range out {
+		if r == '\x1b' || r == '\r' || r == '\x07' || r == '\x7f' || (r >= 0x80 && r <= 0x9f) {
+			t.Fatalf("control character %q in the output:\n%q", r, out)
+		}
+	}
+	for _, want := range []string{"which database?", "nothing to see", "failed", "second line"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lost %q:\n%s", want, out)
+		}
+	}
+}
