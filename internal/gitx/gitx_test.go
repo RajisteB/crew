@@ -97,6 +97,26 @@ func TestAddWorktree_CreatesBranchFromBase(t *testing.T) {
 	}
 }
 
+func TestAddWorktree_ExistingBranchSucceeds(t *testing.T) {
+	repo, _ := newRepo(t)
+	if err := repo.Fetch("main"); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RemoveWorktree(wt, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddWorktree(wt, "crew/m1/p1", "origin/main"); err != nil {
+		t.Fatalf("second add: %v", err)
+	}
+	if got := run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"); got != "crew/m1/p1" {
+		t.Fatalf("branch = %q", got)
+	}
+}
+
 func TestAddWorktree_RejectsDashBranch(t *testing.T) {
 	repo, _ := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")

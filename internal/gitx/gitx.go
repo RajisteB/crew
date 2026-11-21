@@ -66,7 +66,8 @@ func (r Repo) Fetch(branch string) error {
 	return err
 }
 
-// AddWorktree creates a worktree at path on a new branch started at from.
+// AddWorktree creates a worktree at path on branch, started at from. An
+// existing branch is reset to from, so a failed start can be retried.
 func (r Repo) AddWorktree(path, branch, from string) error {
 	if err := checkRef("branch", branch); err != nil {
 		return err
@@ -74,7 +75,7 @@ func (r Repo) AddWorktree(path, branch, from string) error {
 	if err := checkRef("start point", from); err != nil {
 		return err
 	}
-	_, err := git(r.Dir, "worktree", "add", "-b", branch, "--", path, from)
+	_, err := git(r.Dir, "worktree", "add", "-B", branch, "--", path, from)
 	return err
 }
 

@@ -129,3 +129,37 @@ func TestTail(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestFindPR_ReturnsExisting(t *testing.T) {
+	f := &fake{out: `[{"number":7,"state":"OPEN","url":"https://github.com/acme/app/pull/7"}]`}
+	got, ok, err := f.client().FindPR(context.Background(), "crew/m1/p1")
+	if err != nil || !ok {
+		t.Fatalf("got %v %v", ok, err)
+	}
+	if got != (PR{Number: 7, State: "OPEN", URL: "https://github.com/acme/app/pull/7"}) {
+		t.Fatalf("got %+v", got)
+	}
+	want := []string{"pr", "list", "--head=crew/m1/p1", "--state", "all", "--json", "number,state,url", "--limit", "1"}
+	if !slices.Equal(f.calls[0].args, want) {
+		t.Fatalf("args %v want %v", f.calls[0].args, want)
+	}
+}
+
+func TestFindPR_EmptyListIsNotFound(t *testing.T) {
+	f := &fake{out: "[]"}
+	got, ok, err := f.client().FindPR(context.Background(), "b")
+	if err != nil || ok || got != (PR{}) {
+		t.Fatalf("got %+v %v %v", got, ok, err)
+	}
+}
+
+func TestFindPR_ErrorsAreReported(t *testing.T) {
+	f := &fake{err: errors.New("boom")}
+	if _, _, err := f.client().FindPR(context.Background(), "b"); err == nil || !strings.Contains(err.Error(), "gh pr list") {
+		t.Fatalf("got %v", err)
+	}
+	f = &fake{out: "not json"}
+	if _, _, err := f.client().FindPR(context.Background(), "b"); err == nil {
+		t.Fatal("want error for bad output")
+	}
+}

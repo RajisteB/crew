@@ -98,6 +98,31 @@ func (c Client) PRState(ctx context.Context, number int) (PR, error) {
 	return PR{Number: v.Number, State: v.State, URL: v.URL}, nil
 }
 
+// FindPR returns the pull request whose head is branch, in any state. An
+// empty list is (PR{}, false, nil).
+func (c Client) FindPR(ctx context.Context, head string) (PR, bool, error) {
+	args := []string{"pr", "list", "--head=" + head, "--state", "all", "--json", "number,state,url", "--limit", "1"}
+	out, err := c.run(ctx, nil, args...)
+	if err != nil {
+		return PR{}, false, err
+	}
+	var v []struct {
+		Number int    `json:"number"`
+		State  string `json:"state"`
+		URL    string `json:"url"`
+	}
+	if err := json.Unmarshal(out, &v); err != nil {
+		return PR{}, false, unparseable(args, err)
+	}
+	if len(v) == 0 {
+		return PR{}, false, nil
+	}
+	if v[0].Number == 0 || v[0].State == "" {
+		return PR{}, false, unparseable(args, nil)
+	}
+	return PR{Number: v[0].Number, State: v[0].State, URL: v[0].URL}, true, nil
+}
+
 func (c Client) run(ctx context.Context, stdin []byte, args ...string) ([]byte, error) {
 	exe := c.Exec
 	if exe == nil {
