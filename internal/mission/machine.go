@@ -35,9 +35,10 @@ type GitObs struct {
 // Obs is everything Decide may look at besides the mission and its state.
 type Obs struct {
 	Now  time.Time
-	Runs map[string]RunObs // piece id -> its run; absent when the piece has none
-	Git  map[string]GitObs // present for pieces whose run is done
-	PRs  map[string]gh.PR  // present for pr-open pieces
+	Runs map[string]RunObs  // piece id -> its run; absent when the piece has none
+	Git  map[string]GitObs  // present for pieces whose run is done
+	PRs  map[string]gh.PR   // present for pr-open pieces
+	Auto map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
 }
 
 // Action is something for the engine to carry out.
@@ -49,13 +50,23 @@ type DriveRun struct{ Piece string } // the run should be going and nothing driv
 // means the factory's rework station: the engine fills it in.
 type SendBack struct{ Piece, Station, Reason, Note string }
 type OpenPR struct{ Piece string }
-type AskOrchestrator struct{ Piece, Failure string } // Failure: "limit-hit" | "failed" | "uncommitted"
+type AskOrchestrator struct{ Piece, Failure string } // Failure: "limit-hit" | "failed" | "uncommitted" | "conflict" | "checks-failed"
 type Notify struct{ Title, Body string }
 type Cleanup struct {
 	Piece string
 	Force bool
 }
 type Record struct{ Event Event }
+
+// Merge merges the piece's pull request at this head. Checked is true when
+// checks passed, false for without-checks.
+type Merge struct {
+	Piece, Head string
+	Checked     bool
+}
+
+// ResolveConflict merges the base into the piece's branch, or sends the piece back.
+type ResolveConflict struct{ Piece string }
 
 func (StartPiece) isAction()      {}
 func (DriveRun) isAction()        {}
@@ -65,6 +76,8 @@ func (AskOrchestrator) isAction() {}
 func (Notify) isAction()          {}
 func (Cleanup) isAction()         {}
 func (Record) isAction()          {}
+func (Merge) isAction()           {}
+func (ResolveConflict) isAction() {}
 
 // decider is the working copy of one Decide call. It only ever holds a clone
 // of the caller's state.
@@ -222,7 +235,11 @@ func (d *decider) ask(id, failure string) {
 	p := d.ps(id)
 	if !Allows(d.lim.OrchestratorCalls, p.Calls+1) {
 		q := fmt.Sprintf("%s hit the orchestrator call limit after a %s failure", id, failure)
-		d.wait(id, WaitLimit, q, PieceRunning)
+		back := PieceRunning
+		if p.Status == PiecePROpen {
+			back = "" // the piece stays pr-open and its pull request is still watched
+		}
+		d.wait(id, WaitLimit, q, back)
 		return
 	}
 	d.add(AskOrchestrator{Piece: id, Failure: failure})
@@ -254,28 +271,6 @@ func uncommittedNote(dirty []string) string {
 		note += fmt.Sprintf(" (and %d more)", extra)
 	}
 	return note + ". Commit your work."
-}
-
-func (d *decider) prOpen(id string) {
-	pr, ok := d.o.PRs[id]
-	if !ok {
-		return
-	}
-	p := d.ps(id)
-	switch pr.State {
-	case "MERGED":
-		d.complete(id)
-		d.record(EvPRMerged, id, fmt.Sprintf("PR #%d", pr.Number))
-		d.add(Cleanup{Piece: id, Force: true})
-	case "CLOSED":
-		if p.Wait == nil || p.Wait.Kind != WaitPRClosed {
-			d.wait(id, WaitPRClosed, fmt.Sprintf("PR #%d (%s) was closed without merging", pr.Number, id), "")
-		}
-	case "OPEN":
-		if p.Wait == nil {
-			d.wait(id, WaitMerge, fmt.Sprintf("PR #%d (%s) is waiting on you", pr.Number, id), "")
-		}
-	}
 }
 
 func (d *decider) queued(id string) {
