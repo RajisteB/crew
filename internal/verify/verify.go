@@ -423,6 +423,10 @@ func checkModels(r *config.Registry, m *config.Models, rep *Report) {
 
 // ---------------- sources ----------------
 
+// reservedOrchestratorName must match mission.OrchestratorName. verify can't
+// import mission (mission imports verify), so it keeps its own copy.
+const reservedOrchestratorName = "orchestrator"
+
 func checkSources(p *Project, rep *Report) {
 	r := p.Registry
 	capSet := setOf(r.Capabilities)
@@ -433,6 +437,9 @@ func checkSources(p *Project, rep *Report) {
 	}
 	for _, a := range p.Agents {
 		checkCommon(rep, a.Path, a.Name, a.Description, a.Body)
+		if a.Name == reservedOrchestratorName {
+			rep.errf(a.Path, "agent %q clashes with the orchestrator crew generates; rename the agent", a.Name)
+		}
 		if skillNames[a.Name] {
 			rep.errf(a.Path, "name %q is also used by a skill; keep names unique across agents and skills", a.Name)
 		}

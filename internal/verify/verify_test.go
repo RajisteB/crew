@@ -334,3 +334,16 @@ func TestVerify_NoDenyViaIsInfoNote(t *testing.T) {
 	}
 	t.Fatalf("expected the no-deny note for opencode, got %+v", rep.Issues)
 }
+
+func TestVerify_AgentNamedOrchestratorIsError(t *testing.T) {
+	dir := fresh(t)
+	src, err := os.ReadFile(filepath.Join(dir, "agents", "code-explorer.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.Replace(string(src), "name: code-explorer", "name: orchestrator", 1)
+	if err := os.WriteFile(filepath.Join(dir, "agents", "orchestrator.md"), []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	expectError(t, dir, `agent "orchestrator" clashes with the orchestrator crew generates`)
+}

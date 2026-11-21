@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crewfile-dev/crew/internal/build"
 	"github.com/crewfile-dev/crew/internal/scaffold"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
@@ -49,8 +50,27 @@ func TestFactoryCmd_List(t *testing.T) {
 func TestPrintMatrix_ListsForemen(t *testing.T) {
 	p, _ := verify.Run(scaffoldDir(t))
 	var out bytes.Buffer
-	printMatrix(&out, p)
+	printMatrix(&out, p, build.Opts{Out: "/o"})
 	if !strings.Contains(out.String(), "foremen: foreman-ship-change (launch: claude --agent foreman-ship-change)") {
 		t.Fatalf("matrix:\n%s", out.String())
+	}
+}
+
+func TestPrintMatrix_ListsOrchestratorLaunch(t *testing.T) {
+	p, _ := verify.Run(scaffoldDir(t))
+	var out bytes.Buffer
+	printMatrix(&out, p, build.Opts{Out: "/o"})
+	want := "  orchestrator: claude --agent orchestrator --settings /o/crew-build/claude-code/agents/orchestrator.settings.json\n"
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("matrix:\n%s", out.String())
+	}
+}
+
+func TestPrintLaunches_OnlyHarnessesWithAnOrchestrator(t *testing.T) {
+	p, _ := verify.Run(scaffoldDir(t))
+	var out bytes.Buffer
+	printLaunches(&out, p, build.Opts{Out: "/o"})
+	if n := strings.Count(out.String(), "orchestrator: "); n != 1 || !strings.Contains(out.String(), "claude-code:\n  orchestrator: claude --agent orchestrator") {
+		t.Fatalf("launches:\n%s", out.String())
 	}
 }

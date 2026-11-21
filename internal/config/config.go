@@ -59,6 +59,9 @@ type Harness struct {
 type ForemanSpec struct {
 	Static map[string]any `yaml:"static"` // keys that override agents.static for foremen (e.g. mode: primary)
 	Launch string         `yaml:"launch"` // how the user starts it; {name} is the foreman's name
+
+	OrchestratorLaunch string   `yaml:"orchestrator_launch"` // how the user starts the orchestrator; {name} and {settings}
+	Allow              []string `yaml:"orchestrator_allow"`  // native allow rules for the orchestrator's session
 }
 
 // DenySpec lists native deny-rule strings for a harness.

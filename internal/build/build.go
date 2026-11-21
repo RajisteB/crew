@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/crewfile-dev/crew/internal/factory"
+	"github.com/crewfile-dev/crew/internal/run"
 	"github.com/crewfile-dev/crew/internal/source"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
@@ -34,7 +35,7 @@ type File struct {
 	Content   []byte // regular file contents; unused when Link is set
 	Link      string // when set, Path is a symlink to this absolute path
 	Root      string // the folder this output lives under (a harness's skills/ or agents/, or build/<harness>/agents)
-	Kind      string // "skill" | "agent"
+	Kind      string // "skill" | "agent" | "agent-build" | "factory-diagram" | "orchestrator-settings"
 	Name      string
 	Harnesses []string
 }
@@ -122,6 +123,9 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 		if len(p.Factories) > 0 && !canHostForeman(h) {
 			notes = append(notes, Note{hn, fmt.Sprintf("no foreman: %s can't host a main-session agent with shell (crew run still works)", h.Display)})
 		}
+		if canHostForeman(h) && hasOrchestratorLaunch(h) && !run.CanDeny(h) {
+			notes = append(notes, Note{hn, fmt.Sprintf("%s can't apply deny rules, so the orchestrator isn't built for it", h.Display)})
+		}
 		if !h.Agents.Supported {
 			continue
 		}
@@ -131,6 +135,15 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 		}
 		if len(p.Factories) > 0 && canHostForeman(h) {
 			fs, err := foremanOutputs(p, hn, crewDir, dir, link, o)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, f := range fs {
+				put(f)
+			}
+		}
+		if canHostOrchestrator(h) {
+			fs, err := orchestratorOutputs(p, hn, crewDir, dir, link, o)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -73,6 +73,8 @@ harnesses:
       output: claude-json         # reply = .result; refused tool calls (.permission_denials) become run notes
     foreman:                      # factories' foremen run as the main session
       launch: "claude --agent {name}"
+      orchestrator_launch: "claude --agent {name} --settings {settings}"
+      orchestrator_allow: ["Bash(crew:*)", "Read", "Grep", "Glob"]
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory
       all:
         - "Bash(gh pr merge:*)"
