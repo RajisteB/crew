@@ -10,7 +10,7 @@ if [ "$agent" = "epic-planner" ]; then
   git add plan.txt
   route=ready
 else
-  printf 'built by %s in %s\n' "$agent" "$(basename "$PWD")" > "built-$(basename "$PWD").txt"
+  printf 'built by %s in %s\n' "$agent" "$(basename "$PWD")" >> "built-$(basename "$PWD").txt"
   git add .
   route=done
 fi

@@ -222,6 +222,7 @@ func missionPlan(env missionEnv, args []string) error {
 	}
 	fmt.Fprintf(env.out, "mission %s planned (%s)\n\n", st.MissionID, store.Dir)
 	printPieceTable(env.out, m)
+	printAutoMergeLine(env, info.Slug, m)
 	fmt.Fprintf(env.out, "\n```mermaid\n%s```\n\nnext: crew mission start %s\n", mission.Mermaid(m), st.MissionID)
 	return nil
 }
@@ -297,14 +298,15 @@ func missionStart(env missionEnv, id string) error {
 
 // awaitGo parks a started mission until the principal says go.
 func awaitGo(env missionEnv, store mission.Store, id string) error {
-	if _, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+	st, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
 		if cur.Status != mission.StatusPlanned {
 			return cur, mission.Event{}, fmt.Errorf("mission %s is %s; only a planned mission can be started", id, cur.Status)
 		}
 		next := cur.Clone()
 		next.Status = mission.StatusAwaitingGo
 		return next, mission.Event{}, nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	m, err := store.Mission()
@@ -312,6 +314,7 @@ func awaitGo(env missionEnv, store mission.Store, id string) error {
 		return err
 	}
 	printPieceTable(env.out, m)
+	printAutoMergeLine(env, st.Repo, m)
 	fmt.Fprintf(env.out, "\n%s\n\nwaiting for go: crew mission go %s\n", m.Request, id)
 	return nil
 }

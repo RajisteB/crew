@@ -48,7 +48,7 @@ Plan the change, then build it.
 type e2eRig struct {
 	t             *testing.T
 	crewDir, repo string
-	ghDir         string
+	ghDir, origin string
 	store         mission.Store
 	engine        *mission.Engine
 	runs          *mission.LocalRuns
@@ -118,6 +118,7 @@ func (r *e2eRig) setupCrewDir() {
 
 func (r *e2eRig) setupRepo() {
 	origin := filepath.Join(r.t.TempDir(), "origin.git")
+	r.origin = origin
 	runIn(r.t, r.repo, "git", "init", "-q", "-b", "main", r.repo)
 	runIn(r.t, r.repo, "git", "init", "-q", "--bare", "-b", "main", origin)
 	runIn(r.t, r.repo, "git", "commit", "-q", "--allow-empty", "-m", "init")
@@ -133,7 +134,7 @@ func (r *e2eRig) setupSeams() {
 		return gh.Client{Dir: dir, Exec: func(ctx context.Context, d string, in []byte, _ string, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "sh", append([]string{testdataPath("fakegh.sh")}, args...)...)
 			cmd.Dir, cmd.Stdin = d, bytes.NewReader(in)
-			cmd.Env = append(os.Environ(), "FAKE_GH_DIR="+r.ghDir)
+			cmd.Env = append(os.Environ(), "FAKE_GH_DIR="+r.ghDir, "FAKE_GH_ORIGIN="+r.origin)
 			return cmd.Output()
 		}}
 	}

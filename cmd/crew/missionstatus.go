@@ -80,6 +80,7 @@ func missionStatus(env missionEnv, id string) error {
 	out := env.out
 	fmt.Fprintln(out, safeText(fmt.Sprintf("mission %s  %s  %s  (%s, base %s)", id, st.Status, live, st.Repo, st.Base)))
 	printWaiting(out, st)
+	printOpenPRs(env, m, st)
 	printRunning(out, env.repoRoot, st)
 	printQueued(out, m, st)
 	printEnded(out, "Complete", st, mission.PieceComplete)
@@ -119,8 +120,6 @@ func printRunning(out io.Writer, repoRoot string, st mission.State) {
 		switch {
 		case p.Status == mission.PieceRunning && p.Wait == nil:
 			lines = append(lines, fmt.Sprintf("%s  run %s  %s", p.ID, p.RunID, runPosition(repoRoot, p.RunID)))
-		case p.Status == mission.PiecePROpen && p.Wait == nil:
-			lines = append(lines, fmt.Sprintf("%s  PR open  %s", p.ID, p.PRURL))
 		}
 	}
 	section(out, "Running", lines)

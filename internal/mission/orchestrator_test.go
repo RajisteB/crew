@@ -194,3 +194,17 @@ func TestOrchestratorBody_HeredocDelimiterIsChosenNotEOF(t *testing.T) {
 		}
 	}
 }
+
+func TestOrchestratorBody_AutoMerge(t *testing.T) {
+	body := OrchestratorBody()
+	for _, s := range strings.FieldsFunc(body, func(r rune) bool { return r == '.' || r == '\n' }) {
+		if strings.Contains(s, "crew automerge") && !strings.Contains(s, "never run") && !strings.Contains(s, "Never run") && !strings.Contains(s, "not run") {
+			t.Errorf("a sentence names crew automerge without saying not to run it: %q", s)
+		}
+	}
+	for _, want := range []string{"without-checks", "own terminal", "says why", "two more tries", "nothing is asked"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
+	}
+}
