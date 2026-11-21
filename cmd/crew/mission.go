@@ -15,7 +15,6 @@ import (
 	"github.com/crewfile-dev/crew/internal/gh"
 	"github.com/crewfile-dev/crew/internal/gitx"
 	"github.com/crewfile-dev/crew/internal/mission"
-	"github.com/crewfile-dev/crew/internal/principal"
 	"github.com/crewfile-dev/crew/internal/scaffold"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
@@ -261,7 +260,7 @@ func startChecks(env missionEnv, store mission.Store) error {
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
-	return principal.CheckRepo(principal.Store{Dir: filepath.Join(env.crewDir, "principal")}, info)
+	return confirmRepo(env.crewDir, info)
 }
 
 func missionStart(env missionEnv, id string) error {

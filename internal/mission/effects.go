@@ -21,6 +21,9 @@ func (t *tick) pieceMission(id string) (Piece, PieceState, bool) {
 // failure to write an event is reported on Out and does not stop it.
 func (t *tick) perform(actions []Action) error {
 	for _, a := range actions {
+		if t.halted {
+			return nil
+		}
 		var err error
 		switch a := a.(type) {
 		case StartPiece:
@@ -134,6 +137,9 @@ func (t *tick) openPR(a OpenPR) error {
 		return nil
 	}
 	e := t.e
+	if ok, err := t.repoAllowsPush(a.Piece); !ok {
+		return err
+	}
 	if err := e.Git.Push(ps.Worktree, ps.Branch); err != nil {
 		t.note(a.Piece, "can't push %s: %v", ps.Branch, err)
 		return nil

@@ -35,6 +35,9 @@ type Engine struct {
 	Notifier notify.Notifier
 	Now      func() time.Time
 	Out      io.Writer
+	// RepoGate re-checks, before every push, that the repo is still
+	// confirmed at its current visibility. Nil means no check.
+	RepoGate func(ctx context.Context) error
 
 	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
 }
@@ -72,6 +75,7 @@ type tick struct {
 	obs    Obs
 	notes  map[string]struct{}
 	mDirty bool
+	halted bool // the mission was stopped during this tick; no further actions run
 }
 
 // Tick runs one round. The caller holds the mission lock.

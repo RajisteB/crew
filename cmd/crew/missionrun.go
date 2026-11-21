@@ -82,7 +82,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		Store: store, RepoRoot: repoRoot, Settings: settings, Checks: chk.in, Domains: domains,
 		Git: gitx.Repo{Dir: repoRoot}, GH: ghClient(repoRoot), Runs: runs,
 		Orch:     mission.HeadlessOrchestrator{Registry: p.Registry, Runner: runner, Harness: settings.Harness, CrewDir: crewDir},
-		Notifier: newNotifier(), Out: out,
+		Notifier: newNotifier(), Out: out, RepoGate: repoGate(crewDir, repoRoot),
 	}
 	return e, runs, nil
 }
