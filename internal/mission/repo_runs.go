@@ -47,13 +47,12 @@ func RunsElsewhere(repoRoot, missionID string) (int, error) {
 		if !e.IsDir() || e.Name() == missionID {
 			continue
 		}
-		store, err := Open(repoRoot, e.Name())
+		st, found, err := loadMissionState(repoRoot, e.Name())
 		if err != nil {
-			continue
+			return 0, err
 		}
-		st, err := store.LoadState()
-		if err != nil {
-			return 0, fmt.Errorf("mission %s: %w", e.Name(), err)
+		if !found {
+			continue
 		}
 		if st.Status == StatusRunning {
 			n += HoldingRuns(st)
@@ -114,4 +113,23 @@ func (t *tick) takeStartSlot() (release func(), ok bool) {
 		return nil, false
 	}
 	return unlock, true
+}
+
+// loadMissionState reads the saved state of the folder named. found is false
+// for something that is not a mission: a name that is no mission id, or a
+// folder with no state.json. Any other failure to look or read is an error
+// naming the folder, since that mission's runs can't be counted.
+func loadMissionState(repoRoot, name string) (st State, found bool, err error) {
+	if validID(name) != nil {
+		return State{}, false, nil
+	}
+	store := Store{Dir: filepath.Join(missionsDir(repoRoot), name)}
+	st, err = store.LoadState()
+	if errors.Is(err, os.ErrNotExist) {
+		return State{}, false, nil
+	}
+	if err != nil {
+		return State{}, false, fmt.Errorf("mission %s: %w", name, err)
+	}
+	return st, true, nil
 }

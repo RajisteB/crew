@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/crewfile-dev/crew/internal/flock"
@@ -91,4 +92,21 @@ func TestLockStarts_ExcludesAndReleases(t *testing.T) {
 		t.Fatalf("lock should be free after release: %v", err)
 	}
 	again()
+}
+
+func TestRunsElsewhere_UnenterableMissionIsAnError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can enter any folder")
+	}
+	root := t.TempDir()
+	other := saveOther(t, root, StatusRunning, 1)
+	dir := filepath.Join(missionsDir(root), other.MissionID)
+	if err := os.Chmod(dir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	_, err := RunsElsewhere(root, "m-self")
+	if err == nil || !strings.Contains(err.Error(), other.MissionID) {
+		t.Fatalf("err = %v, want an error naming %s", err, other.MissionID)
+	}
 }
