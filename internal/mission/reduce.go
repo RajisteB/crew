@@ -27,6 +27,7 @@ func Started(s State, piece, runID, branch, worktree string) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Status = PieceRunning
 		p.RunID, p.Branch, p.Worktree = runID, branch, worktree
+		p.Behind = nil
 	})
 }
 

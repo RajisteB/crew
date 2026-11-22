@@ -34,7 +34,7 @@ func TestSummary_PromptHasEveryField(t *testing.T) {
 		RouteCounts: map[string]int{"review.fix": 4}, Reason: "route limit reached"}
 	last := run.StepRecord{N: 9, Station: "review", Dir: "/runs/r1/steps/9-review",
 		Verdict: run.Verdict{Route: "fix", Summary: "tests still red", Notes: []string{"nil deref in credits.go"}}}
-	sum := BuildSummary("m-1", m, ps, rs, exFactory(), last, "/runs/r1/steps", Limits{OrchestratorCalls: lim(3), Additions: lim(2)}, 1)
+	sum := BuildSummary("m-1", m, ps, rs, exFactory(), last, "/runs/r1/steps", Limits{OrchestratorCalls: lim(3), Additions: lim(2)}, 1, 0)
 
 	if sum.MissionID != "m-1" || sum.Failure != "limit-hit" || sum.Count != 4 || sum.Max != "3" || sum.CallsLeft != "2" || sum.AdditionsLeft != "1" {
 		t.Fatalf("summary = %+v", sum)
@@ -82,7 +82,7 @@ func stuckSummary(request string) Summary {
 		RouteCounts: map[string]int{"review.fix": 4}, Reason: "route limit reached"}
 	ps := PieceState{ID: "P1", Decisions: []Decision{{By: "orchestrator", Failure: "limit-hit", Action: "goto", Station: "plan", Reason: "replan the credits"}}}
 	last := run.StepRecord{Verdict: run.Verdict{Summary: "tests still red", Notes: []string{"nil deref in credits.go"}}}
-	return BuildSummary("m-1", m, ps, rs, exFactory(), last, "/runs/r1/steps", Limits{OrchestratorCalls: lim(3), Additions: lim(2)}, 0)
+	return BuildSummary("m-1", m, ps, rs, exFactory(), last, "/runs/r1/steps", Limits{OrchestratorCalls: lim(3), Additions: lim(2)}, 0, 0)
 }
 
 func TestSummary_PromptIsTaskThenDataThenNothing(t *testing.T) {
@@ -133,7 +133,7 @@ func TestSummary_RequestCannotCloseTheDataBlockEarly(t *testing.T) {
 
 func TestSummary_UnlimitedShowsStar(t *testing.T) {
 	unl := source.Limit{Set: true, Unlimited: true}
-	sum := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{OrchestratorCalls: unl, Additions: unl}, 5)
+	sum := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{OrchestratorCalls: unl, Additions: unl}, 5, 0)
 	if sum.CallsLeft != "*" || sum.AdditionsLeft != "*" {
 		t.Errorf("left = %q, %q", sum.CallsLeft, sum.AdditionsLeft)
 	}
@@ -142,7 +142,7 @@ func TestSummary_UnlimitedShowsStar(t *testing.T) {
 func TestSummary_PromptCarriesAmendmentsInOrder(t *testing.T) {
 	m := amendedMission()
 	m.Pieces = []Piece{{ID: "P1", Domain: "product", Factory: "feature", Brief: "b"}}
-	sum := BuildSummary("m-1", m, PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0)
+	sum := BuildSummary("m-1", m, PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0, 0)
 	if len(sum.Changes) != 2 {
 		t.Fatalf("changes = %q", sum.Changes)
 	}
@@ -152,7 +152,7 @@ func TestSummary_PromptCarriesAmendmentsInOrder(t *testing.T) {
 	if i < 0 || !(i < j && j < k) || strings.Contains(p, "the model's own reason") {
 		t.Fatalf("prompt:\n%s", p)
 	}
-	plain := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0)
+	plain := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0, 0)
 	if strings.Contains(plain.Prompt(), principalChangesTitle) {
 		t.Error("no amendments, no section")
 	}
@@ -172,5 +172,15 @@ func TestSummary_ForPR(t *testing.T) {
 		if !strings.Contains(data, want) {
 			t.Errorf("What happened lacks %q:\n%s", want, data)
 		}
+	}
+}
+
+func TestBuildSummary_StepsLeft(t *testing.T) {
+	l := Limits{Steps: lim(10)}
+	if got := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", l, 0, 4).StepsLeft; got != "6" {
+		t.Errorf("StepsLeft = %q, want 6", got)
+	}
+	if got := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", l, 0, 40).StepsLeft; got != "0" {
+		t.Errorf("StepsLeft = %q, want 0", got)
 	}
 }

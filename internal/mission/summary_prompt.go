@@ -70,10 +70,13 @@ func (s Summary) dataText() string {
 	}
 	section(&b, "Piece", pieceText(s.Piece))
 	section(&b, "What happened", failureText(s))
+	if len(s.Outside) > 0 {
+		section(&b, "Files changed outside the piece's paths:", outsideText(s))
+	}
 	section(&b, "Route counts", routesText(s.Routes))
 	section(&b, "Last step", lastText(s))
 	section(&b, "Earlier decisions on this piece", decisionsText(s.Earlier))
-	section(&b, "Left to spend", fmt.Sprintf("orchestrator calls: %s\nadditions: %s", s.CallsLeft, s.AdditionsLeft))
+	section(&b, "Left to spend", fmt.Sprintf("orchestrator calls: %s\nadditions: %s\nstation steps: %s", s.CallsLeft, s.AdditionsLeft, s.StepsLeft))
 	section(&b, "Stations you may goto", strings.Join(s.Stations, ", "))
 	section(&b, "Full outputs", s.StepsDir)
 	return b.String()

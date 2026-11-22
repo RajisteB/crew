@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/crewfile-dev/crew/internal/gh"
 	"github.com/crewfile-dev/crew/internal/run"
@@ -64,6 +63,7 @@ func (f *failures) hit(op string) error {
 }
 
 type fakeGit struct {
+	at    map[string]gitFacts // facts for one worktree, by path; others get the fields below
 	log   *callLog
 	fail  *failures
 	dirty []string
@@ -92,11 +92,17 @@ func (g *fakeGit) RemoveWorktree(_ context.Context, path string, force bool) err
 
 func (g *fakeGit) Dirty(_ context.Context, worktree string) ([]string, error) {
 	g.log.add("Dirty %s", worktree)
+	if f, ok := g.at[worktree]; ok {
+		return slices.Clone(f.dirty), g.fail.hit("Dirty")
+	}
 	return slices.Clone(g.dirty), g.fail.hit("Dirty")
 }
 
 func (g *fakeGit) Ahead(_ context.Context, worktree, base string) (int, error) {
 	g.log.add("Ahead %s %s", worktree, base)
+	if f, ok := g.at[worktree]; ok {
+		return f.ahead, g.fail.hit("Ahead")
+	}
 	return g.ahead, g.fail.hit("Ahead")
 }
 
@@ -269,7 +275,15 @@ type harness struct {
 	notif *fakeNotifier
 	store Store
 	id    string
+	// release lets go of the mission lock the harness holds, as a live
+	// engine would. It is safe to call more than once.
+	release func()
 }
+
+// undrive lets go of the mission lock, so the mission is not being driven:
+// for a mission whose engine is gone, or before the test calls Loop, which
+// takes the lock itself.
+func (h *harness) undrive() { h.release() }
 
 func twoPieces() []Piece {
 	return []Piece{
@@ -280,37 +294,7 @@ func twoPieces() []Piece {
 
 func newHarness(t *testing.T, pieces ...Piece) *harness {
 	t.Helper()
-	if len(pieces) == 0 {
-		pieces = twoPieces()
-	}
-	root := t.TempDir()
-	m := Mission{Request: "Launch referrals.\nPay $10 per friend.", Pieces: pieces}
-	store, st, err := New(root, m, gh.RepoInfo{Slug: "acme/app", DefaultBranch: "main"}, testNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st.Status = StatusRunning
-	if err := store.SaveState(st); err != nil {
-		t.Fatal(err)
-	}
-	log, fail := &callLog{}, &failures{}
-	h := &harness{t: t, log: log, fail: fail, store: store, id: st.MissionID,
-		git:   &fakeGit{log: log, fail: fail, ahead: 1},
-		gh:    &fakeGH{log: log, fail: fail, prs: map[int]gh.PR{}, existing: map[string]gh.PR{}},
-		runs:  &fakeRuns{log: log, fail: fail, obs: map[string]RunObs{}, factory: exFactory()},
-		orch:  &fakeOrch{log: log},
-		notif: &fakeNotifier{log: log},
-	}
-	h.e = &Engine{
-		Store: store, RepoRoot: root, Checks: exInput(),
-		Settings: Settings{Version: 1, Approval: "off", Limits: Limits{
-			Concurrency: lim(3), Depth: lim(1), Pieces: lim(10), Steps: lim(100),
-			OrchestratorCalls: lim(3), Additions: lim(2)}},
-		Domains: map[string]source.Domain{"product": {Name: "product", Body: "Product rules."}},
-		Git:     h.git, GH: h.gh, Runs: h.runs, Orch: h.orch, Notifier: h.notif,
-		Now: func() time.Time { return testNow },
-	}
-	return h
+	return newHarnessIn(t, t.TempDir(), pieces...)
 }
 
 func (h *harness) tick() State {

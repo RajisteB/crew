@@ -86,8 +86,26 @@ func checkPiece(p Piece, in CheckInput) []error {
 	if !domOK {
 		errs = append(errs, fmt.Errorf("%s: unknown domain %q", label(p), p.Domain))
 	}
+	if err := checkPiecePaths(p); err != nil {
+		errs = append(errs, err)
+	}
 	errs = append(errs, checkRoute(p, dom, domOK, in)...)
 	return errs
+}
+
+// checkPiecePaths refuses a piece path that holds a control or invisible
+// character, which could redraw the plan the principal reads, then checks the
+// patterns themselves.
+func checkPiecePaths(p Piece) error {
+	for _, path := range p.Paths {
+		if strings.ContainsFunc(path, unsafeRune) {
+			return fmt.Errorf(`%s: paths: "%s": holds a control or invisible character`, p.ID, shownName(path))
+		}
+	}
+	if err := source.CheckPaths(p.Paths); err != nil {
+		return fmt.Errorf("%s: %w", p.ID, err)
+	}
+	return nil
 }
 
 // checkRoute checks the delegate/factory choice and, for a factory, that it

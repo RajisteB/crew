@@ -26,3 +26,16 @@ func TestTrackerText_LongBodiesAreCut(t *testing.T) {
 		t.Errorf("a short body was marked: %q", short)
 	}
 }
+
+func TestTrackerComment_BudgetHit(t *testing.T) {
+	ev := Event{Kind: EvBudgetHit, Piece: "P1", Count: 3, Max: "3", Msg: "orchestrator calls for this piece"}
+	piece, text, ok := TrackerComment(ev, State{})
+	if !ok || piece != "P1" || text != "Budget reached: orchestrator calls for this piece (3 of 3)" {
+		t.Fatalf("piece %q text %q ok %v", piece, text, ok)
+	}
+	ev = Event{Kind: EvBudgetHit, Count: 6, Max: "6", Msg: "station steps for this mission"}
+	piece, text, ok = TrackerComment(ev, State{})
+	if !ok || piece != "" || text != "Budget reached: station steps for this mission (6 of 6)" {
+		t.Fatalf("piece %q text %q ok %v", piece, text, ok)
+	}
+}

@@ -56,6 +56,11 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 			return step
 		}
 	}
+	if w.Kind == WaitPaths {
+		if step, done := answerPaths(d, id, a); done {
+			return step
+		}
+	}
 	if w.Kind == WaitDeliverable {
 		if step, done := answerDeliverable(d, id, a); done {
 			return step
@@ -132,6 +137,8 @@ func answerChoices(p PieceState, w Wait) []string {
 		return []string{answerRetry, answerCancel}
 	case w.Kind == WaitMerge:
 		return []string{answerCancel}
+	case w.Kind == WaitPaths:
+		return pathsChoices(p)
 	case w.Kind == WaitDeliverable && p.PR == 0:
 		return []string{answerAccept, answerGoto, answerCancel}
 	case w.Kind == WaitDeliverable:

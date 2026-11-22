@@ -15,6 +15,7 @@ func behindNote(t *testing.T, fail func(h *harness)) string {
 	h.withTracker()
 	h.edit(func(s *State) { s.Pieces[0].Status = PieceComplete })
 	fail(h)
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(context.Background(), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}

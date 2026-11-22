@@ -32,7 +32,7 @@ func LoadDomains(root string) ([]Domain, []error) {
 			errs = append(errs, &FileError{rel(root, f), err})
 			continue
 		}
-		if err := checkPaths(d.Paths); err != nil {
+		if err := CheckPaths(d.Paths); err != nil {
 			errs = append(errs, &FileError{rel(root, f), err})
 			continue
 		}

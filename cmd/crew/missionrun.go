@@ -20,7 +20,6 @@ import (
 	"github.com/crewfile-dev/crew/internal/notify"
 	"github.com/crewfile-dev/crew/internal/principal"
 	"github.com/crewfile-dev/crew/internal/run"
-	"github.com/crewfile-dev/crew/internal/source"
 )
 
 // maxEngineRestarts is how many times the supervisor restarts a crashed engine.
@@ -74,10 +73,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		return nil, nil, err
 	}
 	chk := newChecks(p, settings, st.Repo)
-	domains := map[string]source.Domain{}
-	for _, d := range p.Domains {
-		domains[d.Name] = d
-	}
+	domains := domainMap(p.Domains)
 	runner := newRunner(p.Registry)
 	runs := &mission.LocalRuns{RepoRoot: repoRoot, CrewDir: crewDir, Project: p, Runner: runner, Out: out}
 	e := &mission.Engine{
@@ -87,6 +83,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		Notifier: newNotifier(), Out: out, RepoGate: repoGate(crewDir, repoRoot),
 		Switches: principal.Store{Dir: filepath.Join(crewDir, "principal")}, MergeMethod: settings.Method(),
 	}
+	e.Reload = func() (mission.Settings, error) { return mission.LoadSettings(crewDir) }
 	if err := setTracker(e, crewDir, st.Repo); err != nil {
 		return nil, nil, err
 	}

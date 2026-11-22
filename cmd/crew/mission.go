@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/gh"
 	"github.com/crewfile-dev/crew/internal/gitx"
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/scaffold"
+	"github.com/crewfile-dev/crew/internal/source"
 	"github.com/crewfile-dev/crew/internal/verify"
 )
 
@@ -216,29 +216,20 @@ func missionPlan(env missionEnv, args []string) error {
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
+	m, seps, _ := mission.SeparatedWithLog(mission.Mission{}, m, chk.in.Domains, nil, time.Now())
 	store, st, err := mission.New(env.repoRoot, m, info, time.Now())
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(env.out, "mission %s planned (%s)\n\n", st.MissionID, store.Dir)
-	printPieceTable(env.out, m)
+	printPieceTable(env.out, m, chk.in.Domains)
+	printSeparations(env.out, seps)
+	printOthersOverlap(env.out, env.repoRoot, st, m, chk.in.Domains)
 	printAutoMergeLine(env, info.Slug, m)
+	printRunsAtOnceLine(env, info.Slug)
 	printJiraLine(env, info.Slug)
 	fmt.Fprintf(env.out, "\n```mermaid\n%s```\n\nnext: crew mission start %s\n", mission.Mermaid(m), st.MissionID)
 	return nil
-}
-
-func printPieceTable(out io.Writer, m mission.Mission) {
-	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "PIECE\tDOMAIN\tFACTORY\tWAITS FOR")
-	for _, p := range m.Pieces {
-		waits := strings.Join(p.WaitsFor, ", ")
-		if waits == "" {
-			waits = "-"
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.ID, p.Domain, p.Factory, waits)
-	}
-	tw.Flush()
 }
 
 // openMission opens a mission and reads its state.
@@ -252,31 +243,37 @@ func openMission(env missionEnv, id string) (mission.Store, mission.State, error
 }
 
 // startChecks is everything start and resume check before an engine runs.
-func startChecks(env missionEnv, store mission.Store) error {
+func startChecks(env missionEnv, store mission.Store) ([]source.Domain, error) {
 	p, err := verifiedProject(env.crewDir, env.out)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	m, err := store.Mission()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	info, err := repoInfo(env)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	settings, err := mission.LoadSettings(env.crewDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	chk := newChecks(p, settings, info.Slug)
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
-		return printCheckErrors(env.out, errs)
+		return nil, printCheckErrors(env.out, errs)
+	}
+	if err := separateOnStart(env, store, m, chk.in.Domains); err != nil {
+		return nil, err
+	}
+	if err := printOthersOverlapOnStart(env, store, m, chk.in.Domains); err != nil {
+		return nil, err
 	}
 	if err := jiraStartCheck(env, info.Slug); err != nil {
-		return err
+		return nil, err
 	}
-	return confirmRepo(context.Background(), env.crewDir, env.repoRoot, info)
+	return chk.in.Domains, confirmRepo(context.Background(), env.crewDir, env.repoRoot, info)
 }
 
 func missionStart(env missionEnv, id string) error {
@@ -287,7 +284,8 @@ func missionStart(env missionEnv, id string) error {
 	if st.Status != mission.StatusPlanned {
 		return fmt.Errorf("mission %s is %s; only a planned mission can be started", id, st.Status)
 	}
-	if err := startChecks(env, store); err != nil {
+	domains, err := startChecks(env, store)
+	if err != nil {
 		return err
 	}
 	settings, err := mission.LoadSettings(env.crewDir)
@@ -297,11 +295,11 @@ func missionStart(env missionEnv, id string) error {
 	if settings.Approval != "on" {
 		return launchMission(env, store, id, mission.StatusPlanned)
 	}
-	return awaitGo(env, store, id)
+	return awaitGo(env, store, id, domains)
 }
 
 // awaitGo parks a started mission until the principal says go.
-func awaitGo(env missionEnv, store mission.Store, id string) error {
+func awaitGo(env missionEnv, store mission.Store, id string, domains []source.Domain) error {
 	st, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
 		if cur.Status != mission.StatusPlanned {
 			return cur, mission.Event{}, fmt.Errorf("mission %s is %s; only a planned mission can be started", id, cur.Status)
@@ -317,8 +315,9 @@ func awaitGo(env missionEnv, store mission.Store, id string) error {
 	if err != nil {
 		return err
 	}
-	printPieceTable(env.out, m)
+	printPieceTable(env.out, m, domains)
 	printAutoMergeLine(env, st.Repo, m)
+	printRunsAtOnceLine(env, st.Repo)
 	printJiraLine(env, st.Repo)
 	fmt.Fprintf(env.out, "\n%s\n\nwaiting for go: crew mission go %s\n", m.Request, id)
 	return nil
@@ -332,7 +331,7 @@ func missionGo(env missionEnv, id string) error {
 	if st.Status != mission.StatusAwaitingGo {
 		return fmt.Errorf("mission %s is %s; go needs a mission waiting for go (crew mission start %s)", id, st.Status, id)
 	}
-	if err := startChecks(env, store); err != nil {
+	if _, err := startChecks(env, store); err != nil {
 		return err
 	}
 	return launchMission(env, store, id, mission.StatusAwaitingGo)

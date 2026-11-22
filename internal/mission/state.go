@@ -42,6 +42,7 @@ const (
 	WaitLimit       = "limit"
 	WaitPRClosed    = "pr-closed"
 	WaitDeliverable = "deliverable"
+	WaitPaths       = "paths"
 )
 
 // Wait is something a piece is blocked on.
@@ -115,6 +116,12 @@ type PieceState struct {
 	Deliverable *Deliverable   `json:"deliverable,omitempty"`
 	Jira        Tracked        `json:"jira"`
 	Problem     string         `json:"problem,omitempty"` // why the piece was last sent back from its pull request: names only, at most 300 runes
+	// Behind is the other mission's piece this queued piece is kept behind.
+	Behind      *Blocker `json:"behind,omitempty"`
+	Outside     []string `json:"outside,omitempty"`      // the files the piece is stopped for, at most maxOutsideFiles
+	OutsideMore int      `json:"outside_more,omitempty"` // how many more there are
+	Allowed     []string `json:"allowed,omitempty"`      // files outside its paths that the principal accepted
+	Steps       int      `json:"steps,omitempty"`        // station steps its run has taken, as last seen
 }
 
 // State is state.json. It holds ids, counts and short messages only: never
@@ -128,6 +135,7 @@ type State struct {
 	NextWait  int          `json:"next_wait"`
 	Additions int          `json:"additions,omitempty"`
 	Jira      TrackerState `json:"jira"`
+	Hold      *Hold        `json:"hold,omitempty"`
 }
 
 // NewState is a planned mission with every piece queued, in file order.
@@ -152,6 +160,10 @@ func (s State) Piece(id string) (PieceState, bool) {
 // Clone is a deep copy: changing it never changes s.
 func (s State) Clone() State {
 	c := s
+	if s.Hold != nil {
+		h := *s.Hold
+		c.Hold = &h
+	}
 	c.Pieces = make([]PieceState, len(s.Pieces))
 	for i, p := range s.Pieces {
 		c.Pieces[i] = p.clone()
@@ -162,9 +174,14 @@ func (s State) Clone() State {
 func (p PieceState) clone() PieceState {
 	p.SentBack = maps.Clone(p.SentBack)
 	p.Decisions = slices.Clone(p.Decisions)
+	p.Outside, p.Allowed = slices.Clone(p.Outside), slices.Clone(p.Allowed)
 	if p.Wait != nil {
 		w := *p.Wait
 		p.Wait = &w
+	}
+	if p.Behind != nil {
+		b := *p.Behind
+		p.Behind = &b
 	}
 	if p.Deliverable != nil {
 		d := *p.Deliverable

@@ -79,6 +79,7 @@ func missionStatus(env missionEnv, id string) error {
 	}
 	out := env.out
 	fmt.Fprintln(out, safeText(fmt.Sprintf("mission %s  %s  %s  (%s, base %s)", id, st.Status, live, st.Repo, st.Base)))
+	printHold(out, st)
 	if err := printJiraStatus(env, store, m, st); err != nil {
 		return err
 	}
@@ -86,7 +87,7 @@ func missionStatus(env missionEnv, id string) error {
 	printOpenPRs(env, m, st)
 	printDeliverables(out, st)
 	printRunning(out, env.repoRoot, st)
-	printQueued(out, m, st)
+	printQueued(out, m, st, readyText(env, st))
 	printEnded(out, "Complete", st, mission.PieceComplete)
 	printEnded(out, "Cancelled", st, mission.PieceCancelled)
 	return printEvents(out, store, env.flags.since)
@@ -114,6 +115,7 @@ func printWaiting(out io.Writer, st mission.State) {
 			detail = oneLine(p.PRURL) + "  " + detail
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  waiting %s", w.ID, p.ID, w.Kind, detail, sinceText(w.Since)))
+		lines = append(lines, pathsFileLines(p)...)
 	}
 	section(out, "Waiting on you", lines)
 }
@@ -142,13 +144,19 @@ func runPosition(repoRoot, runID string) string {
 	return fmt.Sprintf("station %s, step %d", rs.Current, rs.Step)
 }
 
-func printQueued(out io.Writer, m mission.Mission, st mission.State) {
+// printQueued lists the queued pieces with what keeps each back; ready is
+// shown for a piece that nothing in the plan keeps back (see readyText).
+func printQueued(out io.Writer, m mission.Mission, st mission.State, ready string) {
 	var lines []string
 	for _, p := range st.Pieces {
 		if p.Status != mission.PieceQueued || p.Wait != nil {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s  %s", p.ID, waitsText(m, st, p.ID)))
+		text := waitsText(m, st, p.ID)
+		if text == readyToStart {
+			text = ready
+		}
+		lines = append(lines, fmt.Sprintf("%s  %s", p.ID, text))
 	}
 	section(out, "Queued", lines)
 }
@@ -161,10 +169,26 @@ func waitsText(m mission.Mission, st mission.State, id string) string {
 			open = append(open, w)
 		}
 	}
-	if len(open) == 0 {
-		return "ready to start"
+	var apart []string
+	for _, a := range piece.Apart {
+		if other, ok := st.Piece(a); ok && other.Status != mission.PieceComplete && other.Status != mission.PieceCancelled {
+			apart = append(apart, a)
+		}
 	}
-	return "waits for " + strings.Join(open, ", ")
+	var parts []string
+	if len(open) > 0 {
+		parts = append(parts, "waits for "+strings.Join(open, ", "))
+	}
+	if len(apart) > 0 {
+		parts = append(parts, "starts after "+strings.Join(apart, ", ")+" (paths overlap)")
+	}
+	if text := behindText(st, id); text != "" {
+		parts = append(parts, text)
+	}
+	if len(parts) == 0 {
+		return readyToStart
+	}
+	return strings.Join(parts, "; ")
 }
 
 func printEnded(out io.Writer, title string, st mission.State, status mission.PieceStatus) {

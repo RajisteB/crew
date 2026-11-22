@@ -18,9 +18,13 @@ This guide is for the owner of a crew setup who has used factories and has not u
 
 ## What this stage does and doesn't do
 
-Pieces run one at a time. The one exception is a piece that crew sends back from its pull request (see "Failed checks and conflicts"): it runs again at once, even while another piece is running. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. The limit is per mission: two missions started in the same repo each run their own piece, and nothing checks that they touch different files, so don't run two missions over the same part of a repo at once. Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
+Pieces run together, up to `runs_at_once` at a time (3 in a new crew directory). The count is across all of the repo's missions that are running with a live engine, not per mission. A piece counts while it is running, and also while it is stopped in the middle of its run to wait for your answer (an approval, a question), because it will go on running afterwards. A piece whose pull request is waiting for your merge doesn't count, so the next piece can start. One kind of piece is never held back by the limit: a piece that crew sends back from its pull request (see "Failed checks and conflicts") runs again at once.
 
-Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. It does not run pieces in parallel. `crew release approve` doesn't exist yet, and `delegate: true` on a piece is refused.
+Running together is safe only when pieces don't change the same files, so crew checks. It keeps pieces whose `paths` overlap apart (see "Running pieces together"), it does the same across two missions in one repo (see "Two missions in one repo"), and it stops a piece that changes files outside its own paths (see "Files outside a piece's paths"). It also stops taking on new work when a mission has used its step budget (see "Budgets").
+
+Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
+
+Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. Still missing: a piece handing work on to a piece of its own (delegation, so `delegate: true` on a piece is refused, and `limits.delegation_depth` is read but does nothing), and releases (`crew release approve` doesn't exist yet).
 
 ## Setting up
 
@@ -162,11 +166,11 @@ A mission can run for days, so the engine checks again before every push. If the
 `missions.yaml` holds the settings. The ones you are most likely to change:
 
 - `mission_approval: on` makes `start` stop and wait for your `go`. Set it to `off` and `start` begins the mission at once.
-- `limits.runs_at_once` must be `1` for now, and so must any `runs_at_once` under `repos:`. Pieces run one at a time until crew can check that parallel pieces don't touch the same files; the one exception is a piece that crew sends back from its pull request, which runs again at once even while another piece is running. Any other value, including `"*"`, makes crew refuse the file with an error like `limits.runs_at_once must be 1 (got "3"): pieces run one at a time until crew can check that parallel pieces don't overlap`.
+- `limits.runs_at_once` is how many pieces may run together, across all of the repo's missions. A new crew directory has `3`. A `missions.yaml` you already have keeps the value it has (older files say `1`, which means one piece at a time until you change it). It can be a number or `"*"` for no limit, and a `runs_at_once` under `repos:` overrides it for one repo. A mission's engine reads it when it starts, so a change reaches a running mission only when its engine next starts (`crew mission stop`, then `resume`), or while that mission is on hold, when its engine reads the whole file again each tick.
 - `merge_method` is how crew merges a pull request when auto-merge is on: `squash` (the default), `merge` or `rebase`. Pick the one your repo allows; see "Auto-merge".
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
 - `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
-- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. `steps` is read but not enforced in this stage.
+- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. Every limit must be present: a `missions.yaml` without `steps`, for example, is refused when crew reads it. A running engine reads `missions.yaml` once, when it starts, and again only while its mission is on hold for its step budget (see "Budgets"); any other change reaches a running mission when its engine next starts. `steps` is enforced (see "Budgets"); `delegation_depth` is read but not yet enforced.
 
 ## Launching the orchestrator
 
@@ -192,7 +196,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 | `crew mission start <id>` | Runs the start checks. With approval on, stops at "awaiting go". |
 | `crew mission go <id>` | Your go. Re-runs the checks, then starts the engine. |
 | `crew mission status [<id>] [--since N]` | Lists missions, or shows one in detail. |
-| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. |
+| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. `accept` is for a `deliverable` wait and for a `paths` wait. |
 | `crew mission amend <id> [-\|@FILE] --words TEXT` | Changes the plan after the mission has started. |
 | `crew mission stop <id>` | Stops a running mission. |
 | `crew mission resume <id>` | Continues a stopped mission. |
@@ -223,16 +227,16 @@ Add a health endpoint and show its status on the settings page.
 ## Changes
 ```
 
-A piece's `paths` records where the piece is meant to work. It is optional, and crew doesn't enforce it yet.
+A piece's `paths` says where the piece may work. It is optional. crew uses it to keep overlapping pieces apart and to stop a piece that strays (see "Running pieces together" and "Files outside a piece's paths").
 
 `crew mission plan` checks it before creating anything: every domain and factory must exist, the factory must be one of that domain's, no piece may wait for itself or for a missing piece, pieces can't wait on each other in a loop, every brief must be filled in, the piece count must be no more than your limit, and every station's harness must be able to apply deny rules. A piece id is letters, digits, `-` and `_`, and the id `epic` is reserved in any case, because crew labels the mission's Jira epic with it (`piece id "epic" is reserved`). If anything fails it lists every problem and creates nothing. If the plan passes, it prints the mission id, a table of pieces, a diagram, and the next command:
 
 ```
 mission m-20261121-162953-e991 planned (/home/you/src/app/.crew/missions/m-20261121-162953-e991)
 
-PIECE  DOMAIN  FACTORY      WAITS FOR
-P1     web     ship-change  -
-P2     web     ship-change  P1
+PIECE  DOMAIN  FACTORY      WAITS FOR  PATHS
+P1     web     ship-change  -          web/**
+P2     web     ship-change  P1         web/**
 
 (a mermaid diagram follows)
 
@@ -295,6 +299,31 @@ Jira: ACME-1  https://example.atlassian.net/browse/ACME-1 (2 writes not sent yet
 
 If Jira is set up and the mission has started but nothing has reached the board yet (the epic couldn't be created), the line reads `Jira: nothing has reached the board yet`, with no count: until the epic exists crew can't tell how many writes will follow it. Otherwise the count reads `1 write not sent yet` for one and `<n> writes not sent yet` for more. A piece's Jira key follows its id in the open pull requests, deliverables and finished lines, as `P1 (ACME-2)`.
 
+When the mission is on hold for its step budget, a line follows the first (see "Budgets"):
+
+```
+On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute.
+```
+
+A mission that is done shows no such line.
+
+A `paths` wait reads like the others, and every file the piece changed outside its paths is listed under it, one per line, because `accept` takes all of them and the question names only three:
+
+```
+Waiting on you:
+  w2  P3  paths  P3 changed 4 files outside its paths: README.md, go.mod, main.go and 1 more  waiting 3m
+    README.md
+    go.mod
+    main.go
+    util/clock.go
+```
+
+A piece that changed more than 200 files lists the first 200 and ends with `and <n> more (too many to accept: send the piece back or cancel it)`.
+
+A queued piece that crew keeps apart says why in the "Queued" section: `P3  starts after P1 (paths overlap)`, or, for a piece kept behind another mission's piece, `P3  starts after P1 of mission m-20261121-101500-ab12 (paths overlap)` (with `, which is not running` after the mission id when that mission is stopped or its engine has ended).
+
+A queued piece that nothing in the plan keeps back reads `ready to start`, unless something else does: `on hold` while the mission is on hold for its step budget, or `waiting for a free run: 3 of 3 in use across this repo's missions` when one more run would pass `runs_at_once`. Only missions that are running with a live engine count toward that number.
+
 A `deliverable` wait reads like the others: `w1  P1  deliverable  <question>  waiting 4m`. Deliverables a piece has left are listed in their own section, with their files, who has to act and where crew keeps them. A deliverable of a piece that was cancelled before it was accepted shows `cancelled` there:
 
 ```
@@ -324,13 +353,102 @@ Auto-merge in acme/app: design on, api off
 
 `--since N` prints only the events after cursor `N`, which is how a script or the orchestrator follows along.
 
+## Running pieces together
+
+Pieces that don't change the same files can run at the same time. To know which those are, crew looks at each piece's **paths**: the patterns, relative to the repo root, that say where the piece may change files. A pattern is a folder (`web/`), everything under a folder (`api/**`), or a file pattern (`**/*.md`, `docs/*.txt`). A piece's own `paths` in the plan win. When a piece lists none, crew uses its domain's `paths` (see "A domain"). A piece with neither has no paths, and crew can't check it: it is not kept apart from anything, and nothing it changes is checked. The plan says so.
+
+Give each piece the narrowest `paths` that covers its work. The narrower they are, the more pieces can run together.
+
+`crew mission plan` shows the paths in the `PATHS` column, then, right under the table, a note for each piece that needs one, then a line for each pair of pieces it keeps apart:
+
+```
+PIECE  DOMAIN  FACTORY      WAITS FOR  PATHS
+P1     web     ship-change  -          api/**
+P2     web     ship-change  -          web/**
+P3     web     ship-change  -          api/v2/**
+P4     web     ship-change  -          -
+P4 has no paths, so crew can't check it against other pieces or check what it changes
+P3 starts after P1: their paths overlap (P1: api/**, P3: api/v2/**)
+```
+
+The notes are of two kinds: a piece that has no paths, and a piece whose own `paths` reach outside its domain's (`P2 may change files outside the web domain: docs/**`). The second is only a heads-up; the piece still runs.
+
+**How crew decides two patterns overlap.** Two patterns overlap when some file could match both. `api/**` and `api/v2/**` overlap. `api/**` and `web/**` don't. A pattern with no wildcard stands for itself and everything under it, so `api` and `api/v2/x.go` overlap. When crew can't tell, it says yes: keeping two pieces apart only costs time, while running them together can cost a merge conflict. A segment with a backslash in it is one crew can't read, so it overlaps anything at that place. A pattern that is malformed overlaps nothing. `crew mission plan` refuses a piece's path that holds a control or invisible character (`P1: paths: "app/?api/**": holds a control or invisible character`), since it could redraw the table you read to approve the plan.
+
+**`apart_from`.** When two pieces overlap and neither waits for the other, crew writes `apart_from: [P1]` on the later one in the mission file, and the later piece doesn't start until P1 is complete or cancelled. The plan prints one line for each pair, as above. `apart_from` is crew's field: whatever a plan or an amendment supplies for it is replaced, and crew works it out again on every plan, start, amendment and added piece. A piece kept apart from a cancelled piece starts, because the piece in its way is gone. A piece that has already started is never given an `apart_from` entry (a piece parked on a question before it ever started still is): when it overlaps a later piece, that later piece is the one kept apart.
+
+When one piece already waits for the other through `waits_for`, directly or through other pieces, there is nothing to separate, and crew adds nothing: a piece whose dependency is cancelled is parked on a question, so that order holds. An order made only of `apart_from` links doesn't count, because a link stops counting when the piece it names is cancelled. So with three pieces on the same paths, P3 gets `apart_from: [P2, P1]`, not just `[P2]`, and cancelling P2 doesn't let P3 start beside a running P1. Each such entry goes in the direction the existing order already gives, so no loop can form.
+
+## Two missions in one repo
+
+`runs_at_once` is shared: every mission in the repo draws on the same limit, counting only missions that are running with a live engine. Overlap is checked across missions too. A piece doesn't start while a piece of another mission with overlapping paths has started and is not complete or cancelled. A piece that has started is never held back, so two missions can't block each other for good.
+
+**A mission that is not running.** A mission is not running when it is stopped, or when it is marked running but its engine has ended (after a reboot or a killed process, for example). Such a mission holds no run slots, but its pieces that started and haven't finished still hold their paths: their work is unmerged and comes back when the mission does. Only resuming it moves anything. No engine looks at its pull requests, so even one you merge on GitHub stays open in its state until you resume it. An amendment to it is only queued and is applied when it resumes, in its first tick, before crew starts or picks up any piece.
+
+So for a piece kept behind such a mission, there are two ways out:
+
+1. `crew mission resume` that mission, so it can finish the piece.
+2. To drop the piece instead, cancel it with `crew mission amend` (a plan without it) and then resume the mission: the amendment is applied before anything runs. Cancelling a piece that has started stops its run if one is going, removes its worktree (one with uncommitted work is left for you, with a note), and leaves its pull request open: close it on GitHub yourself.
+
+There is no command that abandons a stopped mission. To abandon one, cancel all of its unfinished pieces with `crew mission amend` and resume it: with every piece complete or cancelled, the mission is done.
+
+When a piece is kept behind another mission's piece, `crew mission plan`, `start`, `go` and `resume` print a line for each piece that hasn't started, `P1 starts after P2 of mission m-...`, and `crew mission status` shows the same under "Queued" (see "Status"). When the mission in the way is not running, crew notifies you once:
+
+```
+P1 can't start: it overlaps P2 of mission m-20261121-101500-ab12, which is not running. Resume it with crew mission resume m-20261121-101500-ab12. To drop that piece instead, cancel it with crew mission amend and then resume: the amendment is applied before anything runs.
+```
+
+Two limits of the check:
+
+- A piece with no paths isn't checked against another mission's pieces.
+- Files you accepted outside a piece's paths (see below) don't count: only the piece's own paths do.
+
+If crew can't read one of the repo's mission folders, it starts no new piece in any mission in that repo until the folder is fixed, and says so in a note.
+
+## Files outside a piece's paths
+
+When a piece's run is done and before crew opens its pull request, crew compares what the piece changed against the base branch with the piece's paths. Every changed file counts, deleted files too, and a moved file counts at both ends (the old name and the new). If a file is outside the paths, the piece doesn't get a pull request.
+
+The orchestrator is asked what to do. It may send the piece back to a station with a note naming the files, cancel it, or hand the decision to you. It cannot accept the files: only you can. When it hands it to you (or can't settle it), you get a `paths` wait. `crew mission status` lists every file under it.
+
+```sh
+crew mission answer m-20261121-162953-e991 w2 --do accept --words "those files are fine"
+```
+
+- `accept` takes all of the files listed. The pull request opens, and crew notifies you that the files were accepted (`P3: 4 files outside its paths were accepted: README.md, go.mod, main.go and 1 more`), so an acceptance you didn't make doesn't go unseen. A file you accept stays accepted: if the piece is sent back later and changes more files outside its paths, crew asks only about the new ones.
+- `goto --station build` sends the piece back to a station, with a note naming the files.
+- `cancel` abandons the piece.
+
+`accept` works for at most 200 files. A piece that changed more shows the first 200 and a line saying how many more there are, and takes only `goto` or `cancel`.
+
+A piece with no paths isn't checked.
+
+## Budgets
+
+`limits` in `missions.yaml` cap what a mission may do. Six of them exist; here is what each does when reached.
+
+| Limit | What it caps | When reached |
+| --- | --- | --- |
+| `runs_at_once` | Pieces running together across the repo's missions. | Queued pieces wait until one stops counting. |
+| `pieces` | Pieces in a plan. | `plan` and `amend` refuse a plan with more. |
+| `steps` | Station steps a mission has taken, over all its pieces. | The mission goes on hold (below). |
+| `orchestrator_calls_per_piece` | Decisions the orchestrator makes for one piece. | The next failure of that piece becomes a `limit` wait for you (a `paths` wait for a piece stopped for files outside its paths), with no further call. The event `budget-hit` is recorded. |
+| `orchestrator_additions` | Pieces the orchestrator adds on its own. | An `add` is refused. |
+| `delegation_depth` | How deep a piece may delegate. | Not enforced: crew reads it, and delegation doesn't exist yet. |
+
+**On hold.** A station step is one station of a factory running. When a mission has taken as many steps as `limits.steps` allows, crew puts it on hold: it records a `budget-hit` event, tells you once, and `crew mission status` shows `On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute.`
+
+On hold, crew starts no new piece, sends no piece back to a station, doesn't ask the orchestrator for decisions, and doesn't resolve a conflicted pull request (that can send a piece back to a station), because each of those takes more steps. Runs that are already going are not stopped: they carry on to the end of their run. A run that has lost its driver (the engine restarted, or the mission was stopped and resumed) is not picked up again until the hold lifts, and a running piece that fails is not put to the orchestrator until then. Everything that costs no step goes on: pull requests are opened and watched, merges are seen, complete pieces are cleaned up, answers you give are applied.
+
+To lift the hold, raise `limits.steps` (or the repo's override under `repos:`) in `missions.yaml` above the steps used. The number used can keep rising while on hold, because runs that were already going finish their run: status always shows the current count, so raise the limit above that. A raise that is still too small changes nothing but the numbers: crew notes `step budget raised to 70, 75 used: still on hold` once and status shows the new limit. A mission that ends while on hold is done, and the hold goes with it. Nothing else lifts the hold, and nothing crew or an agent does changes the file. While a mission is on hold the engine reads `missions.yaml` again at the start of each tick (once a minute), so it sees the new number without a restart and notes that work goes on. If the file can't be read at that moment, it keeps the old limit and says so in a note.
+
 ## What "waiting on you" means
 
 The engine does not guess at anything that needs a person. When it reaches such a point it parks the piece, records a wait with an id (`w1`, `w2`, ...), tells you with a desktop notification (macOS only for now) and shows it under "Waiting on you". If you don't answer, it reminds you at `remind_after`, then at twice that, then four times that, all measured from when the item started waiting (with 30 minutes: 30 minutes, 1 hour, 2 hours).
 
 crew also notifies you, once, when the same failure has kept repeating for the `remind_after` interval (for five ticks in a row if `remind_after` isn't set): GitHub logged out, a push refused by permissions or a hook, a mission file crew can't read. The notification names the mission, the piece if there is one, and the error. A failure that clears and comes back is told again. A changed repo visibility stops the mission until you confirm again (see "Confirming the repo").
 
-There are six kinds:
+There are seven kinds:
 
 | Kind | What it means | What you can answer |
 | --- | --- | --- |
@@ -339,6 +457,7 @@ There are six kinds:
 | `question` | The orchestrator couldn't settle a failure, or you must decide something. | `retry`, `goto` or `cancel`. On a conflict or failed-checks question, `retry` gives the piece two more tries. |
 | `limit` | A piece used up its orchestrator calls. | `retry`, `goto` or `cancel`. |
 | `pr-closed` | The pull request was closed without being merged. | `retry` (after you reopen it, crew goes back to watching it) or `cancel`. |
+| `paths` | A piece changed files outside its paths and crew stopped it before opening a pull request (see "Files outside a piece's paths"). | `accept`, `goto` (with `--station`) or `cancel`. |
 | `deliverable` | A piece posted a deliverable and nobody has accepted it (see "Deliverables"). | `accept`, `goto` (with `--station`) or `cancel`. A piece that also has a pull request takes only `accept` or `cancel`. Moving its issue to Done on the Jira board also accepts it. |
 
 A `question` about a piece that hasn't started yet takes only `cancel`. This happens when a queued piece waits for a piece that was cancelled: the piece can never start, so either cancel it too or change the mission with `amend` (see below), for example by dropping the dependency. Amending the piece clears the question and puts it back in the queue.
@@ -490,7 +609,7 @@ What an amendment may do: add pieces, change a queued piece (its brief, its doma
 
 `crew mission stop <id>` applies to a running mission. It tells the engine to shut down, which interrupts the running pieces' runs where they are. Worktrees and branches stay in place. A mission that hasn't started has nothing to stop, and one that is already stopped or done is left alone.
 
-`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that has been started, which is to say one with an `approved.md` (written by `go`, or by `start` when approval is off); a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was.
+`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that has been started, which is to say one with an `approved.md` (written by `go`, or by `start` when approval is off); a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was. A mission whose engine is still live is refused (`mission <id> is being driven (pid <n>)`) before anything is checked or written. Amendments and answers queued while the mission was stopped are applied in the engine's first tick, before any piece starts or is picked up again.
 
 If the engine process crashes, a supervisor restarts it up to three times and records each restart as an event. After that it marks the mission stopped and notifies you. A reboot also ends the engine; run `resume` afterwards.
 
@@ -575,7 +694,7 @@ One thing. When a piece has posted a deliverable that you haven't accepted, and 
 
 Jira never stops a piece. A failed write is a note in the mission's events, and crew plans it again on the next tick, so the board catches up once Jira is back.
 
-When Jira can't be reached at all (the network fails, a call times out, the site rejects the credentials, or it answers 408, 429 or a 5xx), crew notes it once and sends nothing more that tick. When one write fails by itself, for example a 403 on one kind of call, crew notes it, skips that write for the tick and sends the rest; the skipped write is tried again on the next tick. A few writes hold up others: while the epic can't be created nothing else is sent, while a piece's issue can't be created that piece's other writes wait, and a comment that fails holds the comments after it, so they stay in order. A write Jira refuses for good, such as a move the workflow doesn't allow, is noted once and not tried again.
+When Jira can't be reached at all (the network fails, a call times out, the site rejects the credentials, or it answers 408, 429 or a 5xx), crew notes it once and sends nothing more that tick. When one write fails by itself, for example a 403 on one kind of call, crew notes it, skips that write for the tick and sends the rest; the skipped write is tried again on the next tick. A few writes hold up others: while the epic can't be created nothing else is sent, while a piece's issue can't be created that piece's other writes wait, and a comment that fails holds the comments after it, so they stay in order. A write Jira refuses for good, such as a move the workflow doesn't allow, is noted once and not tried again, except creating an issue and placing issues in a sprint, which are tried again on every pass.
 
 An attachment upload has its own time limit, 30 seconds plus one second per 100 KB. An upload that fails while Jira can't be reached ends the tick like any other write and doesn't count as a try. Any other failed upload, a timeout included, counts as one and doesn't hold up the other writes. The running engine tries each file three times. After the third failure it notes `Jira: <file> could not be attached after 3 tries; crew jira sync <mission> tries again` and stops trying that file. The file is still owed, so it counts in `writes not sent yet`, and `crew jira sync <mission>` tries it again. A file crew can never send, because it is over 10 MB or vanished, is noted and given up at once. Whatever happens on the board, the file is always in the mission folder.
 

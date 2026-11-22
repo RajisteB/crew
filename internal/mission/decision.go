@@ -150,7 +150,7 @@ func (a *applier) carryOut(d OrchDecision) (Mission, State, []Action, *RunStep) 
 		step = &RunStep{Piece: a.piece, Kind: "retry"}
 	case "goto":
 		a.resumeFromPR()
-		step = &RunStep{Piece: a.piece, Kind: "goto", Station: d.Station, Note: d.Note}
+		step = &RunStep{Piece: a.piece, Kind: "goto", Station: d.Station, Note: a.gotoNote(d.Note)}
 	case "cancel":
 		step = a.cancelPiece(a.piece, a.by)
 	case "rebrief":
@@ -236,13 +236,14 @@ func (a *applier) addProblem(d OrchDecision) string {
 	if errs := Check(next, a.in); len(errs) > 0 {
 		return "the plan with the new piece fails its checks: " + firstMessages(errs)
 	}
-	a.next = next
+	a.next, _, _ = SeparatedWithLog(a.m, next, a.in.Domains, StartedPieces(a.s), a.o.Now)
 	return ""
 }
 
 func copyPiece(p Piece) Piece {
 	p.Paths = slices.Clone(p.Paths)
 	p.WaitsFor = slices.Clone(p.WaitsFor)
+	p.Apart = nil // written only by crew
 	return p
 }
 
@@ -276,7 +277,8 @@ func (a *applier) reject(d OrchDecision, action, why string) {
 // escalate puts a question to the principal and holds the piece until it is
 // answered.
 func (a *applier) escalate(question string) {
-	a.openWait(a.piece, WaitQuestion, question, a.backAfterQuestion())
+	kind, text := a.escalationWait(question)
+	a.openWait(a.piece, kind, text, a.backAfterQuestion())
 	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvEscalated, Piece: a.piece, By: a.by, Msg: question}})
 	a.notify(waitText(*a.ps(a.piece)))
 }
@@ -311,7 +313,7 @@ func (d *decider) cancelPiece(id, by string) *RunStep {
 	if p.PR != 0 && p.Status != PieceDelivered { // a delivered piece's PR is merged
 		msg += fmt.Sprintf("; PR #%d stays open", p.PR)
 	}
-	p.Status, p.Wait = PieceCancelled, nil
+	p.Status, p.Wait, p.Behind = PieceCancelled, nil, nil
 	d.add(Record{Event: Event{Time: d.o.Now, Kind: EvPieceCancelled, Piece: id, By: by, Msg: msg}})
 	if p.Worktree != "" {
 		d.add(Cleanup{Piece: id})

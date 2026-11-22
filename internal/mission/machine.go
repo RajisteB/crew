@@ -30,6 +30,8 @@ type RunObs struct {
 type GitObs struct {
 	Ahead int      // commits ahead of the base branch
 	Dirty []string // uncommitted paths
+	// Outside: changed files outside the piece's effective paths; nil when none.
+	Outside []string
 }
 
 // Obs is everything Decide may look at besides the mission and its state.
@@ -44,6 +46,13 @@ type Obs struct {
 	Auto      map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
 	// Accept has one entry per piece with an unaccepted Deliverable.
 	Accept map[string]AcceptObs
+	// Elsewhere is the number of runs the repo's other missions hold.
+	// ElsewhereUnknown means they could not be counted: nothing is started.
+	Elsewhere        int
+	ElsewhereUnknown bool
+	// Behind has an entry for each queued piece of this mission whose paths
+	// overlap a piece another mission in the repo holds.
+	Behind map[string]Blocker
 }
 
 // Action is something for the engine to carry out.
@@ -108,6 +117,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 	if d.s.Status != StatusRunning {
 		return d.s, nil
 	}
+	d.countSteps()
 	for _, id := range d.idsWith(PieceRunning, PiecePROpen) {
 		switch d.status(id) {
 		case PieceRunning:
@@ -122,6 +132,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 	}
 	d.remind(remind)
 	d.finish()
+	d.applyBudget()
 	return d.s, d.actions
 }
 
@@ -245,6 +256,11 @@ func (d *decider) failed(id string, rs run.State) {
 func (d *decider) ask(id, failure string) {
 	p := d.ps(id)
 	if !Allows(d.lim.OrchestratorCalls, p.Calls+1) {
+		d.callBudgetHit(id, p.Calls)
+		if failure == reasonOutOfPaths {
+			d.wait(id, WaitPaths, pathsQuestion(*p), PieceRunning)
+			return
+		}
 		q := fmt.Sprintf("%s hit the orchestrator call limit after a %s failure", id, failure)
 		back := PieceRunning
 		if p.Status == PiecePROpen {
@@ -265,6 +281,7 @@ func (d *decider) done(id string) {
 	case len(g.Dirty) > 0:
 		d.ask(id, reasonUncommit)
 	case d.collects(id):
+	case g.Ahead > 0 && d.outsideStops(id, g):
 	case g.Ahead == 0:
 		d.dropsTakenBack(id)
 		if d.finished(id) {
@@ -281,58 +298,11 @@ func uncommittedNote(dirty []string) string {
 	if len(shown) > maxDirtyPaths {
 		shown = shown[:maxDirtyPaths]
 	}
-	note := "These files have uncommitted changes: " + strings.Join(shown, ", ")
+	note := "These files have uncommitted changes: " + strings.Join(shownNames(shown), ", ")
 	if extra := len(dirty) - len(shown); extra > 0 {
 		note += fmt.Sprintf(" (and %d more)", extra)
 	}
 	return note + ". Commit your work."
-}
-
-func (d *decider) queued(id string) {
-	piece, ok := d.m.Piece(id)
-	if !ok {
-		return
-	}
-	ready := true
-	for _, dep := range piece.WaitsFor {
-		switch d.status(dep) {
-		case PieceCancelled:
-			q := fmt.Sprintf("%s waits for %s, which was cancelled; cancel it or amend the mission", id, dep)
-			d.wait(id, WaitQuestion, q, PieceQueued)
-			return
-		case PieceComplete:
-		default:
-			ready = false
-		}
-	}
-	if ready && Allows(d.lim.Concurrency, d.holdingRuns()+d.starting()+1) {
-		d.add(StartPiece{Piece: id})
-	}
-}
-
-// holdingRuns counts the pieces that count toward the limit on runs at once:
-// running pieces, and pieces waiting on the principal in the middle of a run
-// (their wait goes back to running). A piece whose pull request waits for a
-// merge, or that never started, does not count.
-func (d *decider) holdingRuns() int {
-	n := 0
-	for _, p := range d.s.Pieces {
-		if p.Status == PieceRunning || (p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceRunning) {
-			n++
-		}
-	}
-	return n
-}
-
-// starting counts the pieces this call has already decided to start.
-func (d *decider) starting() int {
-	n := 0
-	for _, a := range d.actions {
-		if _, ok := a.(StartPiece); ok {
-			n++
-		}
-	}
-	return n
 }
 
 // remind notifies for each wait that has gone unanswered for remind, doubling

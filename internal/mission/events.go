@@ -37,6 +37,7 @@ const (
 	EvConflict            = "conflict"
 	EvDeliverablePosted   = "deliverable-posted"
 	EvDeliverableAccepted = "deliverable-accepted"
+	EvBudgetHit           = "budget-hit"
 )
 
 // Event is one line of events.jsonl. Messages are short; never file

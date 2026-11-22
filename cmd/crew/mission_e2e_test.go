@@ -53,6 +53,7 @@ type e2eRig struct {
 	engine        *mission.Engine
 	runs          *mission.LocalRuns
 	id            string
+	driven        bool // the test holds the mission lock between ticks (see drive)
 }
 
 func testdataPath(name string) string {
@@ -208,11 +209,13 @@ func e2ePiece(id string, waits ...string) mission.Piece {
 // tick runs one engine round under the mission lock and returns the state.
 func (r *e2eRig) tick() mission.State {
 	r.t.Helper()
-	unlock, err := r.store.Lock()
-	if err != nil {
-		r.t.Fatal(err)
+	if !r.driven {
+		unlock, err := r.store.Lock()
+		if err != nil {
+			r.t.Fatal(err)
+		}
+		defer unlock()
 	}
-	defer unlock()
 	st, err := r.engine.Tick(context.Background())
 	if err != nil {
 		r.t.Fatalf("tick: %v", err)

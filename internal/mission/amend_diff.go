@@ -93,7 +93,8 @@ func removal(s State, id string) ([]pieceChange, error) {
 	return []pieceChange{{Kind: chCancel, Piece: id}}, nil
 }
 
-// differingFields names the fields of a and b that differ.
+// differingFields names the fields of a and b that differ. apart_from is not
+// one of them: crew writes it.
 func differingFields(a, b Piece) []string {
 	var out []string
 	for _, f := range []struct {

@@ -57,6 +57,25 @@ func (t *tick) perform(actions []Action) error {
 	return nil
 }
 
+// freshWorktree fetches the base and makes a new worktree for the piece,
+// clearing any left over. A step that fails is a note and returns false.
+func (t *tick) freshWorktree(id, wt, branch, base string) bool {
+	git := t.e.Git
+	if err := git.Fetch(t.ctx, base); err != nil {
+		t.note(id, "can't start: fetch %s: %v", base, err)
+		return false
+	}
+	if err := git.RemoveWorktree(t.ctx, wt, true); err != nil {
+		t.note(id, "can't start: clear leftover worktree: %v", err)
+		return false
+	}
+	if err := git.AddWorktree(t.ctx, wt, branch, "origin/"+base); err != nil {
+		t.note(id, "can't start: add worktree: %v", err)
+		return false
+	}
+	return true
+}
+
 func (t *tick) startPiece(a StartPiece) error {
 	p, _, ok := t.pieceMission(a.Piece)
 	if !ok {
@@ -66,16 +85,12 @@ func (t *tick) startPiece(a StartPiece) error {
 	wt := filepath.Join(e.RepoRoot, run.CrewDir, "worktrees", t.s.MissionID+"-"+p.ID)
 	branch := "crew/" + t.s.MissionID + "/" + p.ID
 	base := t.s.Base
-	if err := e.Git.Fetch(t.ctx, base); err != nil {
-		t.note(p.ID, "can't start: fetch %s: %v", base, err)
+	release, ok := t.takeStartSlot()
+	if !ok {
 		return nil
 	}
-	if err := e.Git.RemoveWorktree(t.ctx, wt, true); err != nil {
-		t.note(p.ID, "can't start: clear leftover worktree: %v", err)
-		return nil
-	}
-	if err := e.Git.AddWorktree(t.ctx, wt, branch, "origin/"+base); err != nil {
-		t.note(p.ID, "can't start: add worktree: %v", err)
+	defer release()
+	if !t.startClear(p) || !t.freshWorktree(p.ID, wt, branch, base) {
 		return nil
 	}
 	earlier, err := t.prepareScratch(p, wt)
@@ -94,6 +109,7 @@ func (t *tick) startPiece(a StartPiece) error {
 	if err := t.save(); err != nil {
 		return err
 	}
+	release()
 	t.emit(Event{Kind: EvPieceStart, Piece: p.ID, Run: runID, Msg: branch})
 	if err := e.Runs.Drive(t.ctx, runID, wt); err != nil {
 		t.note(p.ID, "can't drive the run: %v", err)
@@ -220,8 +236,11 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 		t.note(a.Piece, "can't summarise the run for the orchestrator: %v", err)
 		return nil
 	}
-	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
+	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions, StepsUsed(t.s))
 	sum = t.forPR(sum, a.Failure, ps)
+	if a.Failure == reasonOutOfPaths {
+		sum = sum.ForPaths(ps)
+	}
 	d, err := t.decide(sum)
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again
