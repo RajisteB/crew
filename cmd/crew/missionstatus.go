@@ -105,11 +105,11 @@ func printWaiting(out io.Writer, st mission.State) {
 			continue
 		}
 		w := p.Wait
-		detail := w.Question
+		detail := oneLine(w.Question)
 		if w.Kind == mission.WaitMerge || w.Kind == mission.WaitPRClosed {
-			detail = p.PRURL
+			detail = oneLine(p.PRURL) + "  " + detail
 		}
-		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  waiting %s", w.ID, p.ID, w.Kind, oneLine(detail), sinceText(w.Since)))
+		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  waiting %s", w.ID, p.ID, w.Kind, detail, sinceText(w.Since)))
 	}
 	section(out, "Waiting on you", lines)
 }

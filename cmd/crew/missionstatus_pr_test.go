@@ -93,3 +93,19 @@ func TestStatus_UnreadableSwitch(t *testing.T) {
 		t.Fatalf("unreadable switch not shown:\n%s", out)
 	}
 }
+
+func TestStatus_MergeWaitShowsReason(t *testing.T) {
+	for _, kind := range []string{mission.WaitMerge, mission.WaitPRClosed} {
+		r := newMissionRig(t)
+		id := r.plan()
+		r.openPR(id, &mission.Wait{ID: "w1", Kind: kind, Question: "PR #7 (P1) has no checks, and auto-merge needs at least one to pass", Since: time.Now()})
+		out, err := r.cmd("status", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := testPRURL + "  PR #7 (P1) has no checks"
+		if !strings.Contains(out, want) {
+			t.Fatalf("%s: line lacks %q:\n%s", kind, want, out)
+		}
+	}
+}

@@ -296,8 +296,8 @@ func TestMission_EndToEnd_TwoPiecesOnePRWaits(t *testing.T) {
 }
 
 // waitingLine matches a "Waiting on you" row: wait id, piece, kind and the PR
-// URL on one line (see printWaiting).
-var waitingLine = regexp.MustCompile(`(?m)^  w\d+  P1  merge  https://github\.com/acme/app/pull/7  waiting \S+$`)
+// URL and the reason on one line (see printWaiting).
+var waitingLine = regexp.MustCompile(`(?m)^  w\d+  P1  merge  https://github\.com/acme/app/pull/7  \S.*  waiting \S+$`)
 
 // assertWaitingFirst checks that status leads with the "Waiting on you"
 // section and that P1's merge wait names the PR on its own line.
