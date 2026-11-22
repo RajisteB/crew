@@ -13,7 +13,7 @@ import (
 
 var jqlPattern = regexp.MustCompile(`^project = "(.*)" AND labels = "(.*)" ORDER BY created ASC$`)
 
-// serve records the request, applies Fail, then dispatches.
+// serve records the request, applies Fail and FailOn, then dispatches.
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
@@ -22,11 +22,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.requests = append(s.requests, r.Method+" "+r.URL.Path)
 	s.bodies = append(s.bodies, string(body))
 	s.headers = append(s.headers, r.Header.Clone())
-	failing := s.fail.times > 0
-	status := s.fail.status
-	if failing {
-		s.fail.times--
-	}
+	status, failing := s.failing(r)
 	s.mu.Unlock()
 
 	if failing {

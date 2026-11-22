@@ -59,3 +59,20 @@ func TestDropStatus_RemovesItEverywhere(t *testing.T) {
 		t.Fatalf("still listed: %s", body)
 	}
 }
+
+func TestFailOn_FailsOnlyMatchingRequests(t *testing.T) {
+	s := New(t)
+	s.FailOn(http.MethodGet, "/rest/api/3/field", 403, 2)
+	for i, want := range []int{403, 200, 403, 200} {
+		path := "/rest/api/3/field"
+		if i%2 == 1 {
+			path = "/rest/api/3/myself"
+		}
+		if code, _ := get(t, s, path); code != want {
+			t.Fatalf("request %d (%s): code = %d, want %d", i, path, code, want)
+		}
+	}
+	if code, _ := get(t, s, "/rest/api/3/field"); code != 200 {
+		t.Fatalf("after two failures: code = %d, want 200", code)
+	}
+}

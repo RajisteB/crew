@@ -9,17 +9,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
 const (
-	requestTimeout = 15 * time.Second
-	maxReplyBytes  = 1 << 20
-	maxErrorBytes  = 300
+	maxReplyBytes = 1 << 20
+	maxErrorBytes = 300
 )
+
+// requestTimeout bounds every call but an attachment upload. A var, so tests
+// can shorten it.
+var requestTimeout = 15 * time.Second
 
 // secret holds the API token. It prints as "[redacted]" however it is formatted.
 type secret struct{ value string }
@@ -27,8 +32,9 @@ type secret struct{ value string }
 func (*secret) String() string   { return "[redacted]" }
 func (*secret) GoString() string { return "[redacted]" }
 
-// Client talks to one Jira Cloud site. Its HTTP client times out after 15s and
-// refuses every redirect, so credentials never travel past Base.
+// Client talks to one Jira Cloud site. Every call times out after 15s, but an
+// attachment upload, which gets longer the bigger the file (attachTimeout).
+// Its HTTP client refuses every redirect, so credentials never travel past Base.
 type Client struct {
 	Base, Email string // Base has no trailing slash
 	HTTP        *http.Client
@@ -41,7 +47,6 @@ func New(base, email, token string) *Client {
 		Base:  strings.TrimRight(base, "/"),
 		Email: email,
 		HTTP: &http.Client{
-			Timeout: requestTimeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -82,20 +87,54 @@ func Permanent(err error) bool {
 	return je.Status >= 400 && je.Status < 500
 }
 
+// IsDown reports whether err says the site can't be reached right now, so
+// other calls would fail too: a transport failure (a net.Error, a *url.Error,
+// a deadline), an Unavailable tracker's error, or an *Error whose status is
+// 401, 408, 429 or 500 and above.
+func IsDown(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ne net.Error
+	var ue *url.Error
+	var un *errUnavailable
+	if errors.As(err, &ne) || errors.As(err, &ue) || errors.As(err, &un) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var je *Error
+	if !errors.As(err, &je) {
+		return false
+	}
+	switch je.Status {
+	case 401, 408, 429:
+		return true
+	}
+	return je.Status >= 500
+}
+
+// attachTimeout bounds the upload of an attachment of n bytes: 30s plus 1s
+// per 100 KB.
+func attachTimeout(n int) time.Duration {
+	return 30*time.Second + time.Duration(n/100_000)*time.Second
+}
+
 // do sends payload (nil for none) as JSON and returns the reply body.
 func (c *Client) do(ctx context.Context, method, path string, payload any) ([]byte, error) {
 	if payload == nil {
-		return c.send(ctx, method, path, nil, "", nil)
+		return c.send(ctx, requestTimeout, method, path, nil, "", nil)
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("jira %s %s: encode body: %w", method, path, err)
 	}
-	return c.send(ctx, method, path, bytes.NewReader(b), "application/json", nil)
+	return c.send(ctx, requestTimeout, method, path, bytes.NewReader(b), "application/json", nil)
 }
 
-// send is the one place a request leaves the process.
-func (c *Client) send(ctx context.Context, method, path string, body io.Reader, contentType string, extra map[string]string) ([]byte, error) {
+// send is the one place a request leaves the process. The request, reply
+// included, must finish within timeout.
+func (c *Client) send(ctx context.Context, timeout time.Duration, method, path string, body io.Reader, contentType string, extra map[string]string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, method, c.Base+path, body)
 	if err != nil {
 		return nil, fmt.Errorf("jira %s %s: %w", method, path, err)

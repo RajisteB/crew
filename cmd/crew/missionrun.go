@@ -99,7 +99,7 @@ func setTracker(e *mission.Engine, crewDir, repo string) error {
 	if err != nil {
 		return err
 	}
-	e.Tracker, e.Sprints, e.TrackerPermanent = t, sprints, jira.IsPermanent
+	e.Tracker, e.Sprints, e.TrackerPermanent, e.TrackerDown = t, sprints, jira.IsPermanent, jira.IsDown
 	return nil
 }
 

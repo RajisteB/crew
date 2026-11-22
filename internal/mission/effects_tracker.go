@@ -4,15 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 )
 
-const (
-	maxAttachBytes   = 10 << 20
-	trackerDrainRuns = 10 // extra sync passes after a mission ends while writes are still owed
-)
+const trackerDrainRuns = 10 // extra sync passes after a mission ends while writes are still owed
 
 // SyncTracker sends the writes Jira is owed, once, and returns how many are
 // still owed. The caller holds the mission lock. It never returns a Jira
@@ -161,9 +157,20 @@ func (p *pass) send(op TrackerOp) (result, error) {
 		return stopPass, nil
 	}
 	t.note(op.Piece, "Jira: can't %s: %v", p.what(op, key), cerr)
-	if !t.permanent(cerr) {
+	switch {
+	case t.permanent(cerr):
+		return p.givenUpOn(op)
+	case op.Kind == "attach":
+		return p.attachFailed(op)
+	case t.down(cerr):
 		return stopPass, nil
 	}
+	return p.skipped(op), nil
+}
+
+// givenUpOn handles an op that can never succeed: a create or a sprint is
+// tried again next tick, anything else is recorded as done.
+func (p *pass) givenUpOn(op TrackerOp) (result, error) {
 	if op.Kind == "create" {
 		p.failed[op.Piece] = true
 	}
@@ -171,6 +178,20 @@ func (p *pass) send(op TrackerOp) (result, error) {
 		return carryOn, nil
 	}
 	return p.succeeded(op)
+}
+
+// skipped handles an op that failed by itself while the tracker is up: it is
+// left for the next tick and the pass goes on without it.
+func (p *pass) skipped(op TrackerOp) result {
+	switch op.Kind {
+	case "create-epic":
+		return stopPass // nothing else can be sent without the epic
+	case "create":
+		p.failed[op.Piece] = true // the piece's other ops wait for its issue
+	case "comment":
+		p.comments = false // later comments wait, so the cursor holds
+	}
+	return carryOn
 }
 
 // what is the failed op in words: "move J-2", "create the epic".
@@ -197,6 +218,12 @@ func (t *tick) permanent(err error) bool {
 		return true
 	}
 	return t.e.TrackerPermanent != nil && t.e.TrackerPermanent(err)
+}
+
+// down reports whether err means the tracker can't be reached. With no
+// TrackerDown every error counts.
+func (t *tick) down(err error) bool {
+	return t.e.TrackerDown == nil || t.e.TrackerDown(err)
 }
 
 // issueKey is the key of a piece's issue, or of the epic for "".
@@ -289,27 +316,6 @@ func (p *pass) sprint(op TrackerOp) error {
 	return nil
 }
 
-// attach sends one deliverable file. A file that is missing, isn't a regular
-// file, or is too big is given up on with a note, so it isn't tried forever.
-func (p *pass) attach(op TrackerOp, key string) error {
-	t := p.t
-	if !filepath.IsLocal(op.File) {
-		return &givenUp{fmt.Errorf("%s is not a file in the deliverables folder", op.File)}
-	}
-	path := filepath.Join(t.e.Store.DeliverablesDir(op.Piece), op.File)
-	fi, err := os.Lstat(path)
-	switch {
-	case err != nil:
-		return &givenUp{err}
-	case !fi.Mode().IsRegular():
-		return &givenUp{fmt.Errorf("%s is not a regular file", op.File)}
-	case fi.Size() > maxAttachBytes:
-		t.note(op.Piece, "Jira: %s is over 10 MB and stays in the mission folder", op.File)
-		return nil
-	}
-	return t.e.Tracker.Attach(t.ctx, key, path)
-}
-
 var errNoKey = errors.New("the tracker returned no issue key")
 
 // givenUp is an error that can never succeed, whatever the tracker says.
@@ -325,6 +331,7 @@ func (p *pass) succeeded(op TrackerOp) (result, error) {
 		t.s = FlagSet(t.s, op.Piece, op.On)
 	case "attach":
 		t.s = FileAttached(t.s, op.Piece, op.File)
+		t.e.forgetAttachTries(op)
 	case "comment":
 		t.s = CommentedThrough(t.s, op.Seq)
 	case "create-epic", "create":

@@ -49,9 +49,14 @@ type Engine struct {
 	Sprints bool
 	// TrackerPermanent says an error can never succeed. Nil means none can.
 	TrackerPermanent func(error) bool
+	// TrackerDown says an error means the tracker itself can't be reached, so
+	// the rest of the pass would fail too. Nil means every error that is not
+	// permanent counts as down.
+	TrackerDown func(error) bool
 
-	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
-	streaks   map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
+	lastNotes   map[string]struct{} // notes of the previous tick, to avoid repeating them
+	streaks     map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
+	attachTries map[string]int      // failed uploads by piece and file, in memory only
 }
 
 func (e *Engine) notifier() notify.Notifier {

@@ -174,7 +174,12 @@ func (b *Board) Sprint(ctx context.Context, keys []string) (bool, error) {
 // Unavailable is a tracker that can't be reached: every method returns an error whose text is Reason.
 type Unavailable struct{ Reason string }
 
-func (u Unavailable) err() error { return errors.New(u.Reason) }
+// errUnavailable is Unavailable's error; IsDown reports true for it.
+type errUnavailable struct{ reason string }
+
+func (e *errUnavailable) Error() string { return e.reason }
+
+func (u Unavailable) err() error { return &errUnavailable{u.Reason} }
 
 func (u Unavailable) Create(context.Context, string, string, string, string, string) (string, error) {
 	return "", u.err()

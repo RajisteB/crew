@@ -18,7 +18,8 @@ type BoardInfo struct {
 	Name string
 }
 
-// Attach uploads body to the issue as a file called name.
+// Attach uploads body to the issue as a file called name. The upload has its
+// own deadline, attachTimeout of the size, not the 15s of every other call.
 func (c *Client) Attach(ctx context.Context, key, name string, body io.Reader) error {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -32,7 +33,7 @@ func (c *Client) Attach(ctx context.Context, key, name string, body io.Reader) e
 	if err := mw.Close(); err != nil {
 		return fmt.Errorf("jira attach %s: %w", key, err)
 	}
-	_, err = c.send(ctx, http.MethodPost, issuePath(key, "/attachments"), &buf,
+	_, err = c.send(ctx, attachTimeout(buf.Len()), http.MethodPost, issuePath(key, "/attachments"), &buf,
 		mw.FormDataContentType(), map[string]string{"X-Atlassian-Token": "no-check"})
 	return err
 }

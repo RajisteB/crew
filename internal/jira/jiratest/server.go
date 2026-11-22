@@ -32,6 +32,12 @@ type Issue struct {
 
 type failure struct{ status, times int }
 
+// rule fails the requests whose method and path match.
+type rule struct {
+	method, prefix string
+	failure
+}
+
 // Server is an in-memory Jira.
 type Server struct {
 	t   *testing.T
@@ -44,6 +50,7 @@ type Server struct {
 	flagField bool
 	boards    map[int]int // board id -> active sprint id, 0 for none
 	fail      failure
+	rules     []rule
 	requests  []string
 	bodies    []string
 	headers   []http.Header
@@ -126,6 +133,31 @@ func (s *Server) Fail(status, times int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.fail = failure{status, times}
+}
+
+// FailOn makes the next times requests whose method is method and whose path
+// starts with pathPrefix reply with the HTTP status. Other requests are served.
+func (s *Server) FailOn(method, pathPrefix string, status, times int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rules = append(s.rules, rule{method, pathPrefix, failure{status, times}})
+}
+
+// failing reports the status the request must fail with, if any, and counts
+// the failure. The caller holds the lock.
+func (s *Server) failing(r *http.Request) (int, bool) {
+	if s.fail.times > 0 {
+		s.fail.times--
+		return s.fail.status, true
+	}
+	for i := range s.rules {
+		ru := &s.rules[i]
+		if ru.times > 0 && ru.method == r.Method && strings.HasPrefix(r.URL.Path, ru.prefix) {
+			ru.times--
+			return ru.status, true
+		}
+	}
+	return 0, false
 }
 
 // Requests lists "METHOD path" for every request, in order. Query strings are left out.
