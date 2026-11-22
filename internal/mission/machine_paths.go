@@ -139,3 +139,7 @@ func shownNames(names []string) []string {
 	}
 	return out
 }
+
+// ShownName is shownName for code outside the package: file names from a
+// piece's worktree are cleaned the same way wherever they are shown.
+func ShownName(name string) string { return shownName(name) }

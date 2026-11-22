@@ -79,6 +79,7 @@ func missionStatus(env missionEnv, id string) error {
 	}
 	out := env.out
 	fmt.Fprintln(out, safeText(fmt.Sprintf("mission %s  %s  %s  (%s, base %s)", id, st.Status, live, st.Repo, st.Base)))
+	printHold(out, st)
 	if err := printJiraStatus(env, store, m, st); err != nil {
 		return err
 	}
@@ -114,6 +115,7 @@ func printWaiting(out io.Writer, st mission.State) {
 			detail = oneLine(p.PRURL) + "  " + detail
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  waiting %s", w.ID, p.ID, w.Kind, detail, sinceText(w.Since)))
+		lines = append(lines, pathsFileLines(p)...)
 	}
 	section(out, "Waiting on you", lines)
 }

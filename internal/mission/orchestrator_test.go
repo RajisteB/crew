@@ -227,3 +227,12 @@ func TestOrchestratorBody_JiraRefusalGoesToThePrincipal(t *testing.T) {
 		t.Errorf("body lacks %q", want)
 	}
 }
+
+func TestOrchestratorBody_MentionsPathsAndBudgets(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{"paths", "accept", "on hold", "missions.yaml", "another mission"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("orchestrator body does not mention %q", want)
+		}
+	}
+}
