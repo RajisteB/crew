@@ -15,10 +15,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// maxRunsAtOnce is the only runs_at_once value this stage accepts. Pieces run
-// one at a time until crew can check that parallel pieces don't overlap.
-const maxRunsAtOnce = 1
-
 // SettingsFile is the settings file name in the crew config directory.
 const SettingsFile = "missions.yaml"
 
@@ -97,22 +93,6 @@ func (s Settings) validate() error {
 		if !n.l.Set {
 			return fmt.Errorf(`limits.%s: a number or "*" is required`, n.key)
 		}
-	}
-	if err := checkRunsAtOnce("limits", s.Limits.Concurrency); err != nil {
-		return err
-	}
-	for repo, l := range s.Repos {
-		if err := checkRunsAtOnce("repos."+repo, l.Concurrency); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// checkRunsAtOnce refuses a runs_at_once that is set to anything but 1.
-func checkRunsAtOnce(where string, l source.Limit) error {
-	if l.Set && (l.Unlimited || l.N != maxRunsAtOnce) {
-		return fmt.Errorf("%s.runs_at_once must be %d (got %q): pieces run one at a time until crew can check that parallel pieces don't overlap", where, maxRunsAtOnce, l.String())
 	}
 	return nil
 }

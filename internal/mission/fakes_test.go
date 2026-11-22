@@ -63,7 +63,15 @@ func (f *failures) hit(op string) error {
 	return nil
 }
 
+// gitFacts is what fakeGit answers for one worktree.
+type gitFacts struct {
+	dirty   []string
+	ahead   int
+	changed []string
+}
+
 type fakeGit struct {
+	at    map[string]gitFacts // facts for one worktree, by path; others get the fields below
 	log   *callLog
 	fail  *failures
 	dirty []string
@@ -92,11 +100,17 @@ func (g *fakeGit) RemoveWorktree(_ context.Context, path string, force bool) err
 
 func (g *fakeGit) Dirty(_ context.Context, worktree string) ([]string, error) {
 	g.log.add("Dirty %s", worktree)
+	if f, ok := g.at[worktree]; ok {
+		return slices.Clone(f.dirty), g.fail.hit("Dirty")
+	}
 	return slices.Clone(g.dirty), g.fail.hit("Dirty")
 }
 
 func (g *fakeGit) Ahead(_ context.Context, worktree, base string) (int, error) {
 	g.log.add("Ahead %s %s", worktree, base)
+	if f, ok := g.at[worktree]; ok {
+		return f.ahead, g.fail.hit("Ahead")
+	}
 	return g.ahead, g.fail.hit("Ahead")
 }
 
@@ -280,10 +294,16 @@ func twoPieces() []Piece {
 
 func newHarness(t *testing.T, pieces ...Piece) *harness {
 	t.Helper()
+	return newHarnessIn(t, t.TempDir(), pieces...)
+}
+
+// newHarnessIn builds a mission in the repo root given, so two missions can
+// share one repo.
+func newHarnessIn(t *testing.T, root string, pieces ...Piece) *harness {
+	t.Helper()
 	if len(pieces) == 0 {
 		pieces = twoPieces()
 	}
-	root := t.TempDir()
 	m := Mission{Request: "Launch referrals.\nPay $10 per friend.", Pieces: pieces}
 	store, st, err := New(root, m, gh.RepoInfo{Slug: "acme/app", DefaultBranch: "main"}, testNow)
 	if err != nil {

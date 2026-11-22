@@ -24,24 +24,13 @@ func (d *decider) queued(id string) {
 			ready = false
 		}
 	}
-	if ready && Allows(d.lim.Concurrency, d.holdingRuns()+d.starting()+1) {
+	if ready && !d.o.ElsewhereUnknown && Allows(d.lim.Concurrency, d.o.Elsewhere+d.holdingRuns()+d.starting()+1) {
 		d.add(StartPiece{Piece: id})
 	}
 }
 
-// holdingRuns counts the pieces that count toward the limit on runs at once:
-// running pieces, and pieces waiting on the principal in the middle of a run
-// (their wait goes back to running). A piece whose pull request waits for a
-// merge, or that never started, does not count.
-func (d *decider) holdingRuns() int {
-	n := 0
-	for _, p := range d.s.Pieces {
-		if p.Status == PieceRunning || (p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceRunning) {
-			n++
-		}
-	}
-	return n
-}
+// holdingRuns counts this mission's pieces that count toward runs_at_once.
+func (d *decider) holdingRuns() int { return HoldingRuns(d.s) }
 
 // starting counts the pieces this call has already decided to start.
 func (d *decider) starting() int {

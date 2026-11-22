@@ -44,6 +44,10 @@ type Obs struct {
 	Auto      map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
 	// Accept has one entry per piece with an unaccepted Deliverable.
 	Accept map[string]AcceptObs
+	// Elsewhere is the number of runs the repo's other missions hold.
+	// ElsewhereUnknown means they could not be counted: nothing is started.
+	Elsewhere        int
+	ElsewhereUnknown bool
 }
 
 // Action is something for the engine to carry out.

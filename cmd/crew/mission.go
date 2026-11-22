@@ -225,6 +225,7 @@ func missionPlan(env missionEnv, args []string) error {
 	printPieceTable(env.out, m, chk.in.Domains)
 	printSeparations(env.out, seps)
 	printAutoMergeLine(env, info.Slug, m)
+	printRunsAtOnceLine(env, info.Slug)
 	printJiraLine(env, info.Slug)
 	fmt.Fprintf(env.out, "\n```mermaid\n%s```\n\nnext: crew mission start %s\n", mission.Mermaid(m), st.MissionID)
 	return nil
@@ -312,6 +313,7 @@ func awaitGo(env missionEnv, store mission.Store, id string, domains []source.Do
 	}
 	printPieceTable(env.out, m, domains)
 	printAutoMergeLine(env, st.Repo, m)
+	printRunsAtOnceLine(env, st.Repo)
 	printJiraLine(env, st.Repo)
 	fmt.Fprintf(env.out, "\n%s\n\nwaiting for go: crew mission go %s\n", m.Request, id)
 	return nil

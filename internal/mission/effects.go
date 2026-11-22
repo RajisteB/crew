@@ -66,6 +66,11 @@ func (t *tick) startPiece(a StartPiece) error {
 	wt := filepath.Join(e.RepoRoot, run.CrewDir, "worktrees", t.s.MissionID+"-"+p.ID)
 	branch := "crew/" + t.s.MissionID + "/" + p.ID
 	base := t.s.Base
+	release, ok := t.takeStartSlot()
+	if !ok {
+		return nil
+	}
+	defer release()
 	if err := e.Git.Fetch(t.ctx, base); err != nil {
 		t.note(p.ID, "can't start: fetch %s: %v", base, err)
 		return nil
@@ -94,6 +99,7 @@ func (t *tick) startPiece(a StartPiece) error {
 	if err := t.save(); err != nil {
 		return err
 	}
+	release()
 	t.emit(Event{Kind: EvPieceStart, Piece: p.ID, Run: runID, Msg: branch})
 	if err := e.Runs.Drive(t.ctx, runID, wt); err != nil {
 		t.note(p.ID, "can't drive the run: %v", err)

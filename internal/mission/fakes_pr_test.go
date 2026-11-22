@@ -22,6 +22,9 @@ func (g *fakeGit) Head(_ context.Context, worktree string) (string, error) {
 
 func (g *fakeGit) ChangedFiles(_ context.Context, worktree, base string) ([]string, error) {
 	g.log.add("ChangedFiles %s %s", worktree, base)
+	if f, ok := g.at[worktree]; ok {
+		return slices.Clone(f.changed), g.fail.hit("ChangedFiles")
+	}
 	return slices.Clone(g.changed), g.fail.hit("ChangedFiles")
 }
 
