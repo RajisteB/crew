@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // The environment variables that hold Jira credentials. crew reads them; no
 // station or orchestrator process it starts may see them.
@@ -22,3 +25,7 @@ func WithoutSecrets(environ []string) []string {
 	}
 	return out
 }
+
+// CleanEnv is this process's environment without the Jira credentials: the
+// base environment of every command crew runs, other than its own engine.
+func CleanEnv() []string { return WithoutSecrets(os.Environ()) }

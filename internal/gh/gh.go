@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 const (
@@ -170,7 +171,7 @@ func realExec(ctx context.Context, dir string, stdin []byte, name string, args .
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Stdin = bytes.NewReader(stdin)
-	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
+	cmd.Env = append(config.CleanEnv(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
 	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

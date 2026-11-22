@@ -5,6 +5,8 @@ package notify
 import (
 	"fmt"
 	"os/exec"
+
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 // Notifier shows a short message to the person running crew.
@@ -50,5 +52,7 @@ func (o osascript) Notify(title, body string) error {
 }
 
 func realRun(name string, args ...string) error {
-	return exec.Command(name, args...).Run()
+	cmd := exec.Command(name, args...)
+	cmd.Env = config.CleanEnv()
+	return cmd.Run()
 }

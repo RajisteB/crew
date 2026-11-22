@@ -54,6 +54,7 @@ func TestLoadConfig_Refuses(t *testing.T) {
 		"path":     "site: https://evil.example/x.atlassian.net\n    project: ACME",
 		"userinfo": "site: https://user:pw@example.atlassian.net\n    project: ACME",
 		"wiki":     "site: https://example.atlassian.net/wiki\n    project: ACME",
+		"badurl":   "site: \"https://user:pw@%zz.atlassian.net\"\n    project: ACME",
 		"lower":    "site: https://example.atlassian.net\n    project: acme",
 		"short":    "site: https://example.atlassian.net\n    project: A",
 		"board":    "site: https://example.atlassian.net\n    project: ACME\n    board: -1",
@@ -69,7 +70,24 @@ func TestLoadConfig_Refuses(t *testing.T) {
 			if !strings.Contains(err.Error(), "jira.yaml: repos.acme/app: ") {
 				t.Fatalf("error does not name the repo: %v", err)
 			}
+			if msg := err.Error(); strings.Contains(msg, "user") || strings.Contains(msg, "pw") {
+				t.Fatalf("error echoes the site's userinfo: %v", err)
+			}
 		})
+	}
+}
+
+func TestLoadConfig_SiteErrorRedactsUserinfo(t *testing.T) {
+	cases := map[string]string{
+		"https://user:pw@example.atlassian.net": `got "https://[redacted]@example.atlassian.net"`,
+		"\"https://user:pw@%zz.atlassian.net\"": "got an unparseable value",
+	}
+	for site, want := range cases {
+		dir := writeConfig(t, "version: 1\nrepos:\n  acme/app:\n    site: "+site+"\n    project: ACME\n")
+		_, err := jira.LoadConfig(dir)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: want %q in the error, got %v", site, want, err)
+		}
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -173,7 +174,7 @@ func (r Repo) withDefaults() Repo {
 // Validate checks the site, project key and board. Errors carry no prefix.
 func (r Repo) Validate() error {
 	if !validSite(r.Site) {
-		return fmt.Errorf("site must be https://<name>.atlassian.net, got %q", r.Site)
+		return fmt.Errorf("site must be https://<name>.atlassian.net, got %s", shownSite(r.Site))
 	}
 	if !projectKey.MatchString(r.Project) {
 		return fmt.Errorf("project must be a Jira project key like ACME, got %q", r.Project)
@@ -182,6 +183,22 @@ func (r Repo) Validate() error {
 		return fmt.Errorf("board must be 0 or more, got %d", r.Board)
 	}
 	return nil
+}
+
+// shownSite is site as an error may print it: quoted, with any userinfo (a
+// password, often) replaced.
+func shownSite(site string) string {
+	u, err := url.Parse(site)
+	if err != nil {
+		return "an unparseable value"
+	}
+	if u.User == nil {
+		return strconv.Quote(site)
+	}
+	bare := *u
+	bare.User = nil
+	rest, _ := strings.CutPrefix(bare.String(), bare.Scheme+"://")
+	return strconv.Quote(bare.Scheme + "://[redacted]@" + rest)
 }
 
 func validSite(site string) bool {

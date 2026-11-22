@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crewfile-dev/crew/internal/config"
 	"github.com/crewfile-dev/crew/internal/run"
 	"github.com/crewfile-dev/crew/internal/source"
 	"github.com/crewfile-dev/crew/internal/verify"
@@ -35,8 +36,8 @@ func (u usageError) Error() string { return u.msg }
 
 type runFlags struct {
 	dir, project, input, gotoStation, note string
-	since                            int
-	detach                           bool
+	since                                  int
+	detach                                 bool
 }
 
 // runCmd handles `crew run …` and returns the process exit code.
@@ -227,6 +228,7 @@ func driveOrDetach(store run.Store, id, dir string, f runFlags, out io.Writer) e
 	}
 	cmd := exec.Command(self, "run", "resume", id, "--project", f.project, "--dir", dir)
 	cmd.Stdout, cmd.Stderr, cmd.Dir = logf, logf, f.project
+	cmd.Env = config.CleanEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return err
