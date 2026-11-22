@@ -73,8 +73,9 @@ func TestDecide_BudgetHitHoldsOnce(t *testing.T) {
 
 // heldCase: a mission over budget with one piece of each kind of work.
 func heldCase() (Mission, State, Obs) {
-	m := mis(nil, "q", "dirty", "pr", "ok")
-	s := st(m, PieceQueued, PieceRunning, PiecePROpen, PieceRunning)
+	m := mis(nil, "q", "dirty", "pr", "ok", "conf", "idle")
+	s := st(m, PieceQueued, PieceRunning, PiecePROpen, PieceRunning, PiecePROpen, PieceRunning)
+	s.Pieces[4].PR, s.Pieces[4].Head, s.Pieces[4].PRSince = 8, "def", t0.Add(-1e12)
 	s.Hold = &Hold{Kind: "steps", Count: 6, Max: "6", Since: t0}
 	s.Pieces[1].Steps = 6
 	s.Pieces[2].PR, s.Pieces[2].Head, s.Pieces[2].PRSince = 7, "abc", t0.Add(-1e12)
@@ -84,17 +85,30 @@ func heldCase() (Mission, State, Obs) {
 	o.Runs["ok"] = RunObs{State: run.State{Status: run.StatusDone}}
 	o.Git["ok"] = GitObs{Ahead: 1}
 	o.PRs["pr"] = gh.PR{Number: 7, State: "OPEN", Mergeable: "MERGEABLE", HeadSHA: "abc", Checks: []gh.Check{chk("fail")}}
-	return m, s, o
+	o.PRs["conf"] = gh.PR{Number: 8, State: "OPEN", Mergeable: "CONFLICTING", HeadSHA: "def"}
+	return m, s, o // "idle" is running with no observed run: DriveRun
 }
 
 func TestDecide_HoldDropsNewWorkOnly(t *testing.T) {
 	m, s, o := heldCase()
 	_, as := Decide(m, s, o, stepLimits(lim(6)), 0)
-	if n := len(of[StartPiece](as)) + len(of[SendBack](as)) + len(of[AskOrchestrator](as)) + len(of[DriveRun](as)); n != 0 {
+	if n := len(of[StartPiece](as)) + len(of[SendBack](as)) + len(of[AskOrchestrator](as)) + len(of[DriveRun](as)) + len(of[ResolveConflict](as)); n != 0 {
 		t.Fatalf("new work was not dropped: %#v", as)
 	}
 	if got := of[OpenPR](as); len(got) != 1 || got[0].Piece != "ok" {
 		t.Fatalf("OpenPR = %+v", got)
+	}
+}
+
+func TestDecide_NoHoldKeepsEveryKindOfNewWork(t *testing.T) {
+	m, s, o := heldCase()
+	s.Hold = nil
+	s.Pieces[2].SentBack = map[string]int{reasonChecksFailed: maxPRSendBacks} // the failed checks go to the orchestrator
+	s.Pieces[3].SentBack = map[string]int{}
+	_, as := Decide(m, s, o, stepLimits(lim(100)), 0)
+	if len(of[StartPiece](as)) != 1 || len(of[SendBack](as)) != 1 || len(of[AskOrchestrator](as)) != 1 ||
+		len(of[DriveRun](as)) != 1 || len(of[ResolveConflict](as)) != 1 {
+		t.Fatalf("a fixture piece does no work: %#v", as)
 	}
 }
 
@@ -112,13 +126,12 @@ func TestDecide_HoldKeepsDeliverablesAndWaits(t *testing.T) {
 }
 
 func TestDecide_HoldLiftsWhenTheLimitRises(t *testing.T) {
-	m := mis(nil, "a", "q")
-	s := st(m, PieceRunning, PieceQueued)
-	s.Hold = &Hold{Kind: "steps", Count: 6, Max: "6", Since: t0}
-	s.Pieces[0].Steps = 6
-	o := obs(t0)
-	o.Runs["a"] = runAt(6)
+	m, s, o := heldCase()
+	s.Pieces[2].SentBack = map[string]int{reasonChecksFailed: maxPRSendBacks}
 	ns, as := Decide(m, s, o, stepLimits(lim(10)), 0)
+	if len(of[ResolveConflict](as)) != 1 {
+		t.Fatalf("no ResolveConflict after the lift: %#v", as)
+	}
 	if ns.Hold != nil {
 		t.Fatalf("hold = %+v", ns.Hold)
 	}

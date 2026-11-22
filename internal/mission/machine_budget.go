@@ -45,7 +45,7 @@ func (d *decider) overBudget() bool {
 }
 
 // applyBudget puts the mission on hold, or lifts the hold, and while it is on
-// hold drops the actions that take on new work. Nothing Decide chose that
+// hold drops the actions that take on new work or send a piece back. Nothing Decide chose that
 // would be dropped changed the state, so the state stays as it was.
 func (d *decider) applyBudget() {
 	over := d.overBudget()
@@ -62,7 +62,7 @@ func (d *decider) applyBudget() {
 	kept := d.actions[:0:0]
 	for _, a := range d.actions {
 		switch a.(type) {
-		case StartPiece, SendBack, AskOrchestrator, DriveRun:
+		case StartPiece, SendBack, AskOrchestrator, DriveRun, ResolveConflict:
 		default:
 			kept = append(kept, a)
 		}
