@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // ErrNoFlag means the site has no Flagged field, so an issue cannot be flagged.
@@ -122,7 +123,8 @@ func (b *Board) Flag(ctx context.Context, key string, on bool) error {
 	return b.Client.SetFlag(ctx, key, id, on)
 }
 
-// Attach uploads the regular file at path under its base name. A path that is not a regular file is an error.
+// Attach uploads the regular file at path under its base name. A path that is
+// not a regular file, is a symlink or has more than one hard link is an error.
 func (b *Board) Attach(ctx context.Context, key, path string) error {
 	fi, err := os.Lstat(path)
 	if err != nil {
@@ -131,11 +133,16 @@ func (b *Board) Attach(ctx context.Context, key, path string) error {
 	if !fi.Mode().IsRegular() {
 		return fmt.Errorf("attach %s: not a regular file", filepath.Base(path))
 	}
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return fmt.Errorf("attach %s: %w", filepath.Base(path), err)
 	}
 	defer f.Close()
+	if info, err := f.Stat(); err != nil {
+		return fmt.Errorf("attach %s: %w", filepath.Base(path), err)
+	} else if st, ok := info.Sys().(*syscall.Stat_t); !ok || uint64(st.Nlink) > 1 {
+		return fmt.Errorf("attach %s: a file with more than one hard link is not attached", filepath.Base(path))
+	}
 	return b.Client.Attach(ctx, key, filepath.Base(path), f)
 }
 

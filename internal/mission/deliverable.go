@@ -111,7 +111,21 @@ func plainDir(root string, rel ...string) (bool, error) {
 	return true, nil
 }
 
-// walkRegular appends the regular files below dir/rel, never following a link.
+// hardLinked reports whether the entry's file has more than one link, or
+// can't be checked: crew treats it like a symlink.
+func hardLinked(e fs.DirEntry) bool {
+	info, err := e.Info()
+	return err != nil || manyLinks(info)
+}
+
+// manyLinks reports whether info is a file with more than one hard link.
+func manyLinks(info fs.FileInfo) bool {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	return !ok || uint64(st.Nlink) > 1
+}
+
+// walkRegular appends the regular files below dir/rel, never following a link
+// and skipping a file with more than one hard link.
 func walkRegular(dir, rel string, out *[]string) error {
 	entries, err := os.ReadDir(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
@@ -124,6 +138,9 @@ func walkRegular(dir, rel string, out *[]string) error {
 		}
 		switch {
 		case e.Type().IsRegular():
+			if hardLinked(e) {
+				continue // a hard link can bring in any file the station can read
+			}
 			*out = append(*out, name)
 		case e.IsDir():
 			if err := walkRegular(dir, name, out); err != nil {
@@ -136,8 +153,8 @@ func walkRegular(dir, rel string, out *[]string) error {
 
 // copyFiles copies the named regular files from one folder to another,
 // creating folders with mode 0700 and files with mode 0600. It refuses a name
-// that is absolute or holds "..", a source that is or sits below a symlink,
-// and a destination that already exists. Nothing is written when a name is
+// that is absolute or holds "..", a source that is or sits below a symlink, a
+// source with more than one hard link, and a destination that already exists. Nothing is written when a name is
 // refused.
 func copyFiles(from, to string, files []string) error {
 	for _, name := range files {
@@ -167,6 +184,11 @@ func copyOne(from, to, name string) error {
 		return err
 	}
 	defer src.Close()
+	if info, err := src.Stat(); err != nil {
+		return err
+	} else if manyLinks(info) {
+		return fmt.Errorf("%q is a hard link", name)
+	}
 	dst := filepath.Join(to, name)
 	if err := os.MkdirAll(filepath.Dir(dst), dirMode); err != nil {
 		return err
