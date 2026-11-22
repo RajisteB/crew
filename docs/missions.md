@@ -18,7 +18,7 @@ This guide is for the owner of a crew setup who has used factories and has not u
 
 ## What this stage does and doesn't do
 
-Pieces run together, up to `runs_at_once` at a time (3 in a new crew directory). The count is across all of the repo's missions, not per mission. A piece counts while it is running, and also while it is stopped in the middle of its run to wait for your answer (an approval, a question), because it will go on running afterwards. A piece whose pull request is waiting for your merge doesn't count, so the next piece can start. One kind of piece is never held back by the limit: a piece that crew sends back from its pull request (see "Failed checks and conflicts") runs again at once.
+Pieces run together, up to `runs_at_once` at a time (3 in a new crew directory). The count is across all of the repo's missions that are running with a live engine, not per mission. A piece counts while it is running, and also while it is stopped in the middle of its run to wait for your answer (an approval, a question), because it will go on running afterwards. A piece whose pull request is waiting for your merge doesn't count, so the next piece can start. One kind of piece is never held back by the limit: a piece that crew sends back from its pull request (see "Failed checks and conflicts") runs again at once.
 
 Running together is safe only when pieces don't change the same files, so crew checks. It keeps pieces whose `paths` overlap apart (see "Running pieces together"), it does the same across two missions in one repo (see "Two missions in one repo"), and it stops a piece that changes files outside its own paths (see "Files outside a piece's paths"). It also stops taking on new work when a mission has used its step budget (see "Budgets").
 
@@ -166,11 +166,11 @@ A mission can run for days, so the engine checks again before every push. If the
 `missions.yaml` holds the settings. The ones you are most likely to change:
 
 - `mission_approval: on` makes `start` stop and wait for your `go`. Set it to `off` and `start` begins the mission at once.
-- `limits.runs_at_once` is how many pieces may run together, across all of the repo's missions. A new crew directory has `3`. A `missions.yaml` you already have keeps the value it has (older files say `1`, which means one piece at a time until you change it). It can be a number or `"*"` for no limit, and a `runs_at_once` under `repos:` overrides it for one repo.
+- `limits.runs_at_once` is how many pieces may run together, across all of the repo's missions. A new crew directory has `3`. A `missions.yaml` you already have keeps the value it has (older files say `1`, which means one piece at a time until you change it). It can be a number or `"*"` for no limit, and a `runs_at_once` under `repos:` overrides it for one repo. A mission's engine reads it when it starts, so a change reaches a running mission only when its engine next starts (`crew mission stop`, then `resume`), or while that mission is on hold, when its engine reads the whole file again each tick.
 - `merge_method` is how crew merges a pull request when auto-merge is on: `squash` (the default), `merge` or `rebase`. Pick the one your repo allows; see "Auto-merge".
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
 - `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
-- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. Every limit must be present: a `missions.yaml` without `steps`, for example, is refused when crew reads it. `steps` is enforced (see "Budgets"); `delegation_depth` is read but not yet enforced.
+- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. Every limit must be present: a `missions.yaml` without `steps`, for example, is refused when crew reads it. A running engine reads `missions.yaml` once, when it starts, and again only while its mission is on hold for its step budget (see "Budgets"); any other change reaches a running mission when its engine next starts. `steps` is enforced (see "Budgets"); `delegation_depth` is read but not yet enforced.
 
 ## Launching the orchestrator
 
@@ -359,7 +359,7 @@ Pieces that don't change the same files can run at the same time. To know which 
 
 Give each piece the narrowest `paths` that covers its work. The narrower they are, the more pieces can run together.
 
-`crew mission plan` shows the paths in the `PATHS` column, then a note under the table for each piece that needs one:
+`crew mission plan` shows the paths in the `PATHS` column, then, right under the table, a note for each piece that needs one, then a line for each pair of pieces it keeps apart:
 
 ```
 PIECE  DOMAIN  FACTORY      WAITS FOR  PATHS
@@ -367,9 +367,8 @@ P1     web     ship-change  -          api/**
 P2     web     ship-change  -          web/**
 P3     web     ship-change  -          api/v2/**
 P4     web     ship-change  -          -
-
-P3 starts after P1: their paths overlap (P1: api/**, P3: api/v2/**)
 P4 has no paths, so crew can't check it against other pieces or check what it changes
+P3 starts after P1: their paths overlap (P1: api/**, P3: api/v2/**)
 ```
 
 The notes are of two kinds: a piece that has no paths, and a piece whose own `paths` reach outside its domain's (`P2 may change files outside the web domain: docs/**`). The second is only a heads-up; the piece still runs.
