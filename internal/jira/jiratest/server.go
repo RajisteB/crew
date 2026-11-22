@@ -48,7 +48,8 @@ type Server struct {
 	statuses  []string
 	issueType []string
 	flagField bool
-	boards    map[int]int // board id -> active sprint id, 0 for none
+	boards    map[int]int  // board id -> active sprint id, 0 for none
+	kanban    map[int]bool // boards that have no sprints at all
 	fail      failure
 	rules     []rule
 	requests  []string
@@ -66,6 +67,7 @@ func New(t *testing.T) *Server {
 		issueType: []string{"Task", "Epic"},
 		flagField: true,
 		boards:    map[int]int{},
+		kanban:    map[int]bool{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(s.srv.Close)
@@ -110,6 +112,15 @@ func (s *Server) SetActiveSprint(board, sprint int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.boards[board] = sprint
+}
+
+// AddBoardWithoutSprints makes a board that has no sprints, as a Kanban board:
+// it is listed, and its sprint query answers 400 as Jira Cloud does.
+func (s *Server) AddBoardWithoutSprints(id int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.boards[id] = 0
+	s.kanban[id] = true
 }
 
 // DropFlagField removes the Flagged field.

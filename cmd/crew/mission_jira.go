@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/crewfile-dev/crew/internal/config"
 	"github.com/crewfile-dev/crew/internal/jira"
 )
 
@@ -31,7 +32,9 @@ func jiraStartCheck(env missionEnv, slug string) error {
 	return jiraCredentialsCheck(env.crewDir, slug)
 }
 
-// jiraCredentialsCheck is that check for a crew directory and a repo.
+// jiraCredentialsCheck is that check for a crew directory and a repo. The
+// reader is often the orchestrator session, so the refusal asks for the
+// principal's own terminal and never invites an edit of the Jira setup.
 func jiraCredentialsCheck(crewDir, slug string) error {
 	cfg, err := jira.LoadConfig(crewDir)
 	if err != nil {
@@ -41,7 +44,7 @@ func jiraCredentialsCheck(crewDir, slug string) error {
 		return nil
 	}
 	if _, _, err := jira.Credentials(jiraEnv); err != nil {
-		return fmt.Errorf("Jira is set up for %s, but %v here; set it, or remove the repo from jira.yaml", slug, err)
+		return fmt.Errorf("Jira is set up for %s, but %v here. Run this command yourself in a terminal where %s and %s are set.", slug, err, config.EnvJiraEmail, config.EnvJiraToken)
 	}
 	return nil
 }

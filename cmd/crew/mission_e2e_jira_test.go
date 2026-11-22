@@ -171,8 +171,8 @@ func TestMission_EndToEnd_JiraDown(t *testing.T) {
 	if st.Jira.Epic != "" || len(r.srv.Issues()) != 0 {
 		t.Fatalf("something reached the board: %+v, %+v", st.Jira, r.srv.Issues())
 	}
-	if out := r.status(); !strings.Contains(out, "not sent yet)") {
-		t.Fatalf("status has no not-sent count:\n%s", out)
+	if out := r.status(); !strings.Contains(out, "\nJira: nothing has reached the board yet\n") {
+		t.Fatalf("status does not say nothing reached the board:\n%s", out)
 	}
 	r.srv.Fail(0, 0)
 	var out bytes.Buffer

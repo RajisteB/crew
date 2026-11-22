@@ -13,8 +13,9 @@ import (
 
 // reporter prints the Jira report and counts its problems.
 type reporter struct {
-	out      io.Writer
-	problems int
+	out        io.Writer
+	problems   int
+	sprintless bool // the board has no sprints (a Kanban board)
 }
 
 func (p *reporter) line(format string, args ...any) { fmt.Fprintf(p.out, "  "+format+"\n", args...) }
@@ -36,22 +37,23 @@ func (p *reporter) callProblem(what string, err error) {
 }
 
 // jiraReport checks one repo's Jira settings against the site and prints what
-// it finds. It returns how many problems it found.
-func jiraReport(ctx context.Context, c *jira.Client, slug string, r jira.Repo, out io.Writer) int {
+// it finds. It returns how many problems it found, and whether the board has
+// no sprints at all.
+func jiraReport(ctx context.Context, c *jira.Client, slug string, r jira.Repo, out io.Writer) (problems int, sprintless bool) {
 	p := &reporter{out: out}
 	fmt.Fprintf(out, "Jira for %s: project %s on %s\n", slug, r.Project, r.Site)
 	_, name, err := c.Myself(ctx)
 	if err != nil {
 		p.callProblem("read the account", err)
-		return p.problems
+		return p.problems, false
 	}
 	p.line("account: %s", name)
 	if !p.workflow(ctx, c, r) {
-		return p.problems
+		return p.problems, false
 	}
 	p.boardLine(ctx, c, r)
 	p.flagLine(ctx, c)
-	return p.problems
+	return p.problems, p.sprintless
 }
 
 // workflow prints the issue types and statuses and checks them. It reports
@@ -109,6 +111,9 @@ func (p *reporter) boardLine(ctx context.Context, c *jira.Client, r jira.Repo) {
 	switch {
 	case errors.As(err, &je) && je.Status == 404:
 		p.problem("the board %d isn't found", r.Board)
+	case errors.As(err, &je) && je.Status == 400: // Jira Cloud's answer for a board with no sprints
+		p.sprintless = true
+		p.line("board: %d has no sprints: issues are not put in a sprint", r.Board)
 	case err != nil:
 		p.callProblem("read the board", err)
 	case found:

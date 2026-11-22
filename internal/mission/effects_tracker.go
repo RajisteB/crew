@@ -49,9 +49,22 @@ func (e *Engine) drainTracker(ctx context.Context, every time.Duration) {
 		}
 	}
 	if owed > 0 {
-		e.emit(Event{Kind: EvNote, Msg: fmt.Sprintf(
-			"Jira is behind: %d writes were not sent; run crew jira sync %s", owed, filepath.Base(e.Store.Dir))})
+		e.emit(Event{Kind: EvNote, Msg: e.behindText(owed)})
 	}
+}
+
+// behindText is the note left when writes are still owed after the drain.
+// With no epic the plan holds only its create, so no count is given.
+func (e *Engine) behindText(owed int) string {
+	id := filepath.Base(e.Store.Dir)
+	st, err := e.Store.LoadState()
+	switch {
+	case err == nil && st.Jira.Epic == "":
+		return "Jira is behind: nothing reached the board; run crew jira sync " + id
+	case owed == 1:
+		return "Jira is behind: 1 write was not sent; run crew jira sync " + id
+	}
+	return fmt.Sprintf("Jira is behind: %d writes were not sent; run crew jira sync %s", owed, id)
 }
 
 // pass is one run of the planned writes.

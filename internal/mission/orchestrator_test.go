@@ -219,3 +219,11 @@ func TestOrchestratorBody_MentionsDeliverables(t *testing.T) {
 		}
 	}
 }
+
+func TestOrchestratorBody_JiraRefusalGoesToThePrincipal(t *testing.T) {
+	body := OrchestratorBody()
+	want := "When `crew mission go`, `start` or `resume` is refused because the Jira variables are not set, don't try to set them and don't touch `jira.yaml`: give the principal the exact command to run in their own terminal."
+	if !strings.Contains(body, want) {
+		t.Errorf("body lacks %q", want)
+	}
+}

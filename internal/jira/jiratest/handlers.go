@@ -294,6 +294,10 @@ func (s *Server) activeSprint(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "board does not exist")
 		return
 	}
+	if s.kanban[board] {
+		fail(w, http.StatusBadRequest, "The board does not support sprints")
+		return
+	}
 	values := []map[string]any{}
 	if sprint != 0 {
 		values = append(values, map[string]any{"id": sprint, "name": "Sprint " + strconv.Itoa(sprint), "state": "active"})

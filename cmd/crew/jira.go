@@ -133,8 +133,12 @@ func jiraSetup(req jiraRequest, out io.Writer) error {
 		repo.Board, line = chooseBoard(context.Background(), client, repo.Project)
 		fmt.Fprintln(out, line)
 	}
-	if n := jiraReport(context.Background(), client, slug, repo, out); n > 0 {
+	n, sprintless := jiraReport(context.Background(), client, slug, repo, out)
+	if n > 0 {
 		return errors.New("Jira can't be used as set; nothing was written")
+	}
+	if sprintless {
+		repo.Board = 0
 	}
 	return confirmAndSave(req, tty, cfg, slug, repo, out)
 }
@@ -192,7 +196,7 @@ func jiraCheck(req jiraRequest, out io.Writer) error {
 	if err != nil {
 		return errors.New(needCredentials)
 	}
-	if n := jiraReport(context.Background(), newJiraClient(repo, email, token), slug, repo, out); n > 0 {
+	if n, _ := jiraReport(context.Background(), newJiraClient(repo, email, token), slug, repo, out); n > 0 {
 		return fmt.Errorf("%d problem(s) with the Jira settings for %s", n, slug)
 	}
 	return nil
@@ -230,6 +234,9 @@ func jiraSync(req jiraRequest, id string, out io.Writer) error {
 	defer runs.Wait()
 	if e.Tracker == nil {
 		return fmt.Errorf("Jira is not set up for %s; run crew jira setup", st.Repo)
+	}
+	if st.Status == mission.StatusPlanned || st.Status == mission.StatusAwaitingGo {
+		return fmt.Errorf("mission %s hasn't started: there is nothing to send", id)
 	}
 	owed, err := e.SyncTracker(context.Background())
 	if err != nil {

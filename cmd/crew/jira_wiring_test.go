@@ -50,7 +50,7 @@ func TestStartChecks_JiraWithoutCredentials(t *testing.T) {
 	setJiraEnv(t, testEmail, "")
 	id = r.plan()
 	_, err = r.cmd("start", id)
-	want := "Jira is set up for acme/app, but CREW_JIRA_TOKEN is not set here; set it, or remove the repo from jira.yaml"
+	want := "Jira is set up for acme/app, but CREW_JIRA_TOKEN is not set here. Run this command yourself in a terminal where CREW_JIRA_EMAIL and CREW_JIRA_TOKEN are set."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v", err)
 	}
@@ -170,7 +170,7 @@ func TestJiraSync_RefusesWithoutCredentials(t *testing.T) {
 	unlock() // a lock taken now would show as a changed lock file only through use; sync must not need it
 	before, _ := r.store(id).LoadState()
 	_, err = r.jira("sync", id)
-	want := "Jira is set up for acme/app, but CREW_JIRA_EMAIL is not set here; set it, or remove the repo from jira.yaml"
+	want := "Jira is set up for acme/app, but CREW_JIRA_EMAIL is not set here. Run this command yourself in a terminal where CREW_JIRA_EMAIL and CREW_JIRA_TOKEN are set."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v", err)
 	}

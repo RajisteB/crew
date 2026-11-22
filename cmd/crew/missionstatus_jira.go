@@ -17,16 +17,18 @@ func printJiraStatus(env missionEnv, store mission.Store, m mission.Mission, st 
 	if st.Jira.Epic == "" && (!entry || !begun(st)) {
 		return nil
 	}
+	if st.Jira.Epic == "" {
+		// Without an epic the plan holds only its create: a count would mislead.
+		fmt.Fprintln(env.out, "Jira: nothing has reached the board yet")
+		return nil
+	}
 	evs, err := store.EventsSince(st.Jira.Seq)
 	if err != nil {
 		return err
 	}
 	owed := mission.Owed(mission.TrackerOps(m, st, evs, entry && repo.Board != 0))
 	line := "Jira: " + st.Jira.Epic
-	switch {
-	case st.Jira.Epic == "":
-		line = "Jira: epic not created yet"
-	case entry:
+	if entry {
 		line += "  " + repo.Site + "/browse/" + st.Jira.Epic
 	}
 	if owed > 0 {
@@ -77,8 +79,11 @@ func printDeliverables(out io.Writer, st mission.State) {
 			continue
 		}
 		state := "waiting on you"
-		if d.Accepted {
+		switch {
+		case d.Accepted:
 			state = "accepted by " + d.By
+		case p.Status == mission.PieceCancelled:
+			state = "cancelled"
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s", withKey(p), strings.Join(d.Files, ", "), state,
 			mission.DeliverablesRel(st.MissionID, p.ID)))

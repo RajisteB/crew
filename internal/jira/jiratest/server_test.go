@@ -76,3 +76,15 @@ func TestFailOn_FailsOnlyMatchingRequests(t *testing.T) {
 		t.Fatalf("after two failures: code = %d, want 200", code)
 	}
 }
+
+func TestAddBoardWithoutSprints(t *testing.T) {
+	s := New(t)
+	s.AddBoardWithoutSprints(7)
+	if _, body := get(t, s, "/rest/agile/1.0/board?projectKeyOrId=ACME"); !strings.Contains(body, `"id":7`) {
+		t.Fatalf("boards = %s", body)
+	}
+	code, body := get(t, s, "/rest/agile/1.0/board/7/sprint?state=active")
+	if code != http.StatusBadRequest || strings.TrimSpace(body) != `{"errorMessages":["The board does not support sprints"]}` {
+		t.Fatalf("sprint query = %d %s", code, body)
+	}
+}
