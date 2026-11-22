@@ -147,6 +147,10 @@ func SaveConfig(crewDir string, c Config) error {
 	return nil
 }
 
+// WithDefaults returns r with the site's trailing slashes cut and every empty
+// issue type and status name set to its default.
+func (r Repo) WithDefaults() Repo { return r.withDefaults() }
+
 func (r Repo) withDefaults() Repo {
 	r.Site = strings.TrimRight(r.Site, "/")
 	fill := func(v *string, def string) {

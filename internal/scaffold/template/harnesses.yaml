@@ -84,6 +84,7 @@ harnesses:
         - "Bash(git push origin main:*)"
         - "Bash(git push origin HEAD:main:*)"
         - "Bash(crew automerge:*)"
+        - "Bash(crew jira setup:*)"
         - "Bash(crew repo confirm:*)"
         - "Bash(crew release approve:*)"
         # Two leading slashes mean an absolute path in Claude Code rules (one

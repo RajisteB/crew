@@ -15,6 +15,7 @@ import (
 
 	"github.com/crewfile-dev/crew/internal/config"
 	"github.com/crewfile-dev/crew/internal/gitx"
+	"github.com/crewfile-dev/crew/internal/jira"
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/notify"
 	"github.com/crewfile-dev/crew/internal/principal"
@@ -86,7 +87,20 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		Notifier: newNotifier(), Out: out, RepoGate: repoGate(crewDir, repoRoot),
 		Switches: principal.Store{Dir: filepath.Join(crewDir, "principal")}, MergeMethod: settings.Method(),
 	}
+	if err := setTracker(e, crewDir, st.Repo); err != nil {
+		return nil, nil, err
+	}
 	return e, runs, nil
+}
+
+// setTracker gives the engine the repo's Jira board, if jira.yaml names one.
+func setTracker(e *mission.Engine, crewDir, repo string) error {
+	t, sprints, err := trackerFor(crewDir, repo, jiraEnv)
+	if err != nil {
+		return err
+	}
+	e.Tracker, e.Sprints, e.TrackerPermanent = t, sprints, jira.IsPermanent
+	return nil
 }
 
 func missionRun(env missionEnv, id string) error {
