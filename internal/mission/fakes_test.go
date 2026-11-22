@@ -156,12 +156,14 @@ type fakeRuns struct {
 	factory   source.Factory
 	last      run.StepRecord
 	steps     []RunStep
+	inputs    []string
 	onObserve func()
 	onDrive   func()
 }
 
 func (r *fakeRuns) Start(p Piece, input, worktree string) (string, error) {
 	r.log.add("Start %s %s", p.ID, worktree)
+	r.inputs = append(r.inputs, input)
 	if err := r.fail.hit("Start"); err != nil {
 		return "", err
 	}

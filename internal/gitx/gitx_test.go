@@ -388,3 +388,23 @@ func TestMergeInto_OtherFailureIsAnErrorAndLeavesNoMerge(t *testing.T) {
 		t.Fatal("expected error for ref starting with -")
 	}
 }
+
+func TestWorktree_ScratchIsIgnored(t *testing.T) {
+	repo, _ := newRepo(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := repo.AddWorktree(ctx, wt, "b1", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(wt, ".crew", "deliverables"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(wt, ".crew", ".gitignore"), "*\n")
+	write(t, filepath.Join(wt, ".crew", "deliverables", "x.md"), "x\n")
+	dirty, err := repo.Dirty(ctx, wt)
+	if err != nil || len(dirty) != 0 {
+		t.Fatalf("dirty = %v, err %v", dirty, err)
+	}
+	if err := repo.RemoveWorktree(ctx, wt, false); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+}

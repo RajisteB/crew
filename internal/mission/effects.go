@@ -39,6 +39,8 @@ func (t *tick) perform(actions []Action) error {
 			err = t.resolveConflict(a)
 		case OpenPR:
 			err = t.openPR(a)
+		case CollectDeliverable:
+			err = t.collectDeliverable(a)
 		case AskOrchestrator:
 			err = t.askOrchestrator(a)
 		case Notify:
@@ -76,12 +78,16 @@ func (t *tick) startPiece(a StartPiece) error {
 		t.note(p.ID, "can't start: add worktree: %v", err)
 		return nil
 	}
-	runID, err := e.Runs.Start(p, PieceInput(t.s.MissionID, t.m, p, e.Domains[p.Domain]), wt)
+	earlier, err := t.prepareScratch(p, wt)
+	if err != nil {
+		t.note(p.ID, "can't start: prepare the deliverables folders: %v", err)
+		t.dropFailedStart(p.ID, wt)
+		return nil
+	}
+	runID, err := e.Runs.Start(p, PieceInput(t.s.MissionID, t.m, p, e.Domains[p.Domain], earlier), wt)
 	if err != nil {
 		t.note(p.ID, "can't start: run: %v", err)
-		if rmErr := e.Git.RemoveWorktree(t.ctx, wt, true); rmErr != nil {
-			t.note(p.ID, "can't clean up the worktree after a failed start: %v", rmErr)
-		}
+		t.dropFailedStart(p.ID, wt)
 		return nil
 	}
 	t.s = Started(t.s, p.ID, runID, branch, wt)
@@ -93,6 +99,13 @@ func (t *tick) startPiece(a StartPiece) error {
 		t.note(p.ID, "can't drive the run: %v", err)
 	}
 	return nil
+}
+
+// dropFailedStart removes the worktree of a piece that could not start.
+func (t *tick) dropFailedStart(piece, wt string) {
+	if err := t.e.Git.RemoveWorktree(t.ctx, wt, true); err != nil {
+		t.note(piece, "can't clean up the worktree after a failed start: %v", err)
+	}
 }
 
 func (t *tick) driveRun(a DriveRun) error {

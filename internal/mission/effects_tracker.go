@@ -296,7 +296,7 @@ func (p *pass) attach(op TrackerOp, key string) error {
 	if !filepath.IsLocal(op.File) {
 		return &givenUp{fmt.Errorf("%s is not a file in the deliverables folder", op.File)}
 	}
-	path := filepath.Join(t.e.Store.Dir, "deliverables", op.Piece, op.File)
+	path := filepath.Join(t.e.Store.DeliverablesDir(op.Piece), op.File)
 	fi, err := os.Lstat(path)
 	switch {
 	case err != nil:

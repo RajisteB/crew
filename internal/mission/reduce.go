@@ -2,6 +2,7 @@ package mission
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/gh"
@@ -26,6 +27,13 @@ func Started(s State, piece, runID, branch, worktree string) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Status = PieceRunning
 		p.RunID, p.Branch, p.Worktree = runID, branch, worktree
+	})
+}
+
+// DeliverableCollected records a fresh, unaccepted deliverable for the piece.
+func DeliverableCollected(s State, piece string, files []string, print string, now time.Time) State {
+	return update(s, piece, func(p *PieceState) {
+		p.Deliverable = &Deliverable{Files: slices.Clone(files), Print: print, Posted: now}
 	})
 }
 

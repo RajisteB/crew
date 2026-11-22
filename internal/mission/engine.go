@@ -201,7 +201,7 @@ func (t *tick) note(piece, format string, args ...any) {
 // done, pull requests for pr-open pieces. An observation that fails is a
 // note and leaves that piece out.
 func (t *tick) observe() {
-	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, PRs: map[string]gh.PR{}, Auto: map[string]AutoObs{}}
+	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, Delivered: map[string]Found{}, PRs: map[string]gh.PR{}, Auto: map[string]AutoObs{}}
 	t.obs = o
 	for _, p := range t.s.Pieces {
 		switch {
@@ -223,6 +223,11 @@ func (t *tick) observeRun(p PieceState) {
 	if ro.State.Status != run.StatusDone {
 		return
 	}
+	found, err := listDelivered(scratchPath(p.Worktree, scratchOut))
+	if err != nil {
+		t.note(p.ID, "can't read the deliverables folder: %v", err)
+		return
+	}
 	dirty, err := t.e.Git.Dirty(t.ctx, p.Worktree)
 	if err != nil {
 		t.note(p.ID, "can't check the worktree: %v", err)
@@ -234,6 +239,7 @@ func (t *tick) observeRun(p PieceState) {
 		return
 	}
 	t.obs.Git[p.ID] = GitObs{Ahead: ahead, Dirty: dirty}
+	t.obs.Delivered[p.ID] = found
 }
 
 func (t *tick) observePR(p PieceState) {

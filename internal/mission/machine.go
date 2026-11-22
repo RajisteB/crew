@@ -35,10 +35,13 @@ type GitObs struct {
 // Obs is everything Decide may look at besides the mission and its state.
 type Obs struct {
 	Now  time.Time
-	Runs map[string]RunObs  // piece id -> its run; absent when the piece has none
-	Git  map[string]GitObs  // present for pieces whose run is done
-	PRs  map[string]gh.PR   // present for pr-open pieces
-	Auto map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
+	Runs map[string]RunObs // piece id -> its run; absent when the piece has none
+	Git  map[string]GitObs // present for pieces whose run is done
+	// Delivered is what a done run left in .crew/deliverables; present for
+	// pieces whose run is done.
+	Delivered map[string]Found
+	PRs       map[string]gh.PR   // present for pr-open pieces
+	Auto      map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
 }
 
 // Action is something for the engine to carry out.
@@ -50,6 +53,10 @@ type DriveRun struct{ Piece string } // the run should be going and nothing driv
 // means the factory's rework station: the engine fills it in.
 type SendBack struct{ Piece, Station, Reason, Note string }
 type OpenPR struct{ Piece string }
+
+// CollectDeliverable copies what the piece's station left in its deliverables
+// folder into the mission folder and records it.
+type CollectDeliverable struct{ Piece string }
 type AskOrchestrator struct{ Piece, Failure string } // Failure: "limit-hit" | "failed" | "uncommitted" | "conflict" | "checks-failed"
 type Notify struct{ Title, Body string }
 type Cleanup struct {
@@ -68,16 +75,17 @@ type Merge struct {
 // ResolveConflict merges the base into the piece's branch, or sends the piece back.
 type ResolveConflict struct{ Piece string }
 
-func (StartPiece) isAction()      {}
-func (DriveRun) isAction()        {}
-func (SendBack) isAction()        {}
-func (OpenPR) isAction()          {}
-func (AskOrchestrator) isAction() {}
-func (Notify) isAction()          {}
-func (Cleanup) isAction()         {}
-func (Record) isAction()          {}
-func (Merge) isAction()           {}
-func (ResolveConflict) isAction() {}
+func (StartPiece) isAction()         {}
+func (DriveRun) isAction()           {}
+func (SendBack) isAction()           {}
+func (OpenPR) isAction()             {}
+func (CollectDeliverable) isAction() {}
+func (AskOrchestrator) isAction()    {}
+func (Notify) isAction()             {}
+func (Cleanup) isAction()            {}
+func (Record) isAction()             {}
+func (Merge) isAction()              {}
+func (ResolveConflict) isAction()    {}
 
 // decider is the working copy of one Decide call. It only ever holds a clone
 // of the caller's state.
@@ -253,10 +261,13 @@ func (d *decider) done(id string) {
 		d.add(SendBack{Piece: id, Reason: reasonUncommit, Note: uncommittedNote(g.Dirty)})
 	case len(g.Dirty) > 0:
 		d.ask(id, reasonUncommit)
+	case d.collects(id):
 	case g.Ahead == 0:
+		d.dropsTakenBack(id)
 		d.complete(id)
 		d.add(Cleanup{Piece: id})
 	default:
+		d.dropsTakenBack(id)
 		d.add(OpenPR{Piece: id})
 	}
 }
