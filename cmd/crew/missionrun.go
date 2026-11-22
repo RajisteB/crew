@@ -83,6 +83,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		Notifier: newNotifier(), Out: out, RepoGate: repoGate(crewDir, repoRoot),
 		Switches: principal.Store{Dir: filepath.Join(crewDir, "principal")}, MergeMethod: settings.Method(),
 	}
+	e.Reload = func() (mission.Settings, error) { return mission.LoadSettings(crewDir) }
 	if err := setTracker(e, crewDir, st.Repo); err != nil {
 		return nil, nil, err
 	}

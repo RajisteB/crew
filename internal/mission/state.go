@@ -121,6 +121,7 @@ type PieceState struct {
 	Outside     []string `json:"outside,omitempty"`      // the files the piece is stopped for, at most maxOutsideFiles
 	OutsideMore int      `json:"outside_more,omitempty"` // how many more there are
 	Allowed     []string `json:"allowed,omitempty"`      // files outside its paths that the principal accepted
+	Steps       int      `json:"steps,omitempty"`        // station steps its run has taken, as last seen
 }
 
 // State is state.json. It holds ids, counts and short messages only: never
@@ -134,6 +135,7 @@ type State struct {
 	NextWait  int          `json:"next_wait"`
 	Additions int          `json:"additions,omitempty"`
 	Jira      TrackerState `json:"jira"`
+	Hold      *Hold        `json:"hold,omitempty"`
 }
 
 // NewState is a planned mission with every piece queued, in file order.
@@ -158,6 +160,10 @@ func (s State) Piece(id string) (PieceState, bool) {
 // Clone is a deep copy: changing it never changes s.
 func (s State) Clone() State {
 	c := s
+	if s.Hold != nil {
+		h := *s.Hold
+		c.Hold = &h
+	}
 	c.Pieces = make([]PieceState, len(s.Pieces))
 	for i, p := range s.Pieces {
 		c.Pieces[i] = p.clone()

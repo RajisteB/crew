@@ -117,6 +117,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 	if d.s.Status != StatusRunning {
 		return d.s, nil
 	}
+	d.countSteps()
 	for _, id := range d.idsWith(PieceRunning, PiecePROpen) {
 		switch d.status(id) {
 		case PieceRunning:
@@ -131,6 +132,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 	}
 	d.remind(remind)
 	d.finish()
+	d.applyBudget()
 	return d.s, d.actions
 }
 
@@ -254,6 +256,7 @@ func (d *decider) failed(id string, rs run.State) {
 func (d *decider) ask(id, failure string) {
 	p := d.ps(id)
 	if !Allows(d.lim.OrchestratorCalls, p.Calls+1) {
+		d.callBudgetHit(id, p.Calls)
 		if failure == reasonOutOfPaths {
 			d.wait(id, WaitPaths, pathsQuestion(*p), PieceRunning)
 			return

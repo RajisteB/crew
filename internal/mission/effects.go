@@ -229,7 +229,7 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 		t.note(a.Piece, "can't summarise the run for the orchestrator: %v", err)
 		return nil
 	}
-	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
+	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions, StepsUsed(t.s))
 	sum = t.forPR(sum, a.Failure, ps)
 	if a.Failure == reasonOutOfPaths {
 		sum = sum.ForPaths(ps)

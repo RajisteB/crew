@@ -47,6 +47,9 @@ type Engine struct {
 	Tracker Tracker
 	// Sprints says the repo's board uses sprints.
 	Sprints bool
+	// Reload reads the settings again. Nil means the limits never change while
+	// the engine runs. It is called only while the mission is on hold.
+	Reload func() (Settings, error)
 	// TrackerPermanent says an error can never succeed. Nil means none can.
 	TrackerPermanent func(error) bool
 	// TrackerDown says an error means the tracker itself can't be reached, so
@@ -149,10 +152,13 @@ func (e *Engine) newTick(ctx context.Context) (*tick, error) {
 	if err != nil {
 		return nil, err
 	}
+	reloadErr := e.reloadIfHeld(s)
 	lim := e.Settings.For(s.Repo)
 	in := e.Checks
 	in.Limits = lim
-	return &tick{e: e, ctx: ctx, m: m, s: s, lim: lim, in: in, now: e.now(), notes: map[string]struct{}{}}, nil
+	t := &tick{e: e, ctx: ctx, m: m, s: s, lim: lim, in: in, now: e.now(), notes: map[string]struct{}{}}
+	t.noteReloadFailure(reloadErr)
+	return t, nil
 }
 
 // save writes the mission when it changed, then the state.

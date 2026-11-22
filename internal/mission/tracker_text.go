@@ -80,6 +80,8 @@ func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 		text = "Deliverable posted: " + ev.Msg + ". A copy is in " + DeliverablesRel(s.MissionID, ev.Piece) + "."
 	case EvDeliverableAccepted:
 		text = "Deliverable accepted by " + ev.By + ": " + ev.Msg
+	case EvBudgetHit:
+		text = fmt.Sprintf("Budget reached: %s (%d of %s)", ev.Msg, ev.Count, ev.Max)
 	case EvAmendment:
 		piece, text = "", "Amendment by the principal: "+ev.Msg
 	default:

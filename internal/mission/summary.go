@@ -38,6 +38,7 @@ type Summary struct {
 	LastNotes                []string
 	Earlier                  []Decision
 	CallsLeft, AdditionsLeft string
+	StepsLeft                string // station steps left for the mission
 	Allowed                  []string
 	StepsDir                 string   // where the full outputs are
 	Outside                  []string // for the orchestrator: the files outside the paths
@@ -45,7 +46,7 @@ type Summary struct {
 }
 
 // BuildSummary gathers (id is the mission id) what the orchestrator needs to settle a stuck piece.
-func BuildSummary(id string, m Mission, ps PieceState, rs run.State, f source.Factory, last run.StepRecord, stepsDir string, lim Limits, additions int) Summary {
+func BuildSummary(id string, m Mission, ps PieceState, rs run.State, f source.Factory, last run.StepRecord, stepsDir string, lim Limits, additions, stepsUsed int) Summary {
 	piece, _ := m.Piece(ps.ID)
 	sum := Summary{
 		MissionID: id, Request: m.Request, Changes: m.PrincipalChanges(), Piece: piece,
@@ -54,7 +55,8 @@ func BuildSummary(id string, m Mission, ps PieceState, rs run.State, f source.Fa
 		Stations: f.StationNames(), LastSummary: last.Verdict.Summary,
 		LastNotes: slices.Clone(last.Verdict.Notes), Earlier: slices.Clone(ps.Decisions),
 		CallsLeft: left(lim.OrchestratorCalls, ps.Calls), AdditionsLeft: left(lim.Additions, additions),
-		Allowed: allowedFor(failureOf(rs)), StepsDir: stepsDir,
+		StepsLeft: left(lim.Steps, stepsUsed),
+		Allowed:   allowedFor(failureOf(rs)), StepsDir: stepsDir,
 	}
 	if sum.Station == "" {
 		sum.Station = last.Station
