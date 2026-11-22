@@ -112,3 +112,15 @@ func pieceOps(p PieceState) []TrackerOp {
 	}
 	return ops
 }
+
+// Owed counts the writes in ops that Jira is missing. A sprint op is left out: placing
+// issues in a sprint is tried on every pass, and a board with no active sprint is not Jira being behind.
+func Owed(ops []TrackerOp) int {
+	n := 0
+	for _, op := range ops {
+		if op.Kind != "sprint" {
+			n++
+		}
+	}
+	return n
+}

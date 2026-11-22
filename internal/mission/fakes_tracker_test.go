@@ -21,6 +21,8 @@ type fakeTracker struct {
 	doneKeys  map[string]bool
 	comments  []string // the text of every comment sent
 	next      int
+	emptyKey  bool                     // Create returns "" with no error
+	onCreate  func(kind, label string) // called at the start of every Create
 }
 
 func (f *fakeTracker) hit(op, id string) error {
@@ -37,12 +39,18 @@ func (f *fakeTracker) hit(op, id string) error {
 
 func (f *fakeTracker) Create(_ context.Context, kind, label, _, _, _ string) (string, error) {
 	f.log.add("create:%s:%s", kind, label)
+	if f.onCreate != nil {
+		f.onCreate(kind, label)
+	}
 	op := "create"
 	if kind == "epic" {
 		op = "create-epic"
 	}
 	if err := f.hit(op, label); err != nil {
 		return "", err
+	}
+	if f.emptyKey {
+		return "", nil
 	}
 	f.next++
 	return fmt.Sprintf("J-%d", f.next), nil

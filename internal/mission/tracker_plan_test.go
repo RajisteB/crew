@@ -204,3 +204,13 @@ func TestTrackerComment_CutsTo1000Runes(t *testing.T) {
 		t.Errorf("got %d runes", n)
 	}
 }
+
+func TestOwed(t *testing.T) {
+	two := []TrackerOp{{Kind: "sprint"}, {Kind: "move"}, {Kind: "comment"}}
+	if n := Owed(two); n != 2 {
+		t.Fatalf("Owed = %d, want 2", n)
+	}
+	if n := Owed([]TrackerOp{{Kind: "sprint"}}); n != 0 {
+		t.Fatalf("Owed(sprint only) = %d, want 0", n)
+	}
+}

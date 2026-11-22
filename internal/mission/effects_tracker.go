@@ -74,7 +74,7 @@ func (t *tick) syncTracker() (int, error) {
 	if err == nil && p.dirty {
 		err = t.save()
 	}
-	return len(t.plan(t.eventsAfterCursor())), err
+	return Owed(t.plan(t.eventsAfterCursor())), err
 }
 
 func (t *tick) eventsAfterCursor() []Event {
@@ -160,7 +160,7 @@ func (p *pass) send(op TrackerOp) (result, error) {
 	if t.ctx.Err() != nil {
 		return stopPass, nil
 	}
-	t.note(op.Piece, "Jira: can't %s %s: %v", opVerb(op.Kind), p.target(op, key), cerr)
+	t.note(op.Piece, "Jira: can't %s: %v", p.what(op, key), cerr)
 	if !t.permanent(cerr) {
 		return stopPass, nil
 	}
@@ -171,6 +171,14 @@ func (p *pass) send(op TrackerOp) (result, error) {
 		return carryOn, nil
 	}
 	return p.succeeded(op)
+}
+
+// what is the failed op in words: "move J-2", "create the epic".
+func (p *pass) what(op TrackerOp, key string) string {
+	if op.Kind == "sprint" {
+		return "place the issues in a sprint"
+	}
+	return opVerb(op.Kind) + " " + p.target(op, key)
 }
 
 func (p *pass) target(op TrackerOp, key string) string {
@@ -208,8 +216,6 @@ func opVerb(kind string) string {
 		return "move"
 	case "comment":
 		return "comment on"
-	case "sprint":
-		return "place in the sprint"
 	}
 	return kind
 }
@@ -222,6 +228,9 @@ func (p *pass) call(op TrackerOp, key string) error {
 	case "create-epic":
 		sum, body := EpicText(id, t.m)
 		k, err := tr.Create(t.ctx, "epic", TrackerLabel(id, ""), sum, body, "")
+		if err == nil && k == "" {
+			err = errNoKey
+		}
 		if err == nil {
 			t.s = EpicCreated(t.s, k)
 		}
@@ -250,6 +259,9 @@ func (p *pass) createPiece(piece string) error {
 	}
 	sum, body := IssueText(t.s.MissionID, t.m, pc)
 	k, err := t.e.Tracker.Create(t.ctx, "piece", TrackerLabel(t.s.MissionID, piece), sum, body, t.s.Jira.Epic)
+	if err == nil && k == "" {
+		err = errNoKey
+	}
 	if err == nil {
 		t.s = IssueCreated(t.s, piece, k)
 	}
@@ -282,7 +294,7 @@ func (p *pass) sprint(op TrackerOp) error {
 func (p *pass) attach(op TrackerOp, key string) error {
 	t := p.t
 	if !filepath.IsLocal(op.File) {
-		return fmt.Errorf("%s is not a file in the deliverables folder", op.File)
+		return &givenUp{fmt.Errorf("%s is not a file in the deliverables folder", op.File)}
 	}
 	path := filepath.Join(t.e.Store.Dir, "deliverables", op.Piece, op.File)
 	fi, err := os.Lstat(path)
@@ -297,6 +309,8 @@ func (p *pass) attach(op TrackerOp, key string) error {
 	}
 	return t.e.Tracker.Attach(t.ctx, key, path)
 }
+
+var errNoKey = errors.New("the tracker returned no issue key")
 
 // givenUp is an error that can never succeed, whatever the tracker says.
 type givenUp struct{ error }
