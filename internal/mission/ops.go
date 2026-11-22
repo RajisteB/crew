@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/crewfile-dev/crew/internal/gh"
+	"github.com/crewfile-dev/crew/internal/principal"
 	"github.com/crewfile-dev/crew/internal/run"
 	"github.com/crewfile-dev/crew/internal/source"
 )
@@ -24,6 +25,9 @@ type GitOps interface {
 	Dirty(ctx context.Context, worktree string) ([]string, error)
 	Ahead(ctx context.Context, worktree, base string) (int, error)
 	Push(ctx context.Context, worktree, branch string) error
+	Head(ctx context.Context, worktree string) (string, error)
+	ChangedFiles(ctx context.Context, worktree, base string) ([]string, error)
+	MergeInto(ctx context.Context, worktree, from string) (conflicts []string, err error)
 }
 
 // GHOps is the GitHub side of the engine. gh.Client satisfies it.
@@ -31,6 +35,14 @@ type GHOps interface {
 	CreatePR(ctx context.Context, head, base, title, body string) (gh.PR, error)
 	PRState(ctx context.Context, number int) (gh.PR, error)
 	FindPR(ctx context.Context, head string) (gh.PR, bool, error)
+	MergePR(ctx context.Context, number int, method, headSHA string) error
+	FailedLog(ctx context.Context, check gh.Check) (string, error)
+}
+
+// SwitchReader reads the auto-merge switches of a repo. principal.Store
+// satisfies it.
+type SwitchReader interface {
+	Switches(repo string) (map[string]principal.SwitchRecord, error)
 }
 
 // RunOps is the factory-run side of the engine.

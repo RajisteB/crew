@@ -17,6 +17,7 @@ import (
 	"github.com/crewfile-dev/crew/internal/gitx"
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/notify"
+	"github.com/crewfile-dev/crew/internal/principal"
 	"github.com/crewfile-dev/crew/internal/run"
 	"github.com/crewfile-dev/crew/internal/source"
 )
@@ -83,6 +84,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 		Git: gitx.Repo{Dir: repoRoot}, GH: ghClient(repoRoot), Runs: runs,
 		Orch:     mission.HeadlessOrchestrator{Registry: p.Registry, Runner: runner, Harness: settings.Harness, CrewDir: crewDir},
 		Notifier: newNotifier(), Out: out, RepoGate: repoGate(crewDir, repoRoot),
+		Switches: principal.Store{Dir: filepath.Join(crewDir, "principal")}, MergeMethod: settings.Method(),
 	}
 	return e, runs, nil
 }

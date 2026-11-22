@@ -3,6 +3,7 @@ package mission
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/crewfile-dev/crew/internal/run"
 )
@@ -32,6 +33,10 @@ func (t *tick) perform(actions []Action) error {
 			err = t.driveRun(a)
 		case SendBack:
 			err = t.sendBack(a)
+		case Merge:
+			err = t.merge(a)
+		case ResolveConflict:
+			err = t.resolveConflict(a)
 		case OpenPR:
 			err = t.openPR(a)
 		case AskOrchestrator:
@@ -113,22 +118,40 @@ func (t *tick) sendBack(a SendBack) error {
 	if !ok || ps.RunID == "" {
 		return nil
 	}
-	station := a.Station
+	note, problem := a.Note, ""
+	if a.Reason == reasonChecksFailed {
+		note, problem = t.withFailedLogs(a.Piece, note), t.checksProblem(a.Piece, ps)
+	}
+	if !t.reworkStep(p, ps, a.Station, note) {
+		return nil
+	}
+	t.s = SentBackDone(t.s, a.Piece, a.Reason, problem)
+	if err := t.save(); err != nil {
+		return err
+	}
+	if a.Reason == reasonChecksFailed {
+		t.emit(Event{Kind: EvChecksFailed, Piece: a.Piece, Msg: strings.TrimPrefix(problem, "failed checks: ")})
+	}
+	return nil
+}
+
+// reworkStep runs a goto step to the station, or to the factory's rework
+// station when it is empty. A failure is a note and reports false.
+func (t *tick) reworkStep(p Piece, ps PieceState, station, note string) bool {
 	if station == "" {
 		f, found := findFactory(t.in.Factories, p.Factory)
 		if !found {
-			t.note(a.Piece, "can't send back: no factory %q", p.Factory)
-			return nil
+			t.note(p.ID, "can't send back: no factory %q", p.Factory)
+			return false
 		}
 		station = f.ReworkStation()
 	}
-	step := RunStep{Piece: a.Piece, Kind: "goto", Station: station, Note: a.Note}
+	step := RunStep{Piece: p.ID, Kind: "goto", Station: station, Note: note}
 	if err := t.e.Runs.Step(t.ctx, ps.RunID, ps.Worktree, step); err != nil {
-		t.note(a.Piece, "can't send back to %s: %v", station, err)
-		return nil
+		t.note(p.ID, "can't send back to %s: %v", station, err)
+		return false
 	}
-	t.s = SentBackDone(t.s, a.Piece, a.Reason)
-	return t.save()
+	return true
 }
 
 func (t *tick) openPR(a OpenPR) error {
@@ -142,6 +165,11 @@ func (t *tick) openPR(a OpenPR) error {
 	}
 	if err := e.Git.Push(t.ctx, ps.Worktree, ps.Branch); err != nil {
 		t.note(a.Piece, "can't push %s: %v", ps.Branch, err)
+		return nil
+	}
+	head, err := e.Git.Head(t.ctx, ps.Worktree)
+	if err != nil {
+		t.note(a.Piece, "can't read the branch head: %v", err)
 		return nil
 	}
 	pr, found, err := e.GH.FindPR(t.ctx, ps.Branch)
@@ -161,7 +189,7 @@ func (t *tick) openPR(a OpenPR) error {
 			return nil
 		}
 	}
-	t.s = PROpened(t.s, a.Piece, pr)
+	t.s = PROpened(t.s, a.Piece, pr, head, t.now)
 	if err := t.save(); err != nil {
 		return err
 	}
@@ -180,6 +208,7 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 		return nil
 	}
 	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
+	sum = t.forPR(sum, a.Failure, ps)
 	d, err := t.decide(sum)
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again

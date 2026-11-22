@@ -49,6 +49,11 @@ func ApplyAnswer(m Mission, s State, a Answer, in CheckInput, now time.Time) (Mi
 
 // answerStep applies what the principal chose and returns the run step.
 func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
+	if onOpenPR(d.ps(id), w) {
+		if step, done := answerOnPR(d, id, a); done {
+			return step
+		}
+	}
 	switch a.Do {
 	case answerApprove:
 		return &RunStep{Piece: id, Kind: "approve", Station: a.Station, Note: a.Note}

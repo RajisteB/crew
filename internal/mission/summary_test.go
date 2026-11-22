@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -154,5 +155,22 @@ func TestSummary_PromptCarriesAmendmentsInOrder(t *testing.T) {
 	plain := BuildSummary("m-1", acme(), PieceState{ID: "P1"}, run.State{}, exFactory(), run.StepRecord{}, "", Limits{}, 0)
 	if strings.Contains(plain.Prompt(), principalChangesTitle) {
 		t.Error("no amendments, no section")
+	}
+}
+
+func TestSummary_ForPR(t *testing.T) {
+	orig := stuckSummary("Launch referrals.")
+	got := orig.ForPR("conflict", "conflicting files: credits.go")
+	if got.Failure != "conflict" || got.Reason != "conflicting files: credits.go" || slices.Contains(got.Allowed, "retry") {
+		t.Errorf("got %+v", got)
+	}
+	if orig.Failure == "conflict" || !slices.Contains(orig.Allowed, "retry") {
+		t.Errorf("receiver modified: %+v", orig)
+	}
+	_, data, _ := promptParts(t, got.Prompt())
+	for _, want := range []string{"failure: conflict", "conflicting files: credits.go"} {
+		if !strings.Contains(data, want) {
+			t.Errorf("What happened lacks %q:\n%s", want, data)
+		}
 	}
 }

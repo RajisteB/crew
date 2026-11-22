@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -20,7 +21,7 @@ import (
 )
 
 const missionUsage = `usage:
-  crew mission setup                                   write missions.yaml and domains/ if they're missing
+  crew mission setup                                   write missions.yaml and domains/ if missing, and add the missions parts to harnesses.yaml
   crew mission plan [-|@FILE]                          check a plan and create the mission
   crew mission start <id>                              run the start checks; wait for go, or go
   crew mission go <id>                                 the principal's go
@@ -128,12 +129,19 @@ func missionSetup(env missionEnv) error {
 	if err != nil {
 		return err
 	}
-	if len(wrote) == 0 {
-		fmt.Fprintln(env.out, "already set up")
-		return nil
-	}
 	for _, w := range wrote {
 		fmt.Fprintf(env.out, "wrote %s\n", filepath.Join(env.crewDir, w))
+	}
+	up, err := scaffold.UpgradeHarnesses(env.crewDir)
+	if err != nil {
+		return err
+	}
+	printUpgrade(env.out, env.crewDir, up)
+	switch {
+	case len(wrote) == 0 && up.Backup == "" && len(up.Skipped) == 0:
+		fmt.Fprintln(env.out, "already set up")
+	case len(wrote) > 0 || up.Backup != "":
+		fmt.Fprintln(env.out, "next: crew compile")
 	}
 	return nil
 }
@@ -182,6 +190,9 @@ func printCheckErrors(out io.Writer, errs []error) error {
 	for _, e := range errs {
 		fmt.Fprintln(out, e)
 	}
+	if slices.ContainsFunc(errs, func(e error) bool { return errors.Is(e, mission.ErrNoDeny) }) {
+		fmt.Fprintln(out, "run crew mission setup to add the missions parts to harnesses.yaml")
+	}
 	return fmt.Errorf("the plan has %d problem(s); nothing was created", len(errs))
 }
 
@@ -211,6 +222,7 @@ func missionPlan(env missionEnv, args []string) error {
 	}
 	fmt.Fprintf(env.out, "mission %s planned (%s)\n\n", st.MissionID, store.Dir)
 	printPieceTable(env.out, m)
+	printAutoMergeLine(env, info.Slug, m)
 	fmt.Fprintf(env.out, "\n```mermaid\n%s```\n\nnext: crew mission start %s\n", mission.Mermaid(m), st.MissionID)
 	return nil
 }
@@ -286,14 +298,15 @@ func missionStart(env missionEnv, id string) error {
 
 // awaitGo parks a started mission until the principal says go.
 func awaitGo(env missionEnv, store mission.Store, id string) error {
-	if _, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
+	st, err := writeState(store, id, func(cur mission.State) (mission.State, mission.Event, error) {
 		if cur.Status != mission.StatusPlanned {
 			return cur, mission.Event{}, fmt.Errorf("mission %s is %s; only a planned mission can be started", id, cur.Status)
 		}
 		next := cur.Clone()
 		next.Status = mission.StatusAwaitingGo
 		return next, mission.Event{}, nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	m, err := store.Mission()
@@ -301,6 +314,7 @@ func awaitGo(env missionEnv, store mission.Store, id string) error {
 		return err
 	}
 	printPieceTable(env.out, m)
+	printAutoMergeLine(env, st.Repo, m)
 	fmt.Fprintf(env.out, "\n%s\n\nwaiting for go: crew mission go %s\n", m.Request, id)
 	return nil
 }

@@ -165,7 +165,7 @@ func TestDecide_UncommittedSentBackOnceThenAsked(t *testing.T) {
 	if !strings.Contains(sb[0].Note, "a.go") || !strings.Contains(sb[0].Note, "b.go") {
 		t.Fatalf("note should list the paths: %q", sb[0].Note)
 	}
-	s = SentBackDone(s, "P1", "uncommitted")
+	s = SentBackDone(s, "P1", "uncommitted", "")
 	_, as = Decide(m, s, o, limits(1, 3), 0)
 	ask := of[AskOrchestrator](as)
 	if len(ask) != 1 || ask[0].Failure != "uncommitted" || len(of[SendBack](as)) != 0 {
@@ -337,7 +337,7 @@ func TestReducers_ReturnNewState(t *testing.T) {
 	if p := piece(t, Resumed(started, "P1"), "P1"); p.Resumes != 1 {
 		t.Fatalf("Resumed: %+v", p)
 	}
-	if p := piece(t, SentBackDone(started, "P1", "uncommitted"), "P1"); p.SentBack["uncommitted"] != 1 {
+	if p := piece(t, SentBackDone(started, "P1", "uncommitted", ""), "P1"); p.SentBack["uncommitted"] != 1 {
 		t.Fatalf("SentBackDone: %+v", p)
 	}
 	if p := piece(t, Asked(started, "P1"), "P1"); p.Calls != 1 {
@@ -346,7 +346,7 @@ func TestReducers_ReturnNewState(t *testing.T) {
 	if p := piece(t, CleanedUp(started, "P1"), "P1"); p.Worktree != "" || piece(t, started, "P1").Worktree != "/wt" {
 		t.Fatalf("CleanedUp: %+v", p)
 	}
-	opened := PROpened(started, "P1", gh.PR{Number: 7, State: "OPEN", URL: "u"})
+	opened := PROpened(started, "P1", gh.PR{Number: 7, State: "OPEN", URL: "u"}, "", time.Time{})
 	if p := piece(t, opened, "P1"); p.PR != 7 || p.PRURL != "u" || p.Status != PiecePROpen {
 		t.Fatalf("PROpened: %+v", p)
 	}

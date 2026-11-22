@@ -68,6 +68,11 @@ type fakeGit struct {
 	fail  *failures
 	dirty []string
 	ahead int
+
+	head       string   // what Head reports; "h0" when unset
+	mergedHead string   // when set, a clean MergeInto moves head here
+	changed    []string // what ChangedFiles reports
+	conflicts  []string // what MergeInto reports
 }
 
 func (g *fakeGit) Fetch(_ context.Context, branch string) error {
@@ -106,6 +111,7 @@ type fakeGH struct {
 	prs      map[int]gh.PR
 	existing map[string]gh.PR // by head branch, for FindPR
 	next     int
+	logs     map[string]string // FailedLog text by check name
 }
 
 func (g *fakeGH) CreatePR(_ context.Context, head, base, title, body string) (gh.PR, error) {
@@ -215,11 +221,13 @@ type fakeOrch struct {
 	decisions []OrchDecision
 	err       error
 	prompts   []string
+	sums      []Summary
 }
 
 func (o *fakeOrch) Decide(_ context.Context, _ string, s Summary) (OrchDecision, error) {
 	o.log.add("Orch.Decide %s", s.Piece.ID)
 	o.prompts = append(o.prompts, s.Prompt())
+	o.sums = append(o.sums, s)
 	if o.err != nil {
 		return OrchDecision{}, o.err
 	}

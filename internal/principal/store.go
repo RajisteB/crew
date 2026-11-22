@@ -29,8 +29,9 @@ const (
 	fileMode  = 0o600
 )
 
-// ErrTampered means repos.json exists but does not match its checksum.
-var ErrTampered = errors.New("repos.json does not match its checksum")
+// ErrTampered means a sealed file exists but does not match its checksum.
+// Callers wrap it with the file path.
+var ErrTampered = errors.New("the file does not match its checksum")
 
 // ErrNotConfirmed and ErrVisibilityChanged are the expected CheckRepo failures.
 var (
@@ -49,6 +50,7 @@ type RepoRecord struct {
 type Store struct{ Dir string }
 
 func (s Store) reposPath() string { return filepath.Join(s.Dir, reposFile) }
+func (s Store) sumPath() string   { return filepath.Join(s.Dir, sumFile) }
 
 func checksum(data []byte) string {
 	sum := sha256.Sum256(data)
@@ -57,16 +59,12 @@ func checksum(data []byte) string {
 
 // load returns every record keyed by slug. A missing repos.json is an empty set.
 func (s Store) load() (map[string]RepoRecord, error) {
-	data, err := os.ReadFile(s.reposPath())
+	data, err := readSealed(s.reposPath(), s.sumPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]RepoRecord{}, nil
 	}
 	if err != nil {
-		return nil, err
-	}
-	sum, err := os.ReadFile(filepath.Join(s.Dir, sumFile))
-	if err != nil || strings.TrimSpace(string(sum)) != checksum(data) {
-		return nil, ErrTampered
+		return nil, fmt.Errorf("%s: %w", s.reposPath(), err)
 	}
 	var recs []RepoRecord
 	if err := json.Unmarshal(data, &recs); err != nil {
@@ -105,13 +103,32 @@ func (s Store) ConfirmRepo(rec RepoRecord) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.Dir, dirMode); err != nil {
+	return writeSealed(s.reposPath(), s.sumPath(), data)
+}
+
+// readSealed returns path's bytes once they match the checksum in sumPath.
+// A missing path is os.ErrNotExist; a missing or wrong checksum is ErrTampered.
+func readSealed(path, sumPath string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	sum, err := os.ReadFile(sumPath)
+	if err != nil || strings.TrimSpace(string(sum)) != checksum(data) {
+		return nil, ErrTampered
+	}
+	return data, nil
+}
+
+// writeSealed writes data, then its checksum, each atomically.
+func writeSealed(path, sumPath string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
-	if err := writeAtomic(s.reposPath(), data); err != nil {
+	if err := writeAtomic(path, data); err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(s.Dir, sumFile), []byte(checksum(data)+"\n"))
+	return writeAtomic(sumPath, []byte(checksum(data)+"\n"))
 }
 
 func sortRecords(list []RepoRecord) {
@@ -143,7 +160,7 @@ func writeAtomic(path string, data []byte) error {
 func CheckRepo(s Store, info gh.RepoInfo) error {
 	rec, ok, err := s.Repo(info.Slug)
 	if errors.Is(err, ErrTampered) {
-		return fmt.Errorf("%s was edited outside crew; delete it and run crew repo confirm again in a terminal: %w", s.reposPath(), err)
+		return fmt.Errorf("the repo store was edited outside crew; delete it and run crew repo confirm again in a terminal: %w", err)
 	}
 	if err != nil {
 		return err

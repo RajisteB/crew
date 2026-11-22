@@ -142,7 +142,7 @@ Each run lives in `<project>/.crew/runs/<id>/` (crew writes `.crew/.gitignore` s
 
 ## Missions
 
-A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub; crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands.
+A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub (or crew merges, if you switch auto-merge on for its domain); crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands.
 
 ```sh
 crew mission setup                    # once, for an older crew directory: missions.yaml and domains/
@@ -151,6 +151,7 @@ crew mission plan @plan.md            # check a plan and create the mission
 crew mission start <id>               # run the start checks
 crew mission go <id>                  # your go: the engine starts
 crew mission status <id>              # what runs, and what waits on you
+crew automerge on --domain D          # let crew merge a domain's pull requests; in a terminal
 ```
 
 See [docs/missions.md](docs/missions.md) for setup, the commands, and what the safeguards do and don't cover.

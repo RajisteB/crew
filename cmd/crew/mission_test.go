@@ -283,6 +283,16 @@ func TestMissionAmend_BeforeGoIsRefused(t *testing.T) {
 
 func TestMissionSetup_WritesDefaultsOnce(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "crew")
+	tmplBytes, err := os.ReadFile(filepath.Join("..", "..", "internal", "scaffold", "template", "harnesses.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "harnesses.yaml"), tmplBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
 	args := []string{"setup", "--dir", dir, "--project", t.TempDir()}
 	if err := missionCmd(args, strings.NewReader(""), &out); err != nil {
@@ -449,5 +459,57 @@ func TestMissionStatus_ModelTextCarriesNoControlCharacters(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lost %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestMissionSetup_UpgradesHarnesses(t *testing.T) {
+	r := newMissionRig(t)
+	fixture, err := os.ReadFile(filepath.Join("..", "..", "internal", "scaffold", "testdata", "harnesses-before-missions.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.crewDir, "harnesses.yaml"), fixture, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.cmd("setup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var updated bool
+	for _, l := range lines {
+		if strings.HasPrefix(l, "updated ") && strings.Contains(l, "harnesses.yaml") && strings.Contains(l, "harnesses.yaml.before-missions") {
+			updated = true
+		}
+		if strings.HasPrefix(l, "skipped") {
+			t.Errorf("unexpected skipped line: %s", l)
+		}
+	}
+	if !updated {
+		t.Errorf("no updated line:\n%s", out)
+	}
+	if last := lines[len(lines)-1]; last != "next: crew compile" {
+		t.Errorf("last line = %q", last)
+	}
+	out, err = r.cmd("setup")
+	if err != nil || !strings.Contains(out, "already set up") {
+		t.Errorf("second run: %v\n%s", err, out)
+	}
+}
+
+func TestMissionStart_NoDenyPointsToSetup(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	harnesses := filepath.Join(r.crewDir, "harnesses.yaml")
+	editFile(t, harnesses, `"{allowed}", --settings, "{settings}",`, `"{allowed}",`)
+	editFile(t, harnesses, "deny_via: settings-file", "deny_via: \"\"")
+	out, err := r.cmd("start", id)
+	if err == nil {
+		t.Fatalf("want an error:\n%s", out)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	want := "run crew mission setup to add the missions parts to harnesses.yaml"
+	if last := lines[len(lines)-1]; last != want {
+		t.Errorf("last line = %q\n%s", last, out)
 	}
 }
