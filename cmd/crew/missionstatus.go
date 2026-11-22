@@ -79,8 +79,12 @@ func missionStatus(env missionEnv, id string) error {
 	}
 	out := env.out
 	fmt.Fprintln(out, safeText(fmt.Sprintf("mission %s  %s  %s  (%s, base %s)", id, st.Status, live, st.Repo, st.Base)))
+	if err := printJiraStatus(env, store, m, st); err != nil {
+		return err
+	}
 	printWaiting(out, st)
 	printOpenPRs(env, m, st)
+	printDeliverables(out, st)
 	printRunning(out, env.repoRoot, st)
 	printQueued(out, m, st)
 	printEnded(out, "Complete", st, mission.PieceComplete)
@@ -167,7 +171,7 @@ func printEnded(out io.Writer, title string, st mission.State, status mission.Pi
 	var ids []string
 	for _, p := range st.Pieces {
 		if p.Status == status {
-			ids = append(ids, p.ID)
+			ids = append(ids, withKey(p))
 		}
 	}
 	if len(ids) > 0 {

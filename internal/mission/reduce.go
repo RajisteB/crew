@@ -2,6 +2,7 @@ package mission
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/crewfile-dev/crew/internal/gh"
@@ -26,6 +27,16 @@ func Started(s State, piece, runID, branch, worktree string) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Status = PieceRunning
 		p.RunID, p.Branch, p.Worktree = runID, branch, worktree
+	})
+}
+
+// DeliverableCollected records a fresh, unaccepted deliverable for the piece.
+func DeliverableCollected(s State, piece string, files []string, print string, now time.Time) State {
+	return update(s, piece, func(p *PieceState) {
+		p.Deliverable = &Deliverable{Files: slices.Clone(files), Print: print, Posted: now}
+		// Forget the recorded lane: the next sync moves the issue again, and
+		// a Done is read only after that move to In Review.
+		p.Jira.Lane, p.Jira.Unconfirmed = "", false
 	})
 }
 
@@ -70,10 +81,14 @@ func BranchUpdated(s State, piece, head string, now time.Time) State {
 	})
 }
 
-// Merged records that the piece's pull request was merged.
+// Merged records that the piece's pull request was merged. The piece is
+// complete, or delivered when its deliverable is not yet accepted.
 func Merged(s State, piece string) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Status, p.Wait = PieceComplete, nil
+		if unaccepted(*p) {
+			p.Status = PieceDelivered
+		}
 	})
 }
 

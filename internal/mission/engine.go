@@ -42,9 +42,21 @@ type Engine struct {
 	Switches SwitchReader
 	// MergeMethod is the gh merge method; empty means squash.
 	MergeMethod string
+	// Tracker is the Jira board. Nil means the repo has no Jira: nothing is
+	// planned or sent.
+	Tracker Tracker
+	// Sprints says the repo's board uses sprints.
+	Sprints bool
+	// TrackerPermanent says an error can never succeed. Nil means none can.
+	TrackerPermanent func(error) bool
+	// TrackerDown says an error means the tracker itself can't be reached, so
+	// the rest of the pass would fail too. Nil means every error that is not
+	// permanent counts as down.
+	TrackerDown func(error) bool
 
-	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
-	streaks   map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
+	lastNotes   map[string]struct{} // notes of the previous tick, to avoid repeating them
+	streaks     map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
+	attachTries map[string]int      // failed uploads by piece and file, in memory only: a new engine tries again
 }
 
 func (e *Engine) notifier() notify.Notifier {
@@ -120,6 +132,11 @@ func (t *tick) run() (State, error) {
 	if err := e.Store.Ack(acked); err != nil {
 		return t.s, err
 	}
+	if e.Tracker != nil {
+		if _, err := t.syncTracker(); err != nil {
+			return t.s, err
+		}
+	}
 	return t.s, nil
 }
 
@@ -189,7 +206,7 @@ func (t *tick) note(piece, format string, args ...any) {
 // done, pull requests for pr-open pieces. An observation that fails is a
 // note and leaves that piece out.
 func (t *tick) observe() {
-	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, PRs: map[string]gh.PR{}, Auto: map[string]AutoObs{}}
+	o := Obs{Now: t.now, Runs: map[string]RunObs{}, Git: map[string]GitObs{}, Delivered: map[string]Found{}, PRs: map[string]gh.PR{}, Auto: map[string]AutoObs{}}
 	t.obs = o
 	for _, p := range t.s.Pieces {
 		switch {
@@ -199,6 +216,7 @@ func (t *tick) observe() {
 			t.observePR(p)
 		}
 	}
+	t.observeAccept()
 }
 
 func (t *tick) observeRun(p PieceState) {
@@ -209,6 +227,11 @@ func (t *tick) observeRun(p PieceState) {
 	}
 	t.obs.Runs[p.ID] = ro
 	if ro.State.Status != run.StatusDone {
+		return
+	}
+	found, err := t.listScratch(p.ID, p.Worktree)
+	if err != nil {
+		t.note(p.ID, "can't read the deliverables folder: %v", err)
 		return
 	}
 	dirty, err := t.e.Git.Dirty(t.ctx, p.Worktree)
@@ -222,6 +245,7 @@ func (t *tick) observeRun(p PieceState) {
 		return
 	}
 	t.obs.Git[p.ID] = GitObs{Ahead: ahead, Dirty: dirty}
+	t.obs.Delivered[p.ID] = found
 }
 
 func (t *tick) observePR(p PieceState) {
@@ -260,6 +284,7 @@ func (e *Engine) Loop(ctx context.Context, every time.Duration) (State, error) {
 		case err != nil:
 			fmt.Fprintf(e.out(), "mission tick: %v\n", err)
 		case st.Status != StatusRunning:
+			e.drainTracker(ctx, every)
 			return st, nil
 		}
 		select {

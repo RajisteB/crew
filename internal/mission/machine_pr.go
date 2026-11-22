@@ -108,9 +108,11 @@ func (d *decider) ended(id string, pr gh.PR) bool {
 	p := d.ps(id)
 	switch pr.State {
 	case "MERGED":
-		d.complete(id)
+		completed := d.finished(id)
 		d.record(EvPRMerged, id, fmt.Sprintf("PR #%d", pr.Number))
-		d.add(Cleanup{Piece: id, Force: true})
+		if completed {
+			d.add(Cleanup{Piece: id, Force: true})
+		}
 	case "CLOSED":
 		if p.Wait == nil || p.Wait.Kind != WaitPRClosed {
 			d.wait(id, WaitPRClosed, fmt.Sprintf("PR #%d (%s) was closed without merging", pr.Number, id), "")

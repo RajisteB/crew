@@ -1,6 +1,7 @@
 #!/bin/sh
 # Fake harness CLI for tests.
 #   FAKE_MODE=echo   print argv (one per line) then stdin
+#   FAKE_MODE=env    print the environment, one NAME=value per line
 #   FAKE_MODE=sleep  sleep 5 seconds
 #   FAKE_MODE=exit3  write to stderr and exit 3
 #   otherwise        reply with the file $FAKE_REPLY_DIR/<n>, where n counts
@@ -10,6 +11,10 @@ case "$FAKE_MODE" in
 echo)
   for a in "$@"; do printf 'ARG %s\n' "$a"; done
   printf 'STDIN '; cat
+  exit 0 ;;
+env)
+  cat > /dev/null
+  env
   exit 0 ;;
 sleep)
   sleep 5

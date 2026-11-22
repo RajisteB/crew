@@ -14,13 +14,14 @@ const (
 	answerGoto      = "goto"
 	answerCancel    = "cancel"
 	answerApprove   = "approve"
+	answerAccept    = "accept"
 	noChoicesAnswer = "none"
 )
 
 // Answer is the principal's reply to a wait.
 type Answer struct {
 	Wait    string `json:"wait"`
-	Do      string `json:"do"` // "retry" | "goto" | "cancel" | "approve"
+	Do      string `json:"do"` // "retry" | "goto" | "cancel" | "approve" | "accept"
 	Station string `json:"station"`
 	Note    string `json:"note"`
 	Words   string `json:"words"` // what the principal said, word for word
@@ -33,7 +34,8 @@ func ApplyAnswer(m Mission, s State, a Answer, in CheckInput, now time.Time) (Mi
 	if !ok {
 		return m, s, nil, nil, fmt.Errorf("no piece is waiting on %q", a.Wait)
 	}
-	if err := checkAnswer(m, in, id, w, a); err != nil {
+	cur, _ := s.Piece(id)
+	if err := checkAnswer(m, in, cur, w, a); err != nil {
 		return m, s, nil, nil, err
 	}
 	d := &decider{m: m, s: s.Clone(), o: Obs{Now: now}}
@@ -54,6 +56,11 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 			return step
 		}
 	}
+	if w.Kind == WaitDeliverable {
+		if step, done := answerDeliverable(d, id, a); done {
+			return step
+		}
+	}
 	switch a.Do {
 	case answerApprove:
 		return &RunStep{Piece: id, Kind: "approve", Station: a.Station, Note: a.Note}
@@ -69,6 +76,23 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 	return &RunStep{Piece: id, Kind: "retry"}
 }
 
+// answerDeliverable applies an accept or goto answer to a deliverable wait.
+// done is false for any other answer, which is handled as usual.
+func answerDeliverable(d *decider, id string, a Answer) (step *RunStep, done bool) {
+	p := d.ps(id)
+	switch a.Do {
+	case answerAccept:
+		d.accept(id, principalBy, "answered")
+		d.complete(id)
+		d.add(Cleanup{Piece: id, Force: true})
+		return nil, true
+	case answerGoto:
+		p.Deliverable, p.Status = nil, PieceRunning
+		return &RunStep{Piece: id, Kind: "goto", Station: a.Station, Note: a.Note}, true
+	}
+	return nil, false
+}
+
 func findWait(s State, id string) (string, Wait, bool) {
 	for _, p := range s.Pieces {
 		if p.Wait != nil && p.Wait.ID == id {
@@ -79,8 +103,8 @@ func findWait(s State, id string) (string, Wait, bool) {
 }
 
 // checkAnswer says whether the answer fits the wait.
-func checkAnswer(m Mission, in CheckInput, piece string, w Wait, a Answer) error {
-	choices := answerChoices(w)
+func checkAnswer(m Mission, in CheckInput, p PieceState, w Wait, a Answer) error {
+	choices := answerChoices(p, w)
 	if !slices.Contains(choices, a.Do) {
 		list := noChoicesAnswer
 		if len(choices) > 0 {
@@ -89,14 +113,14 @@ func checkAnswer(m Mission, in CheckInput, piece string, w Wait, a Answer) error
 		return fmt.Errorf("wait %s (%s) can't be answered with %q; the choices are: %s", w.ID, w.Kind, a.Do, list)
 	}
 	needsStation := a.Do == answerGoto || (a.Do == answerApprove && a.Station != "")
-	if needsStation && !stationExists(in, m, piece, a.Station) {
-		return fmt.Errorf("wait %s: station %q is not in the factory of piece %s", w.ID, a.Station, piece)
+	if needsStation && !stationExists(in, m, p.ID, a.Station) {
+		return fmt.Errorf("wait %s: station %q is not in the factory of piece %s", w.ID, a.Station, p.ID)
 	}
 	return nil
 }
 
 // answerChoices are the answers that fit a wait.
-func answerChoices(w Wait) []string {
+func answerChoices(p PieceState, w Wait) []string {
 	switch {
 	case w.Kind == WaitApproval:
 		return []string{answerApprove, answerCancel}
@@ -108,6 +132,10 @@ func answerChoices(w Wait) []string {
 		return []string{answerRetry, answerCancel}
 	case w.Kind == WaitMerge:
 		return []string{answerCancel}
+	case w.Kind == WaitDeliverable && p.PR == 0:
+		return []string{answerAccept, answerGoto, answerCancel}
+	case w.Kind == WaitDeliverable:
+		return []string{answerAccept, answerCancel}
 	}
 	return nil
 }

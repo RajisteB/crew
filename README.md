@@ -152,7 +152,12 @@ crew mission start <id>               # run the start checks
 crew mission go <id>                  # your go: the engine starts
 crew mission status <id>              # what runs, and what waits on you
 crew automerge on --domain D          # let crew merge a domain's pull requests; in a terminal
+crew jira setup --site URL --key KEY  # show a repo's missions on a Jira board; checks the site, confirms in a terminal
+crew jira check                       # test the repo's Jira settings against the site
+crew jira sync <mission>              # send the Jira writes a mission still owes
 ```
+
+A piece can also end in a deliverable (files such as a brief) instead of, or as well as, a pull request. With Jira set up, a mission shows on your board as an epic with an issue per piece, and a deliverable is attached to its piece's issue; you accept it by moving the issue to Done or with `crew mission answer --do accept`.
 
 See [docs/missions.md](docs/missions.md) for setup, the commands, and what the safeguards do and don't cover.
 

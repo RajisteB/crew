@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 // Snapshot fingerprints each watched root: its HEAD commit, its uncommitted
@@ -91,6 +93,7 @@ func fingerprint(root string) (string, error) {
 
 func git(dir string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = config.CleanEnv()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

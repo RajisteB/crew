@@ -308,7 +308,7 @@ func (d *decider) cancelPiece(id, by string) *RunStep {
 		step = &RunStep{Piece: id, Kind: "stop"}
 	}
 	msg := "cancelled by " + by
-	if p.PR != 0 {
+	if p.PR != 0 && p.Status != PieceDelivered { // a delivered piece's PR is merged
 		msg += fmt.Sprintf("; PR #%d stays open", p.PR)
 	}
 	p.Status, p.Wait = PieceCancelled, nil

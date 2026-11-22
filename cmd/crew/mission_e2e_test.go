@@ -160,12 +160,16 @@ func (r *e2eRig) confirmRepo() {
 	}
 }
 
-func (r *e2eRig) launch() {
+func (r *e2eRig) launch() { r.launchPieces(e2ePiece("P1"), e2ePiece("P2", "P1")) }
+
+// launchPieces plans, starts and releases a mission of the given pieces and
+// builds its engine. The test drives the ticks.
+func (r *e2eRig) launchPieces(pieces ...mission.Piece) {
 	r.t.Helper()
 	oldStart := startDetached
 	startDetached = func(string, string, string, string) (int, error) { return 4242, nil }
 	r.t.Cleanup(func() { startDetached = oldStart })
-	plan := planFile("Build the thing.", e2ePiece("P1"), e2ePiece("P2", "P1"))
+	plan := planFile("Build the thing.", pieces...)
 	r.id = missionIDRe.FindString(r.cmd(string(plan), "plan"))
 	if r.id == "" {
 		r.t.Fatal("plan printed no mission id")

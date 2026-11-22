@@ -25,6 +25,10 @@ func (e noDenyError) Unwrap() error { return ErrNoDeny }
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
+// reservedID can't be a piece id: the epic's Jira label ends in it
+// (TrackerLabel), so a piece with that id would share the epic's label.
+const reservedID = "epic"
+
 // CheckInput is what a plan is checked against.
 type CheckInput struct {
 	Domains   []source.Domain
@@ -64,6 +68,8 @@ func checkID(i int, p Piece, seen map[string]bool) []error {
 		errs = append(errs, fmt.Errorf("piece %d has no id", i+1))
 	case !idPattern.MatchString(p.ID):
 		errs = append(errs, fmt.Errorf("%s: id must be letters, digits, '-' or '_' and start with a letter or digit", label(p)))
+	case strings.EqualFold(p.ID, reservedID):
+		errs = append(errs, fmt.Errorf("piece id %q is reserved", reservedID))
 	case seen[p.ID]:
 		errs = append(errs, fmt.Errorf("%s: id is used more than once", label(p)))
 	}

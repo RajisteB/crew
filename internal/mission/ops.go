@@ -3,6 +3,7 @@ package mission
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/crewfile-dev/crew/internal/gh"
@@ -12,9 +13,10 @@ import (
 )
 
 const (
-	maxTitleRunes   = 70
-	maxPRNoteRunes  = 1000
-	inputCommitRule = "Commit your work on this branch. Don't push, and don't open or merge a pull request."
+	maxTitleRunes    = 70
+	maxPRNoteRunes   = 1000
+	deliverablesRule = "If your piece produces work that isn't a change to the repo (research, a brief, a plan), write it as files in .crew/deliverables/ in this directory. Git ignores that folder: don't commit those files and don't move them. crew collects them when you finish."
+	inputCommitRule  = "Commit your work on this branch. Don't push, and don't open or merge a pull request."
 )
 
 // GitOps is the git side of the engine. gitx.Repo satisfies it.
@@ -45,6 +47,17 @@ type SwitchReader interface {
 	Switches(repo string) (map[string]principal.SwitchRecord, error)
 }
 
+// Tracker is where the principal watches a mission. jira.Board satisfies it.
+type Tracker interface {
+	Create(ctx context.Context, kind, label, summary, body, parent string) (key string, err error)
+	Move(ctx context.Context, key, lane string) error
+	Comment(ctx context.Context, key, text string) error
+	Flag(ctx context.Context, key string, on bool) error
+	Attach(ctx context.Context, key, path string) error
+	Done(ctx context.Context, key string) (bool, error)
+	Sprint(ctx context.Context, keys []string) (placed bool, err error)
+}
+
 // RunOps is the factory-run side of the engine.
 type RunOps interface {
 	Start(p Piece, input, worktree string) (runID string, err error)
@@ -65,7 +78,7 @@ type Orchestrator interface {
 
 // PieceInput is the input a piece's run starts with: the piece's brief, the
 // whole request for context, the domain briefing and the commit rule.
-func PieceInput(id string, m Mission, p Piece, d source.Domain) string {
+func PieceInput(id string, m Mission, p Piece, d source.Domain, earlier []Earlier) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Your piece: %s (mission %s)\n\n%s\n\n", p.ID, id, strings.TrimSpace(p.Brief))
 	fmt.Fprintf(&b, "## The whole request (for context; do only your piece)\n\n%s\n\n", m.Request)
@@ -73,6 +86,10 @@ func PieceInput(id string, m Mission, p Piece, d source.Domain) string {
 		fmt.Fprintf(&b, "## %s\n\n%s\n\n", principalChangesTitle, bulletList(changes))
 	}
 	fmt.Fprintf(&b, "## Domain briefing: %s\n\n%s\n\n", p.Domain, strings.TrimSpace(d.Body))
+	if len(earlier) > 0 {
+		fmt.Fprintf(&b, "## Deliverables from earlier pieces\n\n%s\n\n", earlierList(earlier))
+	}
+	fmt.Fprintf(&b, "## Deliverables\n\n%s\n\n", deliverablesRule)
 	fmt.Fprintf(&b, "## Commit\n\n%s\n", inputCommitRule)
 	return b.String()
 }
@@ -94,6 +111,19 @@ func PRText(id string, m Mission, p Piece, last run.StepRecord) (title, body str
 		fmt.Fprintf(&b, "\nLast step summary:\n\n%s\n", cutRunes(s, maxPRNoteRunes))
 	}
 	return title, b.String()
+}
+
+// earlierList is one line per earlier piece, naming its files in the worktree.
+func earlierList(earlier []Earlier) string {
+	lines := make([]string, len(earlier))
+	for i, e := range earlier {
+		paths := make([]string, len(e.Files))
+		for j, f := range e.Files {
+			paths[j] = path.Join(run.CrewDir, scratchIn, e.Piece, f)
+		}
+		lines[i] = fmt.Sprintf("%s: %s", e.Piece, strings.Join(paths, ", "))
+	}
+	return bulletList(lines)
 }
 
 // bulletList is one "- " line per item.

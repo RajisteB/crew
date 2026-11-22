@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/crewfile-dev/crew/internal/config"
 )
 
 const (
@@ -39,7 +41,7 @@ func git(ctx context.Context, timeout time.Duration, dir string, args ...string)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(config.CleanEnv(), "GIT_TERMINAL_PROMPT=0")
 	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

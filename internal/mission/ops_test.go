@@ -12,14 +12,14 @@ import (
 func TestPieceInput_CarriesRequestVerbatim(t *testing.T) {
 	m := Mission{Request: "Launch referrals.\n\n  Pay $10 per friend (really).\n"}
 	p := Piece{ID: "P1", Domain: "product", Factory: "feature", Brief: "credits API"}
-	got := PieceInput("m-1", m, p, sourceDomain("Product rules."))
+	got := PieceInput("m-1", m, p, sourceDomain("Product rules."), nil)
 	for _, want := range []string{m.Request, "credits API", "Product rules.", "for context; do only your piece",
 		"Commit your work on this branch. Don't push, and don't open or merge a pull request."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	if n := strings.Count(got, "\n## "); n != 3 || !strings.HasPrefix(got, "## ") {
+	if n := strings.Count(got, "\n## "); n != 4 || !strings.HasPrefix(got, "## ") {
 		t.Errorf("sections: %d\n%s", n, got)
 	}
 }
@@ -73,7 +73,7 @@ func TestMission_PrincipalChangesAreAmendmentWordsInOrder(t *testing.T) {
 func TestPieceInput_AmendmentsFollowTheRequest(t *testing.T) {
 	m := amendedMission()
 	p := Piece{ID: "P1", Domain: "product", Factory: "feature", Brief: "credits API"}
-	got := PieceInput("m-1", m, p, sourceDomain("Product rules."))
+	got := PieceInput("m-1", m, p, sourceDomain("Product rules."), nil)
 	heading := "## " + principalChangesTitle
 	for _, want := range []string{heading, "make it $15", "drop the landing page",
 		"(where they differ from the request, the latest change wins)"} {
@@ -88,7 +88,7 @@ func TestPieceInput_AmendmentsFollowTheRequest(t *testing.T) {
 	if !(i < j && j < k) || strings.Index(got, heading) < i {
 		t.Errorf("order wrong:\n%s", got)
 	}
-	if plain := PieceInput("m-1", Mission{Request: "x"}, p, sourceDomain("d")); strings.Contains(plain, principalChangesTitle) {
+	if plain := PieceInput("m-1", Mission{Request: "x"}, p, sourceDomain("d"), nil); strings.Contains(plain, principalChangesTitle) {
 		t.Errorf("no amendments, no section:\n%s", plain)
 	}
 }
