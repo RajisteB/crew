@@ -115,6 +115,8 @@ type PieceState struct {
 	Deliverable *Deliverable   `json:"deliverable,omitempty"`
 	Jira        Tracked        `json:"jira"`
 	Problem     string         `json:"problem,omitempty"` // why the piece was last sent back from its pull request: names only, at most 300 runes
+	// Behind is the other mission's piece this queued piece is kept behind.
+	Behind *Blocker `json:"behind,omitempty"`
 }
 
 // State is state.json. It holds ids, counts and short messages only: never
@@ -165,6 +167,10 @@ func (p PieceState) clone() PieceState {
 	if p.Wait != nil {
 		w := *p.Wait
 		p.Wait = &w
+	}
+	if p.Behind != nil {
+		b := *p.Behind
+		p.Behind = &b
 	}
 	if p.Deliverable != nil {
 		d := *p.Deliverable

@@ -35,30 +35,47 @@ func HoldingRuns(s State) int {
 // folder that is not a mission is ignored; a mission whose state can't be read
 // is an error, since its runs can't be counted.
 func RunsElsewhere(repoRoot, missionID string) (int, error) {
-	entries, err := os.ReadDir(missionsDir(repoRoot))
-	if errors.Is(err, os.ErrNotExist) {
-		return 0, nil
-	}
+	n := 0
+	err := walkOtherMissions(repoRoot, missionID, func(st State) error {
+		if st.Status == StatusRunning {
+			n += HoldingRuns(st)
+		}
+		return nil
+	})
 	if err != nil {
 		return 0, err
 	}
-	n := 0
+	return n, nil
+}
+
+// walkOtherMissions calls fn with the saved state of each of the repo's other
+// missions, in mission id order. It skips what is not a mission (see
+// loadMissionState) and stops at the first mission that can't be read or the
+// first error fn returns.
+func walkOtherMissions(repoRoot, missionID string, fn func(st State) error) error {
+	entries, err := os.ReadDir(missionsDir(repoRoot))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	for _, e := range entries {
 		if !e.IsDir() || e.Name() == missionID {
 			continue
 		}
 		st, found, err := loadMissionState(repoRoot, e.Name())
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if !found {
 			continue
 		}
-		if st.Status == StatusRunning {
-			n += HoldingRuns(st)
+		if err := fn(st); err != nil {
+			return err
 		}
 	}
-	return n, nil
+	return nil
 }
 
 // lockStarts takes the repo's start lock, <repoRoot>/.crew/missions/starts.lock,

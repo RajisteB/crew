@@ -224,6 +224,7 @@ func missionPlan(env missionEnv, args []string) error {
 	fmt.Fprintf(env.out, "mission %s planned (%s)\n\n", st.MissionID, store.Dir)
 	printPieceTable(env.out, m, chk.in.Domains)
 	printSeparations(env.out, seps)
+	printOthersOverlap(env.out, env.repoRoot, st, m, chk.in.Domains)
 	printAutoMergeLine(env, info.Slug, m)
 	printRunsAtOnceLine(env, info.Slug)
 	printJiraLine(env, info.Slug)
@@ -264,6 +265,9 @@ func startChecks(env missionEnv, store mission.Store) ([]source.Domain, error) {
 		return nil, printCheckErrors(env.out, errs)
 	}
 	if err := separateOnStart(env, store, m, chk.in.Domains); err != nil {
+		return nil, err
+	}
+	if err := printOthersOverlapOnStart(env, store, m, chk.in.Domains); err != nil {
 		return nil, err
 	}
 	if err := jiraStartCheck(env, info.Slug); err != nil {

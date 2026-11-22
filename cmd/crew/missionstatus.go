@@ -174,6 +174,9 @@ func waitsText(m mission.Mission, st mission.State, id string) string {
 	if len(apart) > 0 {
 		parts = append(parts, "starts after "+strings.Join(apart, ", ")+" (paths overlap)")
 	}
+	if text := behindText(st, id); text != "" {
+		parts = append(parts, text)
+	}
 	if len(parts) == 0 {
 		return "ready to start"
 	}

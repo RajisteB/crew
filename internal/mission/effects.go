@@ -71,6 +71,9 @@ func (t *tick) startPiece(a StartPiece) error {
 		return nil
 	}
 	defer release()
+	if !t.startClear(p) {
+		return nil
+	}
 	if err := e.Git.Fetch(t.ctx, base); err != nil {
 		t.note(p.ID, "can't start: fetch %s: %v", base, err)
 		return nil

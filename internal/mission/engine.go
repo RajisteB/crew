@@ -218,6 +218,7 @@ func (t *tick) observe() {
 	}
 	t.observeAccept()
 	t.observeElsewhere()
+	t.observeBehind()
 }
 
 func (t *tick) observeRun(p PieceState) {

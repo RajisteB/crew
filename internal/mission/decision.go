@@ -312,7 +312,7 @@ func (d *decider) cancelPiece(id, by string) *RunStep {
 	if p.PR != 0 && p.Status != PieceDelivered { // a delivered piece's PR is merged
 		msg += fmt.Sprintf("; PR #%d stays open", p.PR)
 	}
-	p.Status, p.Wait = PieceCancelled, nil
+	p.Status, p.Wait, p.Behind = PieceCancelled, nil, nil
 	d.add(Record{Event: Event{Time: d.o.Now, Kind: EvPieceCancelled, Piece: id, By: by, Msg: msg}})
 	if p.Worktree != "" {
 		d.add(Cleanup{Piece: id})

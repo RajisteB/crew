@@ -24,6 +24,9 @@ func (d *decider) queued(id string) {
 			ready = false
 		}
 	}
+	if d.settleBehind(id, ready) {
+		return
+	}
 	if ready && !d.o.ElsewhereUnknown && Allows(d.lim.Concurrency, d.o.Elsewhere+d.holdingRuns()+d.starting()+1) {
 		d.add(StartPiece{Piece: id})
 	}

@@ -48,6 +48,9 @@ type Obs struct {
 	// ElsewhereUnknown means they could not be counted: nothing is started.
 	Elsewhere        int
 	ElsewhereUnknown bool
+	// Behind has an entry for each queued piece of this mission whose paths
+	// overlap a piece another mission in the repo holds.
+	Behind map[string]Blocker
 }
 
 // Action is something for the engine to carry out.
