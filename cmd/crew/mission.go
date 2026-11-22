@@ -216,12 +216,14 @@ func missionPlan(env missionEnv, args []string) error {
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
+	m, seps, _ := mission.SeparatedWithLog(mission.Mission{}, m, chk.in.Domains, nil, time.Now())
 	store, st, err := mission.New(env.repoRoot, m, info, time.Now())
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(env.out, "mission %s planned (%s)\n\n", st.MissionID, store.Dir)
 	printPieceTable(env.out, m, chk.in.Domains)
+	printSeparations(env.out, seps)
 	printAutoMergeLine(env, info.Slug, m)
 	printJiraLine(env, info.Slug)
 	fmt.Fprintf(env.out, "\n```mermaid\n%s```\n\nnext: crew mission start %s\n", mission.Mermaid(m), st.MissionID)
@@ -259,6 +261,9 @@ func startChecks(env missionEnv, store mission.Store) ([]source.Domain, error) {
 	chk := newChecks(p, settings, info.Slug)
 	if errs := mission.Check(m, chk.in); len(errs) > 0 {
 		return nil, printCheckErrors(env.out, errs)
+	}
+	if err := separateOnStart(env, store, m, chk.in.Domains); err != nil {
+		return nil, err
 	}
 	if err := jiraStartCheck(env, info.Slug); err != nil {
 		return nil, err

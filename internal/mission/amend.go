@@ -25,18 +25,19 @@ type Amendment struct {
 // never modified; on an error they are returned as they came, with no
 // actions and no run steps.
 func Amend(m Mission, s State, a Amendment, in CheckInput, now time.Time) (Mission, State, []Action, []RunStep, error) {
-	next, changes, err := planAmendment(m, s, a, in)
+	next, changes, err := planAmendment(m, s, a, in, now)
 	if err != nil {
 		return m, s, nil, nil, err
 	}
 	d := &decider{m: next, s: s.Clone(), o: Obs{Now: now}}
 	steps := d.applyChanges(changes, a.Words)
 	d.m.Changes = append(append([]Change(nil), m.Changes...), changeLog(changes, a.Words, now)...)
+	d.m.Changes = append(d.m.Changes, next.Changes[len(m.Changes):]...) // crew's own entries
 	return d.m, d.s, d.actions, steps, nil
 }
 
 // planAmendment parses and validates the new plan and lists its changes.
-func planAmendment(m Mission, s State, a Amendment, in CheckInput) (Mission, []pieceChange, error) {
+func planAmendment(m Mission, s State, a Amendment, in CheckInput, now time.Time) (Mission, []pieceChange, error) {
 	if s.Status == StatusDone {
 		return Mission{}, nil, errors.New("the mission is done and can't be amended")
 	}
@@ -58,6 +59,7 @@ func planAmendment(m Mission, s State, a Amendment, in CheckInput) (Mission, []p
 	if errs := Check(result, in); len(errs) > 0 {
 		return Mission{}, nil, fmt.Errorf("the new plan fails its checks: %w", errors.Join(errs...))
 	}
+	result, _, _ = SeparatedWithLog(m, result, in.Domains, StartedPieces(s), now)
 	return result, changes, nil
 }
 

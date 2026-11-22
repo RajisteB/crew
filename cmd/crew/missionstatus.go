@@ -161,10 +161,23 @@ func waitsText(m mission.Mission, st mission.State, id string) string {
 			open = append(open, w)
 		}
 	}
-	if len(open) == 0 {
+	var apart []string
+	for _, a := range piece.Apart {
+		if other, ok := st.Piece(a); ok && other.Status != mission.PieceComplete && other.Status != mission.PieceCancelled {
+			apart = append(apart, a)
+		}
+	}
+	var parts []string
+	if len(open) > 0 {
+		parts = append(parts, "waits for "+strings.Join(open, ", "))
+	}
+	if len(apart) > 0 {
+		parts = append(parts, "starts after "+strings.Join(apart, ", ")+" (paths overlap)")
+	}
+	if len(parts) == 0 {
 		return "ready to start"
 	}
-	return "waits for " + strings.Join(open, ", ")
+	return strings.Join(parts, "; ")
 }
 
 func printEnded(out io.Writer, title string, st mission.State, status mission.PieceStatus) {

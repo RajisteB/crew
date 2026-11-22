@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/crewfile-dev/crew/internal/mission"
 	"github.com/crewfile-dev/crew/internal/source"
@@ -46,4 +47,30 @@ func domainNamed(domains []source.Domain, name string) source.Domain {
 		}
 	}
 	return source.Domain{}
+}
+
+// printSeparations prints one line for each pair of pieces crew keeps apart.
+func printSeparations(out io.Writer, seps []mission.Separation) {
+	for _, s := range seps {
+		fmt.Fprintln(out, s.String())
+	}
+}
+
+// separateOnStart keeps overlapping pieces apart again before a mission runs,
+// treating the pieces that have started as settled. When the pairs changed it
+// saves the mission and prints the separations.
+func separateOnStart(env missionEnv, store mission.Store, m mission.Mission, domains []source.Domain) error {
+	st, err := store.LoadState()
+	if err != nil {
+		return err
+	}
+	next, seps, changed := mission.SeparatedWithLog(m, m, domains, mission.StartedPieces(st), time.Now())
+	if !changed {
+		return nil
+	}
+	if err := store.SaveMission(next); err != nil {
+		return err
+	}
+	printSeparations(env.out, seps)
+	return nil
 }

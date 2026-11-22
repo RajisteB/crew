@@ -236,13 +236,14 @@ func (a *applier) addProblem(d OrchDecision) string {
 	if errs := Check(next, a.in); len(errs) > 0 {
 		return "the plan with the new piece fails its checks: " + firstMessages(errs)
 	}
-	a.next = next
+	a.next, _, _ = SeparatedWithLog(a.m, next, a.in.Domains, StartedPieces(a.s), a.o.Now)
 	return ""
 }
 
 func copyPiece(p Piece) Piece {
 	p.Paths = slices.Clone(p.Paths)
 	p.WaitsFor = slices.Clone(p.WaitsFor)
+	p.Apart = nil // written only by crew
 	return p
 }
 

@@ -27,6 +27,9 @@ type Piece struct {
 	Brief    string   `yaml:"brief" json:"brief"`
 	Paths    []string `yaml:"paths" json:"paths"`
 	WaitsFor []string `yaml:"waits_for" json:"waits_for"`
+	// Apart is written only by crew: pieces whose paths overlap this one's and
+	// that must be done before it starts.
+	Apart []string `yaml:"apart_from,omitempty" json:"apart_from,omitempty"`
 }
 
 // Change is one line of the change log.
