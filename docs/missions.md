@@ -293,7 +293,7 @@ The Jira line gives the epic and its address. When the board is behind, it also 
 Jira: ACME-1  https://example.atlassian.net/browse/ACME-1 (2 writes not sent yet)
 ```
 
-If Jira is set up but the epic couldn't be created yet, the line reads `Jira: epic not created yet` and the same count. A piece's Jira key follows its id in the open pull requests, deliverables and finished lines, as `P1 (ACME-2)`.
+If Jira is set up but the epic couldn't be created yet, the line reads `Jira: epic not created yet` and the same count. The count reads `1 write not sent yet` for one and `<n> writes not sent yet` otherwise. A piece's Jira key follows its id in the open pull requests, deliverables and finished lines, as `P1 (ACME-2)`.
 
 A `deliverable` wait reads like the others: `w1  P1  deliverable  <question>  waiting 4m`. Deliverables a piece has left are listed in their own section, with their files, who has to act and where crew keeps them:
 
@@ -528,9 +528,9 @@ crew jira setup --site https://example.atlassian.net --key ACME
 
 Add `--board N` to use the sprints of board `N`, and `--assignee ACCOUNT_ID` to assign issues to someone other than the token's owner. Without `--board`, crew uses the project's only board when there is exactly one; with none or several it says so and doesn't use sprints.
 
-`crew jira setup` makes a read-only check against the live site first and prints what it found: the account the token belongs to, whether the project exists, whether its issue types have the four statuses, which board and active sprint it will use, and whether the Flagged field is there (without it, a waiting piece gets a comment but no flag). If anything is wrong it stops and writes nothing. If all is well, it asks you to type `<owner/name> <KEY>` (for example `acme/app ACME`) in a terminal, and only then writes the entry to `jira.yaml` in your crew directory. It can't be answered by a pipe, so a session can't set Jira up for you. New crew directories deny `crew jira setup` to sessions as well. In a crew directory that already existed, the deny list is as you left it, and the typed phrase in a terminal is what stops a session.
+`crew jira setup` needs a terminal. With none, it refuses before it contacts Jira and sends nothing. Otherwise it makes a read-only check against the live site and prints what it found: the account the token belongs to, whether the project exists, whether its issue types have the four statuses, which board and active sprint it will use, and whether the Flagged field is there (without it, a waiting piece gets a comment but no flag). If anything is wrong it stops and writes nothing. If all is well, it then asks you to type `<owner/name> <KEY>` (for example `acme/app ACME`) in a terminal, and only then writes the entry to `jira.yaml` in your crew directory. The phrase can't be answered by a pipe, so a session can't set Jira up for you. New crew directories deny `crew jira setup` to sessions as well. In a crew directory that already existed, the deny list is as you left it, and the typed phrase in a terminal is what stops a session.
 
-`crew jira check` repeats the check for the repo's current entry. Run it after you change the project's workflow or the entry:
+All three `crew jira` commands take `--dir` (the crew directory) and `--project` (the repo; default: the current directory). `crew jira check` repeats the check for the repo's current entry. Run it after you change the project's workflow or the entry:
 
 ```sh
 crew jira check
@@ -540,7 +540,7 @@ crew jira check
 
 ### jira.yaml
 
-`crew jira setup` writes `jira.yaml` in your crew directory, one entry per repo. You can edit it. Unknown keys are errors.
+`crew jira setup` writes `jira.yaml` in your crew directory, one entry per repo, with `version: 1`. You can edit it. Unknown keys are errors.
 
 ```yaml
 version: 1
@@ -579,7 +579,7 @@ Jira never stops a piece. A failed write is a note in the mission's events, and 
 crew jira sync <mission>
 ```
 
-`crew jira sync` sends what is owed, once, and prints `Jira is up to date for mission <id>` or how many writes are still not sent. It refuses while the mission's engine is alive, since the engine sends the writes itself. It needs the variables set, like the engine.
+`crew jira sync` sends what is owed, once, and prints `Jira is up to date for mission <id>`, or `<n> writes still not sent; see the notes in crew mission status <id>` (`1 write` when it is one). It refuses while the mission's engine is alive, since the engine sends the writes itself. It also refuses when the repo is set up for Jira but `CREW_JIRA_EMAIL` or `CREW_JIRA_TOKEN` isn't set in that shell: `Jira is set up for <repo>, but CREW_JIRA_TOKEN is not set here; set it, or remove the repo from jira.yaml`.
 
 ### Your token and the sessions crew starts
 
@@ -599,6 +599,8 @@ The station writes them to `.crew/deliverables/` in its worktree. When the run e
 - Without Jira, nothing else changes: the files stay in the mission folder, and you read them there.
 
 A piece that ends in a deliverable and no pull request has no pull request to merge, so its piece is "delivered" and waits for you to accept the deliverable. A piece that ends in both opens its pull request as usual. After the pull request is merged, the piece is delivered and waits for you to accept the deliverable as well.
+
+crew keeps its own files (missions, runs, worktrees) in `.crew` in your project. If `.crew` in the project is a symlink, or `.crew/.gitignore` is not a regular file, crew refuses to run there and says so, because it would otherwise write through the link.. This is about the project's `.crew`; a worktree's `.crew/deliverables` that isn't a real folder is only ignored, as below.
 
 ### How later pieces get them
 

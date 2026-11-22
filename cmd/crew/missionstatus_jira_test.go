@@ -49,7 +49,7 @@ func TestMissionStatus_JiraLine(t *testing.T) {
 	}
 	r.edit(id, func(s *mission.State) { s.Pieces[0].Jira.Lane = "" })
 	out, _ = r.cmd("status", id)
-	if !strings.Contains(out, "/browse/ACME-1 (1 writes not sent yet)\n") {
+	if !strings.Contains(out, "/browse/ACME-1 (1 write not sent yet)\n") {
 		t.Fatalf("no not-sent count:\n%s", out)
 	}
 }
@@ -109,5 +109,13 @@ func TestMissionStatus_PRLineCarriesTheIssueKey(t *testing.T) {
 	out, _ := r.cmd("status", id)
 	if !strings.Contains(out, "  P1 (ACME-2)  PR #7  ") {
 		t.Fatalf("no key on the pull request line:\n%s", out)
+	}
+}
+
+func TestWritesText(t *testing.T) {
+	for n, want := range map[int]string{1: "1 write", 2: "2 writes", 10: "10 writes"} {
+		if got := writesText(n); got != want {
+			t.Errorf("writesText(%d) = %q, want %q", n, got, want)
+		}
 	}
 }

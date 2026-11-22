@@ -110,8 +110,7 @@ func TestMission_EndToEnd_JiraBoard(t *testing.T) {
 	}
 }
 
-// deliverableMission runs P1 (deliverable only) and P2 (waits for P1) up to
-// the point where P1 has left its deliverable.
+// launchDeliverables launches P1 (deliverable only) and P2 (waits for P1).
 func (r *jiraE2E) launchDeliverables() {
 	r.launchPieces(e2ePiece("P1"), e2ePiece("P2", "P1"))
 }
@@ -172,7 +171,7 @@ func TestMission_EndToEnd_JiraDown(t *testing.T) {
 	if st.Jira.Epic != "" || len(r.srv.Issues()) != 0 {
 		t.Fatalf("something reached the board: %+v, %+v", st.Jira, r.srv.Issues())
 	}
-	if out := r.status(); !strings.Contains(out, "writes not sent yet)") {
+	if out := r.status(); !strings.Contains(out, "not sent yet)") {
 		t.Fatalf("status has no not-sent count:\n%s", out)
 	}
 	r.srv.Fail(0, 0)

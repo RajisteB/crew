@@ -239,6 +239,6 @@ func jiraSync(req jiraRequest, id string, out io.Writer) error {
 		fmt.Fprintf(out, "Jira is up to date for mission %s\n", id)
 		return nil
 	}
-	fmt.Fprintf(out, "%d writes still not sent; see the notes in crew mission status %s\n", owed, id)
+	fmt.Fprintf(out, "%s still not sent; see the notes in crew mission status %s\n", writesText(owed), id)
 	return nil
 }

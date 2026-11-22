@@ -30,10 +30,18 @@ func printJiraStatus(env missionEnv, store mission.Store, m mission.Mission, st 
 		line += "  " + repo.Site + "/browse/" + st.Jira.Epic
 	}
 	if owed > 0 {
-		line += fmt.Sprintf(" (%d writes not sent yet)", owed)
+		line += " (" + writesText(owed) + " not sent yet)"
 	}
 	fmt.Fprintln(env.out, safeText(line))
 	return nil
+}
+
+// writesText is "1 write" or "n writes".
+func writesText(n int) string {
+	if n == 1 {
+		return "1 write"
+	}
+	return fmt.Sprintf("%d writes", n)
 }
 
 // begun says whether the mission has been released to run.

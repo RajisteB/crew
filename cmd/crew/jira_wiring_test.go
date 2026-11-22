@@ -113,7 +113,7 @@ func TestJiraSync_ReportsWhatIsStillOwed(t *testing.T) {
 	finishMission(r, id)
 	r.srv.Fail(500, 1000)
 	out, err := r.jira("sync", id)
-	if err != nil || !strings.Contains(out, "writes still not sent; see the notes in crew mission status "+id) {
+	if err != nil || !strings.Contains(out, "1 write still not sent; see the notes in crew mission status "+id) {
 		t.Fatalf("err = %v\n%q", err, out)
 	}
 }
