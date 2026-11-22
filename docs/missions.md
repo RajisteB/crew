@@ -18,7 +18,7 @@ This guide is for the owner of a crew setup who has used factories and has not u
 
 ## What this stage does and doesn't do
 
-Pieces run one at a time. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. The limit is per mission: two missions started in the same repo each run their own piece, and nothing checks that they touch different files, so don't run two missions over the same part of a repo at once. Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
+Pieces run one at a time. The one exception is a piece that crew sends back from its pull request (see "Failed checks and conflicts"): it runs again at once, even while another piece is running. A piece that has stopped to wait for your answer in the middle of its run (an approval, a question) still counts as running, so it holds the next piece back; a piece whose pull request is waiting for your merge doesn't, so the next one can start. The limit is per mission: two missions started in the same repo each run their own piece, and nothing checks that they touch different files, so don't run two missions over the same part of a repo at once. Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
 
 Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It does not write to Jira and does not run pieces in parallel. `crew release approve` doesn't exist yet, and `delegate: true` on a piece is refused.
 
@@ -41,7 +41,7 @@ If you created your crew directory before missions existed, run this (add `--dir
 crew mission setup
 ```
 
-It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, and the orchestrator launch line and allow list. Your comments and every value you already have stay as they are. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
+It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, and the orchestrator launch line and allow list. Your comments and every value you already have stay as they are. The one exception: a `harnesses.yaml` that differs from the default only by comments is replaced by the new default, and your comments are in the backup copy. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
 
 The one case it leaves alone is a `headless.command` you changed by hand. It prints a `skipped` line for that harness; add `--settings "{settings}"` to the command yourself and run `crew mission setup` again.
 
@@ -113,9 +113,12 @@ A domain is a Markdown file in `domains/`. The name must match the file name, an
 name: web
 description: The web front end, covering pages, components and styling.
 factories: [ship-change]
+paths: [web/**]
 ---
 Use the existing component library. Keep changes small.
 ```
+
+`paths` is optional. It lists where the domain's files live, as patterns relative to the repo root: a folder name (`web/`), `brand/**` for everything under a folder, or `**/*.md` for every Markdown file. A leading `./` and a trailing `/` are fine. crew refuses a domain file whose `paths` has an empty entry, an entry that starts with `/`, an empty segment (`a//b`), a `..` segment, or a segment that isn't a valid pattern. A domain without `paths` is never counted as touched by a pull request, so its auto-merge switch doesn't hold back another domain's pull request (see "Auto-merge").
 
 The body is the briefing: every piece in this domain gets it as part of its input. The orchestrator picks domains by their `description`, so write it as the sentence that tells it when to choose this domain. The frontmatter is YAML, which breaks on a colon followed by a space and on a space followed by `#`. If your description has either, put it in quotes:
 
@@ -159,7 +162,7 @@ A mission can run for days, so the engine checks again before every push. If the
 `missions.yaml` holds the settings. The ones you are most likely to change:
 
 - `mission_approval: on` makes `start` stop and wait for your `go`. Set it to `off` and `start` begins the mission at once.
-- `limits.runs_at_once` must be `1` for now, and so must any `runs_at_once` under `repos:`. Pieces run one at a time until crew can check that parallel pieces don't touch the same files. Any other value, including `"*"`, makes crew refuse the file with an error like `limits.runs_at_once must be 1 (got "3"): pieces run one at a time until crew can check that parallel pieces don't overlap`.
+- `limits.runs_at_once` must be `1` for now, and so must any `runs_at_once` under `repos:`. Pieces run one at a time until crew can check that parallel pieces don't touch the same files; the one exception is a piece that crew sends back from its pull request, which runs again at once even while another piece is running. Any other value, including `"*"`, makes crew refuse the file with an error like `limits.runs_at_once must be 1 (got "3"): pieces run one at a time until crew can check that parallel pieces don't overlap`.
 - `merge_method` is how crew merges a pull request when auto-merge is on: `squash` (the default), `merge` or `rebase`. Pick the one your repo allows; see "Auto-merge".
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
 - `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
@@ -263,7 +266,7 @@ With an id it shows the mission in detail. Items waiting on you come first, then
 mission m-20261121-162953-e991  running  live, pid 4242  (acme/app, base main)
 
 Waiting on you:
-  w1  P1  merge  https://github.com/acme/app/pull/7  waiting 12m
+  w1  P1  merge  https://github.com/acme/app/pull/7  PR #7 (P1) is waiting on you  waiting 12m
 
 Queued:
   P2  waits for P1
@@ -292,7 +295,7 @@ Open pull requests:
 
 If crew can't read the switch, the mode reads `off (switch unreadable)`. A piece whose pull request holds a wait is listed under "Waiting on you" only.
 
-`crew mission plan` and `crew mission start` print one line under the piece table, before you say go, so you can see what will merge without you:
+`crew mission plan` prints one line under the piece table, and `crew mission start` prints it before you say go only when approval is on, so you can see what will merge without you:
 
 ```
 Auto-merge in acme/app: design on, api off
@@ -344,7 +347,7 @@ crew automerge status
 `on` and `off` need a terminal, and you must run them yourself: the orchestrator is told never to, and the session rules deny the command. A domain is in one of three modes:
 
 - `off`: crew leaves the domain's pull requests for you. This is the default, and it is what crew uses for any domain with no switch.
-- `on`: crew merges a pull request once at least one check has passed and none has failed or is still running.
+- `on`: crew merges a pull request once at least one check has passed and none has failed or is still running, and the checks have all been green for a minute.
 - `without-checks`: crew merges as soon as the pull request can be merged, without waiting for any check.
 
 Setting a switch shows what you are about to allow and asks you to type a phrase:
@@ -361,29 +364,39 @@ Type "acme/app design" to confirm:
 
 With `--all` you type `acme/app all`. The repo must be confirmed first (see "Confirming the repo"). `on` without `--without-checks` is refused when the default branch has no checks and the repo has no workflow in `.github/workflows`, because nothing would ever pass; the error says so and names `--without-checks`.
 
-A piece follows the switch of its own domain. A pull request that changes files inside another domain's `paths` needs that domain's switch on too; if it is off, the pull request waits for you and the item names that domain. crew skips the checks only if the piece's domain and every domain the pull request touches are `without-checks`; if any of them is `on`, crew waits for checks.
+A piece follows the switch of its own domain. A pull request that changes files inside another domain's `paths` needs that domain's switch on too; if it is off, the pull request waits for you and the item names that domain. A domain that lists no `paths` is never counted as touched, so its switch can't hold back another domain's pull request; when you run `crew automerge on`, crew prints a paragraph naming the other domains that list no paths, so you know the rule can't protect them. Add `paths:` to their domain files to change that. crew skips the checks only if the piece's domain and every domain the pull request touches are `without-checks`; if any of them is `on`, crew waits for checks.
 
 crew reads the switch again right before it merges, so turning a domain off stops merges at once. crew merges only the head commit it pushed itself, and the merge fails if the pull request has moved on.
 
 ### Failed checks and conflicts
 
-With auto-merge `on` or `off`, a pull request whose checks fail on crew's own head goes back to the piece's factory with the names of the failed checks, and the end of the log of the first few. The piece fixes it, commits and crew pushes to the same pull request. Under `without-checks` crew doesn't look at the checks. A pull request that conflicts with the base branch first gets the base merged into the branch; if that conflicts, the piece goes back to the factory to resolve it. Each of the two costs a try, and a piece has two tries for each. After that the orchestrator decides, and if it can't, the item comes to you as a `question`. Your `retry` answer gives the piece two more tries.
+With auto-merge `on` or `off`, a pull request whose checks fail on crew's own head goes back to the piece's factory with the names of the failed checks, and the end of the log of the first few. The piece fixes it, commits and crew pushes to the same pull request. Under `without-checks` crew doesn't look at the checks. A pull request that conflicts with the base branch first gets the base merged into the branch; if that conflicts, the piece goes back to the factory to resolve it. A send-back for failed checks costs a try, and so does a send-back for a conflict; a base merge that goes through cleanly costs nothing. A piece has two tries of each kind. After that the orchestrator decides, and if it can't, the item comes to you as a `question`. Your `retry` answer gives the piece two more tries.
+
+This happens with auto-merge off too: crew sends a piece back for failed checks and merges the base into a conflicting branch whether or not it will merge the pull request itself. That is new compared with the first missions version.
 
 ### Why a pull request can wait
 
-With auto-merge on, a pull request waits for you, in a `merge` item or a `question`, for one of five reasons. The text of the item says which:
+A pull request waits for you, in a `merge` item, a `question` or a `pr-closed` item, for one of these reasons. The text of the item says which, and `crew mission status` shows it beside the link:
 
-1. A domain it touches, other than its own, has auto-merge off.
+1. Another domain it touches has auto-merge off.
 2. The branch has commits crew didn't push. crew never merges a head it didn't push. This is reported after 2 minutes.
-3. The pull request has no checks. This is reported after 2 minutes.
-4. Checks are still running 30 minutes after crew pushed the head. crew still merges when they pass.
-5. Failed checks or a conflict that two tries didn't fix, and the orchestrator couldn't settle either.
+3. The pull request was opened before crew recorded what it pushed, so crew won't merge it.
+4. The pull request has no checks. This is reported after 2 minutes.
+5. Checks are still running 30 minutes after crew pushed the head. crew still merges when they pass.
+6. GitHub hasn't said whether the pull request can be merged after 30 minutes.
+7. GitHub refused the merge. crew keeps trying, and completes the piece when a try goes through or you merge it yourself.
+8. GitHub reports a conflict that crew can't find after 30 minutes: the base merges into the branch cleanly, but GitHub still says it conflicts.
+9. Failed checks or a conflict that two tries didn't fix, and the orchestrator couldn't settle either.
+
+A pull request that was closed without being merged is a `pr-closed` item.
 
 If crew can't read the switch, or `automerge.json` doesn't match its checksum, every domain is off and the engine says so in a note.
 
 ### How crew merges
 
 crew merges with the method in `merge_method` in `missions.yaml`: `squash` (the default), `merge` or `rebase`. If the repo doesn't allow that method, the merge fails, crew notes why, and the pull request waits until you change `merge_method` or merge it by hand.
+
+If GitHub accepts the merge without merging at once (a merge queue, or GitHub's own auto-merge), crew notes that, waits, and completes the piece when the pull request is merged.
 
 Merging is deploying where the repo makes it so. If a merge to the base branch deploys, a pull request crew merges is deployed with nobody watching. Switch auto-merge on for the domains whose checks you trust.
 

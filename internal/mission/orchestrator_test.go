@@ -202,7 +202,7 @@ func TestOrchestratorBody_AutoMerge(t *testing.T) {
 			t.Errorf("a sentence names crew automerge without saying not to run it: %q", s)
 		}
 	}
-	for _, want := range []string{"without-checks", "own terminal", "says why", "two more tries", "nothing is asked"} {
+	for _, want := range []string{"without-checks", "own terminal", "says why", "two more tries", "nothing is asked", "still running"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q", want)
 		}
