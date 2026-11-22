@@ -288,7 +288,7 @@ func TestSafeName(t *testing.T) {
 	if !safeName("brief v2.md") {
 		t.Error("a plain name was refused")
 	}
-	for _, name := range []string{"a\nb", "a b", "a b", "a‮b", "a\xffb"} {
+	for _, name := range []string{"a\nb", "a\u2028b", "a\u2029b", "a\u202eb", "a\xffb"} {
 		if safeName(name) {
 			t.Errorf("%q was accepted", name)
 		}

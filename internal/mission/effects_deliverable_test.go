@@ -254,10 +254,21 @@ func TestEngine_StartRefusesALinkedGitignore(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(wt, ".crew"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join(t.TempDir(), "x"), filepath.Join(wt, ".crew", ".gitignore")); err != nil {
+	target := filepath.Join(t.TempDir(), "x")
+	if err := os.Symlink(target, filepath.Join(wt, ".crew", ".gitignore")); err != nil {
 		t.Fatal(err)
 	}
 	if p := h.tick().Pieces[1]; p.Status != PieceQueued {
 		t.Fatalf("P2 should not start: %+v", p)
+	}
+	var found bool
+	for _, n := range h.notes() {
+		found = found || strings.Contains(n, "can't start: prepare the deliverables folders: ")
+	}
+	if !found {
+		t.Fatalf("no note: %v", h.notes())
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("the link target was created: %v", err)
 	}
 }

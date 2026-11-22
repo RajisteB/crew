@@ -56,14 +56,36 @@ func NewRun(project string, f source.Factory, factorySrc []byte, input string, n
 // runs never end up in the project's history and its .gitignore is untouched.
 func EnsureCrewDir(project string) error {
 	dir := filepath.Join(project, CrewDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	info, err := os.Lstat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	case err != nil:
 		return err
+	case !info.IsDir():
+		return fmt.Errorf("%s is not a plain folder: %s", CrewDir, dir)
 	}
 	gi := filepath.Join(dir, ".gitignore")
-	if _, err := os.Stat(gi); errors.Is(err, os.ErrNotExist) {
-		return os.WriteFile(gi, []byte("*\n"), 0o644)
+	info, err = os.Lstat(gi)
+	switch {
+	case err == nil && info.Mode().IsRegular():
+		return nil
+	case err == nil:
+		return fmt.Errorf("%s/.gitignore is not a regular file: %s", CrewDir, gi)
+	case !errors.Is(err, os.ErrNotExist):
+		return err
 	}
-	return nil
+	f, err := os.OpenFile(gi, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString("*\n"); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func newRunID(factory string, now time.Time) (string, error) {

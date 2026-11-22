@@ -91,9 +91,6 @@ func (t *tick) prepareScratch(p Piece, worktree string) ([]Earlier, error) {
 	if err := run.EnsureCrewDir(worktree); err != nil {
 		return nil, err
 	}
-	if info, err := os.Lstat(scratchPath(worktree, ".gitignore")); err == nil && !info.Mode().IsRegular() {
-		return nil, &notPlainError{Path: scratchPath(worktree, ".gitignore")}
-	}
 	if _, err := plainDir(worktree, run.CrewDir, scratchIn); err != nil {
 		return nil, err
 	}
