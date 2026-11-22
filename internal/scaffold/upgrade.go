@@ -269,10 +269,13 @@ func upgradeForeman(h, tn *yaml.Node, launch, allow bool) string {
 		k, _ := mapEntry(tn, "foreman")
 		mapAdd(h, "foreman", k, hf)
 	}
-	for key, need := range map[string]bool{"orchestrator_launch": launch, "orchestrator_allow": allow} {
-		if need {
-			k, v := mapEntry(tf, key)
-			mapAdd(hf, key, k, v)
+	for _, add := range []struct {
+		key  string
+		need bool
+	}{{"orchestrator_launch", launch}, {"orchestrator_allow", allow}} {
+		if add.need {
+			k, v := mapEntry(tf, add.key)
+			mapAdd(hf, add.key, k, v)
 		}
 	}
 	if launch && allow {

@@ -114,3 +114,23 @@ func TestSetSwitches_FileModes(t *testing.T) {
 	assertMode(t, filepath.Join(s.Dir, "automerge.json"), 0o600)
 	assertMode(t, filepath.Join(s.Dir, "automerge.json.sum"), 0o600)
 }
+
+func TestSetSwitches_TamperedFileRefused(t *testing.T) {
+	s := newStore(t)
+	if err := s.SetSwitches([]SwitchRecord{sw("a/b", "product", AutoOff)}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Dir, "automerge.json")
+	data, _ := os.ReadFile(path)
+	edited := []byte(strings.Replace(string(data), `"off"`, `"on"`, 1))
+	if err := os.WriteFile(path, edited, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := s.SetSwitches([]SwitchRecord{sw("a/b", "design", AutoOn)})
+	if !errors.Is(err, ErrTampered) {
+		t.Fatalf("err = %v, want ErrTampered", err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(edited) {
+		t.Fatalf("file changed:\n%s", after)
+	}
+}
