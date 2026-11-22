@@ -42,6 +42,8 @@ type Obs struct {
 	Delivered map[string]Found
 	PRs       map[string]gh.PR   // present for pr-open pieces
 	Auto      map[string]AutoObs // per pr-open piece; a piece that is absent follows AutoOff
+	// Accept has one entry per piece with an unaccepted Deliverable.
+	Accept map[string]AcceptObs
 }
 
 // Action is something for the engine to carry out.
@@ -114,6 +116,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 			d.prOpen(id)
 		}
 	}
+	d.deliverables()
 	for _, id := range d.idsWith(PieceQueued) {
 		d.queued(id)
 	}
@@ -264,8 +267,9 @@ func (d *decider) done(id string) {
 	case d.collects(id):
 	case g.Ahead == 0:
 		d.dropsTakenBack(id)
-		d.complete(id)
-		d.add(Cleanup{Piece: id})
+		if d.finished(id) {
+			d.add(Cleanup{Piece: id})
+		}
 	default:
 		d.dropsTakenBack(id)
 		d.add(OpenPR{Piece: id})

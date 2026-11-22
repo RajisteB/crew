@@ -78,10 +78,14 @@ func BranchUpdated(s State, piece, head string, now time.Time) State {
 	})
 }
 
-// Merged records that the piece's pull request was merged.
+// Merged records that the piece's pull request was merged. The piece is
+// complete, or delivered when its deliverable is not yet accepted.
 func Merged(s State, piece string) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Status, p.Wait = PieceComplete, nil
+		if unaccepted(*p) {
+			p.Status = PieceDelivered
+		}
 	})
 }
 

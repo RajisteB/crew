@@ -26,7 +26,7 @@ const missionUsage = `usage:
   crew mission start <id>                              run the start checks; wait for go, or go
   crew mission go <id>                                 the principal's go
   crew mission status [<id>] [--since N]               what is running and what waits on you
-  crew mission answer <id> <wait> --do retry|goto|cancel|approve [--station S] [--note TEXT|@FILE] --words TEXT|@FILE
+  crew mission answer <id> <wait> --do retry|goto|cancel|approve|accept [--station S] [--note TEXT|@FILE] --words TEXT|@FILE
   crew mission amend <id> [-|@FILE] --words TEXT|@FILE
   crew mission stop <id>
   crew mission resume <id>
@@ -54,7 +54,7 @@ func missionFlagSet(f *missionFlags) *flag.FlagSet {
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&f.dir, "dir", "", "crew directory")
 	fs.StringVar(&f.project, "project", "", "project root")
-	fs.StringVar(&f.do, "do", "", "answer: retry, goto, cancel or approve")
+	fs.StringVar(&f.do, "do", "", "answer: retry, goto, cancel, approve or accept")
 	fs.StringVar(&f.station, "station", "", "answer: the station to go to")
 	fs.StringVar(&f.note, "note", "", "answer: a message for the station (text, or @file)")
 	fs.StringVar(&f.words, "words", "", "answer, amend: what the principal said (text, or @file)")

@@ -39,12 +39,8 @@ func (t *tick) observeAuto(ps PieceState, pr gh.PR) {
 	if !ok || t.e.Switches == nil || ps.Worktree == "" || pr.State != "OPEN" {
 		return
 	}
-	if t.switches == nil {
-		snap := t.readSwitches()
-		t.switches = &snap
-	}
-	if t.switches.err != nil {
-		t.noteSwitchError(ps.ID, t.switches.err)
+	if t.snapshot().err != nil {
+		t.noteSwitchError(ps.ID, t.snapshot().err)
 		return
 	}
 	files, err := t.e.Git.ChangedFiles(t.ctx, ps.Worktree, "origin/"+t.s.Base)
@@ -52,7 +48,7 @@ func (t *tick) observeAuto(ps PieceState, pr gh.PR) {
 		t.note(ps.ID, "can't list the files PR #%d changes: %v; auto-merge is off until it can", ps.PR, err)
 		return
 	}
-	t.obs.Auto[ps.ID] = EffectiveMode(p, files, t.e.Domains, t.switches.recs)
+	t.obs.Auto[ps.ID] = EffectiveMode(p, files, t.e.Domains, t.snapshot().recs)
 }
 
 func (t *tick) noteSwitchError(piece string, err error) {
@@ -113,7 +109,9 @@ func (t *tick) merge(a Merge) error {
 	}
 	t.emit(Event{Kind: EvPRMerged, Piece: a.Piece,
 		Msg: fmt.Sprintf("PR #%d merged by crew (auto-merge %s for %s)", ps.PR, auto.Mode, p.Domain)})
-	t.removeWorktree(ps, true)
+	if now, _ := t.s.Piece(a.Piece); now.Status == PieceComplete {
+		t.removeWorktree(ps, true)
+	}
 	return nil
 }
 
