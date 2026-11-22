@@ -153,11 +153,15 @@ func automergeSet(req amRequest, out io.Writer) error {
 			return err
 		}
 	}
+	noPaths, err := domainsWithoutPaths(req.crewDir, domains)
+	if err != nil {
+		return err
+	}
 	phrase := info.Slug + " " + domains[0]
 	if req.all {
 		phrase = info.Slug + " all"
 	}
-	fmt.Fprint(tty, confirmationBlock(info, domains, mode, phrase))
+	fmt.Fprint(tty, confirmationBlock(info, domains, noPaths, mode))
 	if err := principal.Confirm(tty, fmt.Sprintf(`Type "%s" to confirm: `, phrase), phrase); err != nil {
 		return err
 	}
@@ -194,10 +198,13 @@ func resolveAMDomains(req amRequest) ([]string, error) {
 	return []string{req.domain}, nil
 }
 
-// requireChecks fails unless the default branch has checks or a workflow exists.
+// requireChecks fails unless a workflow file exists or the default branch has checks.
 func requireChecks(req amRequest, info gh.RepoInfo, domains []string) error {
+	if hasWorkflowFile(req.project) {
+		return nil
+	}
 	has, err := ghClient(req.project).HasChecks(context.Background(), info.DefaultBranch)
-	if err != nil || has || hasWorkflowFile(req.project) {
+	if err != nil || has {
 		return err
 	}
 	flagUsed := "--domain " + domains[0]
@@ -221,8 +228,9 @@ func hasWorkflowFile(project string) bool {
 	})
 }
 
-// confirmationBlock is what the principal reads on the terminal before typing the phrase.
-func confirmationBlock(info gh.RepoInfo, domains []string, mode principal.AutoMode, phrase string) string {
+// confirmationBlock is what the principal reads on the terminal before typing
+// the phrase. noPaths names the other defined domains that list no paths.
+func confirmationBlock(info gh.RepoInfo, domains, noPaths []string, mode principal.AutoMode) string {
 	base := info.DefaultBranch
 	var modeLine, warning string
 	switch mode {
@@ -239,6 +247,38 @@ func confirmationBlock(info gh.RepoInfo, domains []string, mode principal.AutoMo
 	fmt.Fprintf(&b, "\nRepo:     %s (%s)\nDomains:  %s\nMode:     %s\n\n", info.Slug, info.Visibility, strings.Join(domains, ", "), modeLine)
 	if warning != "" {
 		b.WriteString(warning + "\n\n")
+		b.WriteString(noPathsParagraph(noPaths))
 	}
 	return b.String()
+}
+
+// noPathsParagraph says which domains the cross-domain rule can't protect. It
+// is empty when there are none.
+func noPathsParagraph(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0] + " lists no paths, so crew can't tell when a pull request changes its files: " +
+			"its switch won't hold back another domain's pull request. Add paths: to its domain file to change that.\n\n"
+	}
+	return strings.Join(names, ", ") + " list no paths, so crew can't tell when a pull request changes their files: " +
+		"their switch won't hold back another domain's pull request. Add paths: to their domain files to change that.\n\n"
+}
+
+// domainsWithoutPaths is the sorted names of the defined domains that this
+// command does not switch and that list no paths.
+func domainsWithoutPaths(crewDir string, switching []string) ([]string, error) {
+	ds, errs := source.LoadDomains(crewDir)
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	var out []string
+	for _, d := range ds {
+		if len(d.Paths) == 0 && !slices.Contains(switching, d.Name) {
+			out = append(out, d.Name)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }
