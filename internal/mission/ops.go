@@ -45,6 +45,17 @@ type SwitchReader interface {
 	Switches(repo string) (map[string]principal.SwitchRecord, error)
 }
 
+// Tracker is where the principal watches a mission. jira.Board satisfies it.
+type Tracker interface {
+	Create(ctx context.Context, kind, label, summary, body, parent string) (key string, err error)
+	Move(ctx context.Context, key, lane string) error
+	Comment(ctx context.Context, key, text string) error
+	Flag(ctx context.Context, key string, on bool) error
+	Attach(ctx context.Context, key, path string) error
+	Done(ctx context.Context, key string) (bool, error)
+	Sprint(ctx context.Context, keys []string) (placed bool, err error)
+}
+
 // RunOps is the factory-run side of the engine.
 type RunOps interface {
 	Start(p Piece, input, worktree string) (runID string, err error)

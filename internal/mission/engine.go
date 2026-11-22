@@ -42,6 +42,13 @@ type Engine struct {
 	Switches SwitchReader
 	// MergeMethod is the gh merge method; empty means squash.
 	MergeMethod string
+	// Tracker is the Jira board. Nil means the repo has no Jira: nothing is
+	// planned or sent.
+	Tracker Tracker
+	// Sprints says the repo's board uses sprints.
+	Sprints bool
+	// TrackerPermanent says an error can never succeed. Nil means none can.
+	TrackerPermanent func(error) bool
 
 	lastNotes map[string]struct{} // notes of the previous tick, to avoid repeating them
 	streaks   map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
@@ -119,6 +126,11 @@ func (t *tick) run() (State, error) {
 	}
 	if err := e.Store.Ack(acked); err != nil {
 		return t.s, err
+	}
+	if e.Tracker != nil {
+		if _, err := t.syncTracker(); err != nil {
+			return t.s, err
+		}
 	}
 	return t.s, nil
 }
@@ -260,6 +272,7 @@ func (e *Engine) Loop(ctx context.Context, every time.Duration) (State, error) {
 		case err != nil:
 			fmt.Fprintf(e.out(), "mission tick: %v\n", err)
 		case st.Status != StatusRunning:
+			e.drainTracker(ctx, every)
 			return st, nil
 		}
 		select {
