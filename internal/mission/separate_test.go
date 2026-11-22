@@ -127,3 +127,30 @@ func TestSeparateOverlaps_NeverMakesACircle(t *testing.T) {
 		}
 	}
 }
+
+func TestStartedPieces_ParkedBeforeStartingIsNotSettled(t *testing.T) {
+	s := State{Pieces: []PieceState{
+		{ID: "P1", Status: PieceRunning},
+		{ID: "P2", Status: PieceWaiting, Wait: &Wait{Back: PieceQueued}},
+		{ID: "P3", Status: PieceWaiting, Wait: &Wait{Back: PieceRunning}},
+		{ID: "P4", Status: PieceQueued},
+	}}
+	got := StartedPieces(s)
+	if !got["P1"] || got["P2"] || !got["P3"] || got["P4"] {
+		t.Fatalf("settled = %v", got)
+	}
+}
+
+func TestSeparateOverlaps_ParkedPieceKeepsItsEntry(t *testing.T) {
+	p2 := pp("P2", "a/**")
+	p2.Apart = []string{"P1"}
+	m := Mission{Pieces: []Piece{pp("P1", "a/**"), p2}}
+	s := State{Pieces: []PieceState{
+		{ID: "P1", Status: PieceRunning},
+		{ID: "P2", Status: PieceWaiting, Wait: &Wait{Back: PieceQueued}},
+	}}
+	got, _ := SeparateOverlaps(m, nil, StartedPieces(s))
+	if want := map[string][]string{"P2": {"P1"}}; !reflect.DeepEqual(apartOf(got), want) {
+		t.Fatalf("apart = %v", apartOf(got))
+	}
+}
