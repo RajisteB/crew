@@ -27,3 +27,18 @@ func TestChangedFiles_MovedFileListsBothPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestChangedFiles_DeletedFileIsListed(t *testing.T) {
+	repo, _ := newRepo(t)
+	commitFile(t, repo.Dir, "docs/old.md", "old\n")
+	run(t, repo.Dir, "checkout", "-b", "piece")
+	run(t, repo.Dir, "rm", "-q", "docs/old.md")
+	run(t, repo.Dir, "commit", "-m", "delete")
+	got, err := repo.ChangedFiles(ctx, repo.Dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(got, "docs/old.md") {
+		t.Fatalf("ChangedFiles = %v, missing the deleted docs/old.md", got)
+	}
+}

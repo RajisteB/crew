@@ -119,22 +119,48 @@ func patternSegments(p string) ([]string, bool) {
 	return segs, true
 }
 
+// segmentsOverlap reports whether one path could match both segment lists.
+// Every call works on a suffix of each list, so the answer for each pair of
+// remaining lengths is worked out once: patterns with many ** stay quick.
 func segmentsOverlap(a, b []string) bool {
+	memo := make(map[[2]int]bool)
+	var overlap func(i, j int) bool
+	overlap = func(i, j int) bool {
+		key := [2]int{i, j}
+		if got, ok := memo[key]; ok {
+			return got
+		}
+		got := suffixesOverlap(a, b, i, j, overlap)
+		memo[key] = got
+		return got
+	}
+	return overlap(0, 0)
+}
+
+// suffixesOverlap is one step of segmentsOverlap on a[i:] and b[j:]; rest
+// answers for shorter suffixes.
+func suffixesOverlap(a, b []string, i, j int, rest func(i, j int) bool) bool {
+	ea, eb := i == len(a), j == len(b)
 	switch {
-	case len(a) == 0 && len(b) == 0:
+	case ea && eb:
 		return true
-	case len(a) > 0 && a[0] == "**":
-		return segmentsOverlap(a[1:], b) || (len(b) > 0 && segmentsOverlap(a, b[1:]))
-	case len(b) > 0 && b[0] == "**":
-		return segmentsOverlap(a, b[1:]) || (len(a) > 0 && segmentsOverlap(a[1:], b))
-	case len(a) == 0 || len(b) == 0:
+	case !ea && a[i] == "**":
+		return rest(i+1, j) || (!eb && rest(i, j+1))
+	case !eb && b[j] == "**":
+		return rest(i, j+1) || (!ea && rest(i+1, j))
+	case ea || eb:
 		return false
 	}
-	return segmentsCanMatch(a[0], b[0]) && segmentsOverlap(a[1:], b[1:])
+	return segmentsCanMatch(a[i], b[j]) && rest(i+1, j+1)
 }
 
 // segmentsCanMatch reports whether one name could match both segments.
+// A segment holding a backslash counts as a wildcard: crew can't tell what
+// it matches, so it says yes.
 func segmentsCanMatch(a, b string) bool {
+	if strings.Contains(a, `\`) || strings.Contains(b, `\`) {
+		return true
+	}
 	wa, wb := strings.ContainsAny(a, wildcardChars), strings.ContainsAny(b, wildcardChars)
 	if !wa && !wb {
 		return a == b

@@ -298,7 +298,7 @@ func uncommittedNote(dirty []string) string {
 	if len(shown) > maxDirtyPaths {
 		shown = shown[:maxDirtyPaths]
 	}
-	note := "These files have uncommitted changes: " + strings.Join(shown, ", ")
+	note := "These files have uncommitted changes: " + strings.Join(shownNames(shown), ", ")
 	if extra := len(dirty) - len(shown); extra > 0 {
 		note += fmt.Sprintf(" (and %d more)", extra)
 	}

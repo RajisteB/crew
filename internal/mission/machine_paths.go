@@ -35,8 +35,15 @@ func (d *decider) outsideStops(id string, g GitObs) bool {
 func pathsQuestion(p PieceState) string {
 	total := len(p.Outside) + p.OutsideMore
 	first := shownNames(p.Outside[:min(len(p.Outside), questionShown)])
-	return fmt.Sprintf("%s changed %d files outside its paths: %s and %d more",
-		p.ID, total, strings.Join(first, ", "), total-len(first))
+	files := "files"
+	if total == 1 {
+		files = "file"
+	}
+	q := fmt.Sprintf("%s changed %d %s outside its paths: %s", p.ID, total, files, strings.Join(first, ", "))
+	if more := total - len(first); more > 0 {
+		q += fmt.Sprintf(" and %d more", more)
+	}
+	return q
 }
 
 // outsideNote is what a station is told when the piece goes back for this.
@@ -80,10 +87,13 @@ func (s Summary) ForPaths(ps PieceState) Summary {
 	return s
 }
 
+// outsideText lists at most maxOutsideShown files for the orchestrator, then
+// how many more there are, as the station note does.
 func outsideText(s Summary) string {
-	t := strings.Join(shownNames(s.Outside), "\n")
-	if s.OutsideMore > 0 {
-		t += fmt.Sprintf("\nand %d more", s.OutsideMore)
+	shown := s.Outside[:min(len(s.Outside), maxOutsideShown)]
+	t := strings.Join(shownNames(shown), "\n")
+	if more := len(s.Outside) - len(shown) + s.OutsideMore; more > 0 {
+		t += fmt.Sprintf("\nand %d more", more)
 	}
 	return t
 }
