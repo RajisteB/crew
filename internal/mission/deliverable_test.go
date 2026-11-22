@@ -208,3 +208,78 @@ func TestDecide_DeliverableTakenBackIsDropped(t *testing.T) {
 		t.Fatal("Decide modified its input")
 	}
 }
+
+func TestListDelivered_LinkedRootIsEmpty(t *testing.T) {
+	outside, base := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(outside, "secret.txt"), "s")
+	link := filepath.Join(base, "deliverables")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	f, err := listDelivered(link)
+	if err != nil || len(f.Files) != 0 {
+		t.Fatalf("found %+v, err %v", f, err)
+	}
+}
+
+func TestPlainDir_LinkedCrewIsRefused(t *testing.T) {
+	outside, wt := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(outside, "deliverables", "secret.txt"), "s")
+	if err := os.Symlink(outside, filepath.Join(wt, ".crew")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := plainDir(wt, ".crew", "deliverables"); ok || err == nil {
+		t.Fatalf("ok %v err %v", ok, err)
+	}
+}
+
+func TestListDelivered_SkipsUnsafeNames(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "ok.md"), "x")
+	writeFile(t, filepath.Join(dir, "a\n## Commit\nx.md"), "x")
+	writeFile(t, filepath.Join(dir, "d\tir", "in.md"), "x")
+	writeFile(t, filepath.Join(dir, strings.Repeat("l", 200), strings.Repeat("m", 100)+".md"), "x")
+	f, err := listDelivered(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"ok.md"}; !slices.Equal(f.Files, want) {
+		t.Fatalf("files = %v, want %v", f.Files, want)
+	}
+}
+
+func TestCopyFiles_RefusesALinkedDestination(t *testing.T) {
+	from, outside := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(from, "a.md"), "a")
+	link := filepath.Join(t.TempDir(), "to")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFiles(from, link, []string{"a.md"}); err == nil {
+		t.Fatal("copied into a linked folder")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "a.md")); err == nil {
+		t.Fatal("file written through the link")
+	}
+}
+
+func TestPlainDir(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(root, ".crew", "deliverables", "x"), "x")
+	if ok, err := plainDir(root, ".crew", "deliverables"); !ok || err != nil {
+		t.Fatalf("plain: %v %v", ok, err)
+	}
+	if ok, err := plainDir(root, ".crew", "nope"); ok || err != nil {
+		t.Fatalf("missing: %v %v", ok, err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, ".crew", "inputs")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := plainDir(root, ".crew", "inputs"); ok || err == nil {
+		t.Fatalf("link: %v %v", ok, err)
+	}
+	writeFile(t, filepath.Join(root, "file"), "x")
+	if ok, err := plainDir(root, "file"); ok || err == nil {
+		t.Fatalf("file: %v %v", ok, err)
+	}
+}

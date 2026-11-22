@@ -223,7 +223,7 @@ func (t *tick) observeRun(p PieceState) {
 	if ro.State.Status != run.StatusDone {
 		return
 	}
-	found, err := listDelivered(scratchPath(p.Worktree, scratchOut))
+	found, err := t.listScratch(p.ID, p.Worktree)
 	if err != nil {
 		t.note(p.ID, "can't read the deliverables folder: %v", err)
 		return

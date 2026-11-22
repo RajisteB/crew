@@ -72,3 +72,143 @@ func TestEngine_StartCopiesEarlierDeliverables(t *testing.T) {
 		t.Fatalf("input = %v", h.runs.inputs)
 	}
 }
+
+// startedWithDone starts P1, then returns its worktree with the run done.
+func startedWithDone(t *testing.T) (*harness, string) {
+	t.Helper()
+	h := newHarness(t, twoPieces()[0])
+	wt := h.tick().Pieces[0].Worktree
+	h.runs.setRun("run-P1", doneState(), false)
+	return h, wt
+}
+
+func (h *harness) notes() []string {
+	h.t.Helper()
+	evs, _ := h.store.EventsSince(0)
+	var out []string
+	for _, e := range evs {
+		if e.Kind == EvNote {
+			out = append(out, e.Msg)
+		}
+	}
+	return out
+}
+
+func assertIgnoredLink(t *testing.T, h *harness) {
+	t.Helper()
+	p := h.tick().Pieces[0]
+	if p.Deliverable != nil {
+		t.Fatalf("deliverable recorded: %+v", p.Deliverable)
+	}
+	if _, err := os.Stat(h.store.DeliverablesDir("P1")); err == nil {
+		t.Fatal("something was copied into the mission folder")
+	}
+	if p.Status != PiecePROpen {
+		t.Fatalf("the piece should go on to its pull request: %+v", p)
+	}
+	var found bool
+	for _, n := range h.notes() {
+		found = found || strings.Contains(n, "the deliverables folder is not a plain folder and was ignored: ")
+	}
+	if !found {
+		t.Fatalf("no note: %v", h.notes())
+	}
+}
+
+func TestEngine_LinkedDeliverablesRootIsIgnored(t *testing.T) {
+	h, wt := startedWithDone(t)
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "secret.txt"), "s")
+	dir := filepath.Join(wt, ".crew", "deliverables")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, dir); err != nil {
+		t.Fatal(err)
+	}
+	assertIgnoredLink(t, h)
+}
+
+func TestEngine_LinkedCrewFolderIsIgnored(t *testing.T) {
+	h, wt := startedWithDone(t)
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "deliverables", "secret.txt"), "s")
+	if err := os.RemoveAll(filepath.Join(wt, ".crew")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wt, ".crew")); err != nil {
+		t.Fatal(err)
+	}
+	assertIgnoredLink(t, h)
+}
+
+func TestEngine_StartRefusesALinkedInputsFolder(t *testing.T) {
+	h := newHarness(t)
+	st := h.state()
+	st.Pieces[0].Status = PieceComplete
+	st.Pieces[0].Deliverable = &Deliverable{Files: []string{"brief.md"}, Print: "p"}
+	if err := h.store.SaveState(st); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(h.store.DeliverablesDir("P1"), "brief.md"), "the brief")
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "P1", "keep.txt"), "keep")
+	wt := filepath.Join(h.e.RepoRoot, ".crew", "worktrees", h.id+"-P2")
+	if err := os.MkdirAll(filepath.Join(wt, ".crew"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wt, ".crew", "inputs")); err != nil {
+		t.Fatal(err)
+	}
+	if p := h.tick().Pieces[1]; p.Status != PieceQueued {
+		t.Fatalf("P2 should not start: %+v", p)
+	}
+	var found bool
+	for _, n := range h.notes() {
+		found = found || strings.Contains(n, "can't start: prepare the deliverables folders: ")
+	}
+	if !found {
+		t.Fatalf("no note: %v", h.notes())
+	}
+	if _, err := os.Stat(filepath.Join(outside, "P1", "keep.txt")); err != nil {
+		t.Fatalf("file outside the worktree was touched: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "P1", "brief.md")); err == nil {
+		t.Fatal("copied through the link")
+	}
+}
+
+func TestEngine_FailedCollectKeepsTheOldCopy(t *testing.T) {
+	h, wt := startedWithDone(t)
+	out := filepath.Join(wt, ".crew", "deliverables")
+	writeFile(t, filepath.Join(out, "a.md"), "old")
+	h.tick()
+	old := h.piece("P1").Deliverable
+	if old == nil {
+		t.Fatal("first collect failed")
+	}
+	writeFile(t, filepath.Join(out, "a.md"), "new, longer")
+	writeFile(t, filepath.Join(out, "b.md"), "unreadable")
+	if err := os.Chmod(filepath.Join(out, "b.md"), 0); err != nil {
+		t.Fatal(err)
+	}
+	h.tick()
+	if got := h.piece("P1").Deliverable; got == nil || !slices.Equal(got.Files, old.Files) || got.Print != old.Print {
+		t.Fatalf("state changed: %+v", got)
+	}
+	dir := h.store.DeliverablesDir("P1")
+	if b, err := os.ReadFile(filepath.Join(dir, "a.md")); err != nil || string(b) != "old" {
+		t.Fatalf("old copy lost: %q %v", b, err)
+	}
+	ents, _ := os.ReadDir(filepath.Dir(dir))
+	if len(ents) != 1 {
+		t.Fatalf("leftover temporary folder: %v", ents)
+	}
+	var found bool
+	for _, n := range h.notes() {
+		found = found || strings.Contains(n, "can't collect the deliverable")
+	}
+	if !found {
+		t.Fatalf("no note: %v", h.notes())
+	}
+}

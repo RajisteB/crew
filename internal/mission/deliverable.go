@@ -13,12 +13,15 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
 	scratchOut          = "deliverables" // <worktree>/.crew/deliverables: what the station leaves
 	scratchIn           = "inputs"       // <worktree>/.crew/inputs/<piece>: earlier pieces' deliverables
 	maxDeliverableFiles = 20
+	maxPathBytes        = 255
 )
 
 // Found is what a finished run left in its deliverables folder.
@@ -46,6 +49,12 @@ func (s Store) DeliverablesDir(piece string) string {
 // file's path, size and modification time.
 func listDelivered(dir string) (Found, error) {
 	var all []string
+	if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
+			return Found{}, nil // missing, a link or a file: nothing is read
+		}
+		return Found{}, err
+	}
 	if err := walkRegular(dir, "", &all); err != nil {
 		if errors.Is(err, fs.ErrNotExist) && len(all) == 0 {
 			return Found{}, nil
@@ -65,6 +74,37 @@ func listDelivered(dir string) (Found, error) {
 	return Found{Files: slices.Clone(taken), Print: hex.EncodeToString(h.Sum(nil)), Extra: len(all) - len(taken)}, nil
 }
 
+// safeName is false for a name that holds a control character or isn't UTF-8:
+// names go into another agent's instructions and into messages.
+func safeName(name string) bool {
+	return utf8.ValidString(name) && !strings.ContainsFunc(name, unicode.IsControl)
+}
+
+// notPlainError says a folder crew needs is a link or a file.
+type notPlainError struct{ Path string }
+
+func (e *notPlainError) Error() string { return fmt.Sprintf("%s is not a plain folder", e.Path) }
+
+// plainDir reports whether root/rel[0]/rel[1]/... exists and every part is a
+// real directory. A missing part is false with no error; a part that is a
+// symlink or a file is a *notPlainError.
+func plainDir(root string, rel ...string) (bool, error) {
+	cur := root
+	for _, part := range rel {
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return false, nil
+		case err != nil:
+			return false, err
+		case !info.IsDir():
+			return false, &notPlainError{Path: cur}
+		}
+	}
+	return true, nil
+}
+
 // walkRegular appends the regular files below dir/rel, never following a link.
 func walkRegular(dir, rel string, out *[]string) error {
 	entries, err := os.ReadDir(filepath.Join(dir, filepath.FromSlash(rel)))
@@ -73,6 +113,9 @@ func walkRegular(dir, rel string, out *[]string) error {
 	}
 	for _, e := range entries {
 		name := path.Join(rel, e.Name())
+		if !safeName(e.Name()) || len(name) > maxPathBytes {
+			continue
+		}
 		switch {
 		case e.Type().IsRegular():
 			*out = append(*out, name)
@@ -95,6 +138,11 @@ func copyFiles(from, to string, files []string) error {
 		if !filepath.IsLocal(filepath.FromSlash(name)) {
 			return fmt.Errorf("%q is not a path inside the deliverables folder", name)
 		}
+	}
+	if info, err := os.Lstat(to); err == nil && !info.IsDir() {
+		return &notPlainError{Path: to}
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
 	}
 	for _, name := range files {
 		if err := copyOne(from, to, filepath.FromSlash(name)); err != nil {
