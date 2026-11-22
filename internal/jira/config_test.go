@@ -66,10 +66,31 @@ func TestLoadConfig_Refuses(t *testing.T) {
 			if err == nil {
 				t.Fatal("want an error")
 			}
-			if name != "unknown" && !strings.Contains(err.Error(), "jira.yaml: repos.acme/app: ") {
+			if !strings.Contains(err.Error(), "jira.yaml: repos.acme/app: ") {
 				t.Fatalf("error does not name the repo: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoadConfig_TopLevelUnknownKeyKeepsPlainPrefix(t *testing.T) {
+	dir := writeConfig(t, "version: 1\ncolour: red\nrepos: {}\n")
+	_, err := jira.LoadConfig(dir)
+	if err == nil || !strings.HasPrefix(err.Error(), "jira.yaml: ") || strings.Contains(err.Error(), "repos.") {
+		t.Fatalf("want a plain jira.yaml: error, got %v", err)
+	}
+}
+
+func TestLoadConfig_StripsEveryTrailingSlash(t *testing.T) {
+	for _, site := range []string{"https://example.atlassian.net/", "https://example.atlassian.net//"} {
+		dir := writeConfig(t, "version: 1\nrepos:\n  acme/app:\n    site: "+site+"\n    project: ACME\n")
+		c, err := jira.LoadConfig(dir)
+		if err != nil {
+			t.Fatalf("%s: %v", site, err)
+		}
+		if r, _ := c.For("acme/app"); r.Site != "https://example.atlassian.net" {
+			t.Fatalf("%s: Site = %q", site, r.Site)
+		}
 	}
 }
 

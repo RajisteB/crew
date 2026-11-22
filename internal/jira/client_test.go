@@ -138,3 +138,19 @@ func TestMyself(t *testing.T) {
 		t.Fatalf("Myself = %q, %q, %v", id, name, err)
 	}
 }
+
+func TestNew_TrimsTrailingSlashes(t *testing.T) {
+	srv := jiratest.New(t)
+	c := New(srv.URL()+"//", testEmail, testToken)
+	if strings.HasSuffix(c.Base, "/") {
+		t.Fatalf("Base = %q", c.Base)
+	}
+	if _, _, err := c.Myself(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range srv.Requests() {
+		if strings.Contains(r, "//") {
+			t.Fatalf("request path has //: %q", r)
+		}
+	}
+}

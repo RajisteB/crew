@@ -63,22 +63,49 @@ func LoadConfig(crewDir string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("%s: %w", ConfigFile, err)
 	}
-	var c Config
-	dec := yaml.NewDecoder(bytes.NewReader(b))
-	dec.KnownFields(true)
-	if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
+	var raw struct {
+		Version int                  `yaml:"version"`
+		Repos   map[string]yaml.Node `yaml:"repos"`
+	}
+	if err := decodeStrict(b, &raw); err != nil {
 		return Config{}, fmt.Errorf("%s: %w", ConfigFile, err)
 	}
-	repos := make(map[string]Repo, len(c.Repos))
-	for name, r := range c.Repos {
-		r = r.withDefaults()
-		if err := r.Validate(); err != nil {
+	repos := make(map[string]Repo, len(raw.Repos))
+	for name, node := range raw.Repos {
+		r, err := decodeRepo(node)
+		if err == nil {
+			r = r.withDefaults()
+			err = r.Validate()
+		}
+		if err != nil {
 			return Config{}, fmt.Errorf("%s: repos.%s: %w", ConfigFile, name, err)
 		}
 		repos[name] = r
 	}
-	c.Repos = repos
-	return c, nil
+	return Config{Version: raw.Version, Repos: repos}, nil
+}
+
+// decodeRepo decodes one repo's entry on its own, so an unknown key in it is
+// attributed to that repo.
+func decodeRepo(node yaml.Node) (Repo, error) {
+	b, err := yaml.Marshal(&node)
+	if err != nil {
+		return Repo{}, err
+	}
+	var r Repo
+	if err := decodeStrict(b, &r); err != nil {
+		return Repo{}, err
+	}
+	return r, nil
+}
+
+func decodeStrict(b []byte, out any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	if err := dec.Decode(out); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 // For returns the entry for repo ("owner/name").
@@ -121,7 +148,7 @@ func SaveConfig(crewDir string, c Config) error {
 }
 
 func (r Repo) withDefaults() Repo {
-	r.Site = strings.TrimSuffix(r.Site, "/")
+	r.Site = strings.TrimRight(r.Site, "/")
 	fill := func(v *string, def string) {
 		if *v == "" {
 			*v = def
