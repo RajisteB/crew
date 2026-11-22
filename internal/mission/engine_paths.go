@@ -5,7 +5,11 @@ package mission
 // is a note, and the piece is left out of the observation.
 func (t *tick) observeOutside(p PieceState, ahead int) (outside []string, ok bool) {
 	piece, _, found := t.pieceMission(p.ID)
-	if !found || ahead == 0 {
+	if !found {
+		t.note(p.ID, "can't check the files the piece changed: the piece is not in the mission")
+		return nil, false
+	}
+	if ahead == 0 {
 		return nil, true
 	}
 	paths := EffectivePaths(piece, t.e.Domains[piece.Domain])

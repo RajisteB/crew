@@ -2,6 +2,7 @@ package mission
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +57,24 @@ func TestEngine_PieceWithoutPathsIsNotListed(t *testing.T) {
 	h.tick()
 	if h.log.has("ChangedFiles") || !h.log.has("CreatePR") {
 		t.Fatalf("calls %v", h.log.calls)
+	}
+}
+
+func TestEngine_UnknownPieceIsNotOpenedUnchecked(t *testing.T) {
+	h, _ := pathsHarness(t, "go.mod")
+	h.edit(func(s *State) {
+		s.Pieces = append(s.Pieces, PieceState{ID: "P9", Status: PieceRunning, RunID: "run-P9", Worktree: h.e.RepoRoot + "/wt9"})
+	})
+	h.runs.setRun("run-P9", doneState(), false)
+	h.tick()
+	if h.log.has("CreatePR") {
+		t.Fatalf("calls %v", h.log.calls)
+	}
+	found := false
+	for _, e := range h.events(EvNote) {
+		found = found || strings.Contains(e.Msg, "can't check the files the piece changed: the piece is not in the mission")
+	}
+	if !found {
+		t.Fatalf("notes %+v", h.events(EvNote))
 	}
 }

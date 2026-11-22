@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
 	reasonOutOfPaths = "out-of-paths"
 	maxOutsideFiles  = 200
-	maxOutsideShown  = 20 // files named in a note
-	questionShown    = 3  // files named in a question
+	maxOutsideShown  = 20  // files named in a note
+	questionShown    = 3   // files named in a question
+	maxNameShown     = 120 // runes of a file name shown
 )
 
 // outsideStops reports whether the done piece changed files outside its paths
@@ -32,7 +34,7 @@ func (d *decider) outsideStops(id string, g GitObs) bool {
 // pathsQuestion is what the principal is asked about a piece's outside files.
 func pathsQuestion(p PieceState) string {
 	total := len(p.Outside) + p.OutsideMore
-	first := p.Outside[:min(len(p.Outside), questionShown)]
+	first := shownNames(p.Outside[:min(len(p.Outside), questionShown)])
 	return fmt.Sprintf("%s changed %d files outside its paths: %s and %d more",
 		p.ID, total, strings.Join(first, ", "), total-len(first))
 }
@@ -41,6 +43,7 @@ func pathsQuestion(p PieceState) string {
 func outsideNote(p PieceState) string {
 	shown := p.Outside[:min(len(p.Outside), maxOutsideShown)]
 	more := len(p.Outside) - len(shown) + p.OutsideMore
+	shown = shownNames(shown)
 	return fmt.Sprintf("These files are outside this piece's paths: %s (and %d more). Undo those changes or move the work into the piece's paths.",
 		strings.Join(shown, ", "), more)
 }
@@ -78,7 +81,7 @@ func (s Summary) ForPaths(ps PieceState) Summary {
 }
 
 func outsideText(s Summary) string {
-	t := strings.Join(s.Outside, "\n")
+	t := strings.Join(shownNames(s.Outside), "\n")
 	if s.OutsideMore > 0 {
 		t += fmt.Sprintf("\nand %d more", s.OutsideMore)
 	}
@@ -114,4 +117,25 @@ func answerPaths(d *decider, id string, a Answer) (step *RunStep, done bool) {
 		return &RunStep{Piece: id, Kind: "goto", Station: a.Station, Note: withNote(*p, a.Note)}, true
 	}
 	return nil, false
+}
+
+// shownName is a file name made fit to show: git allows any bytes in a name,
+// and an agent controls them. Characters that safeName refuses become "?" and
+// the name is cut. The name kept in state is not changed.
+func shownName(name string) string {
+	clean := strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || unsafeRune(r) {
+			return '?'
+		}
+		return r
+	}, name)
+	return cutRunes(clean, maxNameShown)
+}
+
+func shownNames(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = shownName(n)
+	}
+	return out
 }
