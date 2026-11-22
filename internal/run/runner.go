@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -73,6 +74,7 @@ func (r HeadlessRunner) exec(ctx context.Context, req StationRequest, h config.H
 
 	cmd := exec.CommandContext(tctx, argv[0], argv[1:]...)
 	cmd.Dir = req.WorkDir
+	cmd.Env = config.WithoutSecrets(os.Environ())
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 2 * time.Second
