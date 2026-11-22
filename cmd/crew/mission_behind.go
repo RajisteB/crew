@@ -18,7 +18,8 @@ func domainMap(domains []source.Domain) map[string]source.Domain {
 }
 
 // printOthersOverlap prints one line for each unfinished piece of the mission
-// whose paths overlap a piece another mission in the repo holds. It saves
+// that has not started and whose paths overlap a piece another mission in the
+// repo holds. It saves
 // nothing: the check that counts is the one made when the piece starts.
 func printOthersOverlap(out io.Writer, repoRoot string, st mission.State, m mission.Mission, domains []source.Domain) {
 	byName := domainMap(domains)
@@ -27,8 +28,9 @@ func printOthersOverlap(out io.Writer, repoRoot string, st mission.State, m miss
 		fmt.Fprintf(out, "can't read the repo's other missions: %v\n", err)
 		return
 	}
+	started := mission.StartedPieces(st)
 	for _, p := range m.Pieces {
-		if ps, ok := st.Piece(p.ID); ok && (ps.Status == mission.PieceComplete || ps.Status == mission.PieceCancelled) {
+		if started[p.ID] {
 			continue
 		}
 		if b, blocked := mission.BlockedBy(mission.EffectivePaths(p, byName[p.Domain]), claims); blocked {

@@ -67,3 +67,28 @@ func TestMissionStatus_QueuedPieceBehindAnotherMission(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestStartChecks_NoOverlapLineForAPieceUnderWay(t *testing.T) {
+	r := newMissionRig(t)
+	r.stdin = string(planFile("Build.", pathPiece("P1", "api/**")))
+	out, _ := r.cmd("plan")
+	first := missionIDRe.FindString(out)
+	r.edit(first, func(s *mission.State) {
+		s.Status = mission.StatusRunning
+		s.Pieces[0].Status = mission.PieceRunning
+	})
+	r.stdin = string(planFile("Build more.", pathPiece("P1", "api/v2/**"), pathPiece("P2", "api/v3/**")))
+	out, _ = r.cmd("plan")
+	second := missionIDRe.FindString(out)
+	r.edit(second, func(s *mission.State) { s.Pieces[0].Status = mission.PieceRunning })
+	out, err := r.cmd("start", second)
+	if err != nil {
+		t.Fatalf("start: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "P2 starts after P1 of mission "+first) {
+		t.Errorf("no line for the queued P2:\n%s", out)
+	}
+	if strings.Contains(out, "P1 starts after") {
+		t.Errorf("line for P1, which is under way:\n%s", out)
+	}
+}
