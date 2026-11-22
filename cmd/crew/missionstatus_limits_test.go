@@ -24,7 +24,7 @@ func TestMissionStatus_OnHoldAndPathsWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(out, "\n")
-	if want := "On hold: 60 of 60 station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute."; len(lines) < 2 || lines[1] != want {
+	if want := "On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute."; len(lines) < 2 || lines[1] != want {
 		t.Errorf("second line of status is not %q:\n%s", want, out)
 	}
 	for _, want := range []string{
@@ -34,6 +34,18 @@ func TestMissionStatus_OnHoldAndPathsWait(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("status missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestMissionStatus_NoHoldLineForADoneMission(t *testing.T) {
+	r := newMissionRig(t)
+	id := r.plan()
+	r.edit(id, func(s *mission.State) {
+		s.Status = mission.StatusDone
+		s.Hold = &mission.Hold{Kind: "steps", Count: 60, Max: "60", Since: time.Now()}
+	})
+	if out, _ := r.cmd("status", id); strings.Contains(out, "On hold") {
+		t.Errorf("a done mission is not on hold:\n%s", out)
 	}
 }
 

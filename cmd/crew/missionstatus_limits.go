@@ -8,12 +8,12 @@ import (
 )
 
 // printHold prints the line that says the mission is on hold for its step
-// budget. A mission that is not on hold prints nothing.
+// budget. A mission that is not on hold, or is done, prints nothing.
 func printHold(out io.Writer, st mission.State) {
-	if st.Hold == nil {
+	if st.Hold == nil || st.Status == mission.StatusDone {
 		return
 	}
-	fmt.Fprintf(out, "On hold: %d of %s station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute.\n", st.Hold.Count, st.Hold.Max)
+	fmt.Fprintf(out, "On hold: %d of %s station steps used. Raise limits.steps above %d in missions.yaml; the engine reads it again within a minute.\n", st.Hold.Count, st.Hold.Max, st.Hold.Count)
 }
 
 // pathsFileLines are the files of a paths wait, one per line. `accept` takes

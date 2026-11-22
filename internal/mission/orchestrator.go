@@ -42,7 +42,7 @@ You never edit files, run a station's work, merge or approve anything. You have 
 
    A piece that changes files outside its paths is stopped. Send it back with ` + "`goto`" + `, cancel it, or escalate to the principal. Only the principal can accept those files, with ` + "`--do accept`" + ` on its ` + "`paths`" + ` wait; ` + "`crew mission status`" + ` lists the files. Don't answer ` + "`accept`" + ` for them.
 
-   A mission that is on hold for its step budget (` + "`crew mission status`" + ` says ` + "`On hold`" + `) takes no new work until the principal raises ` + "`limits.steps`" + ` in ` + "`missions.yaml`" + `. Tell them so. Never edit ` + "`missions.yaml`" + ` yourself.
+   A mission that is on hold for its step budget (` + "`crew mission status`" + ` says ` + "`On hold`" + `) takes no new work until the principal raises ` + "`limits.steps`" + ` in ` + "`missions.yaml`" + ` above the steps used, which status shows. Tell them so. Never edit ` + "`missions.yaml`" + ` yourself.
 
    When the principal asks to stop or resume a mission, run ` + "`crew mission stop <id>`" + ` or ` + "`crew mission resume <id>`" + `.
 

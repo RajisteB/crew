@@ -61,7 +61,7 @@ func TestDecide_BudgetHitHoldsOnce(t *testing.T) {
 		t.Fatalf("records = %+v", rec)
 	}
 	ns := of[Notify](as)
-	want := "step budget reached (6 of 6): no new piece starts and nothing is sent back until limits.steps is raised in missions.yaml"
+	want := "step budget reached (6 of 6): no new piece starts and nothing is sent back until limits.steps is raised above 6 in missions.yaml"
 	if len(ns) != 1 || ns[0].Body != want {
 		t.Fatalf("notifies = %+v", ns)
 	}

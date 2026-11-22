@@ -302,8 +302,10 @@ If Jira is set up and the mission has started but nothing has reached the board 
 When the mission is on hold for its step budget, a line follows the first (see "Budgets"):
 
 ```
-On hold: 60 of 60 station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute.
+On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute.
 ```
+
+A mission that is done shows no such line.
 
 A `paths` wait reads like the others, and every file the piece changed outside its paths is listed under it, one per line, because `accept` takes all of them and the question names only three:
 
@@ -435,11 +437,11 @@ A piece with no paths isn't checked.
 | `orchestrator_additions` | Pieces the orchestrator adds on its own. | An `add` is refused. |
 | `delegation_depth` | How deep a piece may delegate. | Not enforced: crew reads it, and delegation doesn't exist yet. |
 
-**On hold.** A station step is one station of a factory running. When a mission has taken as many steps as `limits.steps` allows, crew puts it on hold: it records a `budget-hit` event, tells you once, and `crew mission status` shows `On hold: 60 of 60 station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute.`
+**On hold.** A station step is one station of a factory running. When a mission has taken as many steps as `limits.steps` allows, crew puts it on hold: it records a `budget-hit` event, tells you once, and `crew mission status` shows `On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute.`
 
 On hold, crew starts no new piece, sends no piece back to a station, doesn't ask the orchestrator for decisions, and doesn't resolve a conflicted pull request (that can send a piece back to a station), because each of those takes more steps. Runs that are already going are not stopped: they carry on to the end of their run. A run that has lost its driver (the engine restarted, or the mission was stopped and resumed) is not picked up again until the hold lifts, and a running piece that fails is not put to the orchestrator until then. Everything that costs no step goes on: pull requests are opened and watched, merges are seen, complete pieces are cleaned up, answers you give are applied.
 
-To lift the hold, raise `limits.steps` (or the repo's override under `repos:`) in `missions.yaml`. Nothing else lifts it, and nothing crew or an agent does changes the file. While a mission is on hold the engine reads `missions.yaml` again at the start of each tick (once a minute), so it sees the new number without a restart and notes that work goes on. If the file can't be read at that moment, it keeps the old limit and says so in a note.
+To lift the hold, raise `limits.steps` (or the repo's override under `repos:`) in `missions.yaml` above the steps used. The number used can keep rising while on hold, because runs that were already going finish their run: status always shows the current count, so raise the limit above that. A raise that is still too small changes nothing but the numbers: crew notes `step budget raised to 70, 75 used: still on hold` once and status shows the new limit. A mission that ends while on hold is done, and the hold goes with it. Nothing else lifts the hold, and nothing crew or an agent does changes the file. While a mission is on hold the engine reads `missions.yaml` again at the start of each tick (once a minute), so it sees the new number without a restart and notes that work goes on. If the file can't be read at that moment, it keeps the old limit and says so in a note.
 
 ## What "waiting on you" means
 

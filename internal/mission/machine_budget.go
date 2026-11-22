@@ -47,12 +47,19 @@ func (d *decider) overBudget() bool {
 // applyBudget puts the mission on hold, or lifts the hold, and while it is on
 // hold drops the actions that take on new work or send a piece back. Nothing Decide chose that
 // would be dropped changed the state, so the state stays as it was.
+// A mission that is done is on hold no more.
 func (d *decider) applyBudget() {
+	if d.s.Status == StatusDone {
+		d.s.Hold = nil
+		return
+	}
 	over := d.overBudget()
 	switch {
 	case over && d.s.Hold == nil:
 		d.startHold()
-	case !over && d.s.Hold != nil:
+	case over:
+		d.keepHold()
+	case d.s.Hold != nil:
 		d.s.Hold = nil
 		d.record(EvNote, "", "step budget raised to "+d.lim.Steps.String()+": work goes on")
 	}
@@ -77,8 +84,21 @@ func (d *decider) startHold() {
 	d.notify(stepBudgetText(n, limit))
 }
 
+// keepHold keeps the hold's numbers current while the mission stays over
+// budget: Count follows the steps used (runs already going carry on), and a
+// limit raised too little is noted once.
+func (d *decider) keepHold() {
+	h := *d.s.Hold
+	h.Count = StepsUsed(d.s)
+	if limit := d.lim.Steps.String(); limit != h.Max {
+		h.Max = limit
+		d.record(EvNote, "", "step budget raised to "+limit+", "+strconv.Itoa(h.Count)+" used: still on hold")
+	}
+	d.s.Hold = &h
+}
+
 func stepBudgetText(n int, limit string) string {
-	return "step budget reached (" + strconv.Itoa(n) + " of " + limit + "): no new piece starts and nothing is sent back until limits.steps is raised in missions.yaml"
+	return "step budget reached (" + strconv.Itoa(n) + " of " + limit + "): no new piece starts and nothing is sent back until limits.steps is raised above " + strconv.Itoa(n) + " in missions.yaml"
 }
 
 // callBudgetHit records that a piece used up its orchestrator calls.
