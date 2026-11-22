@@ -56,7 +56,7 @@ type Engine struct {
 
 	lastNotes   map[string]struct{} // notes of the previous tick, to avoid repeating them
 	streaks     map[string]streak   // failures seen in an unbroken run of ticks, by failureKey
-	attachTries map[string]int      // failed uploads by piece and file, in memory only
+	attachTries map[string]int      // failed uploads by piece and file, in memory only: a new engine tries again
 }
 
 func (e *Engine) notifier() notify.Notifier {

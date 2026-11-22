@@ -1,6 +1,8 @@
 package mission
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -111,27 +113,80 @@ func TestEngine_SkippedCommentHoldsTheCursor(t *testing.T) {
 func TestEngine_AttachIsGivenUpAfterThreeTries(t *testing.T) {
 	h := onePiece(t)
 	h.withTracker()
-	h.withTrackerDown(true) // an attach that fails is never "down"
+	h.withTrackerDown(false)
 	h.tick()
 	deliverable(t, h, "a.txt", 5)
 	h.fail.failNext("attach", 1000)
 	for range 3 {
 		h.tick()
 	}
+	want := "Jira: a.txt could not be attached after 3 tries; crew jira sync " + h.id + " tries again"
 	giveUp := 0
 	for _, e := range h.events(EvNote) {
-		if e.Msg == "Jira: a.txt could not be attached after 3 tries and stays in the mission folder" {
+		if e.Msg == want {
 			giveUp++
 		}
 	}
 	if h.log.count("attach:J-2:a.txt") != 3 || giveUp != 1 {
 		t.Fatalf("calls %v notes %v", h.log.calls, h.events(EvNote))
 	}
-	if a := h.piece("P1").Deliverable.Attached; len(a) != 1 {
-		t.Fatalf("attached = %v", a)
-	}
 	h.tick()
 	if h.log.count("attach:") != 3 {
+		t.Fatalf("a fourth try: %v", h.log.calls)
+	}
+	if a := h.piece("P1").Deliverable.Attached; len(a) != 0 {
+		t.Fatalf("the file was recorded as attached: %v", a)
+	}
+	if owed, err := h.e.SyncTracker(context.Background()); err != nil || owed != 1 {
+		t.Fatalf("owed %d err %v", owed, err)
+	}
+	fresh := *h.e // what crew jira sync builds: the same store, new counters
+	fresh.attachTries, fresh.lastNotes = nil, nil
+	h.fail.failNext("attach", 0)
+	if owed, err := fresh.SyncTracker(context.Background()); err != nil || owed != 0 {
+		t.Fatalf("fresh engine: owed %d err %v", owed, err)
+	}
+	if h.log.count("attach:J-2:a.txt") != 4 {
+		t.Fatalf("a fresh engine did not try again: %v", h.log.calls)
+	}
+}
+
+func TestEngine_ADownAttachDoesNotUseUpTries(t *testing.T) {
+	h := onePiece(t)
+	h.withTracker()
+	h.withTrackerDown(true)
+	h.tick()
+	deliverable(t, h, "a.txt", 5)
+	h.fail.failNext("attach", 1000)
+	h.emitEv(Event{Kind: EvDecision, Piece: "P1", Msg: "after the attach"})
+	for i := range 5 {
+		h.tick()
+		if n := h.log.count("attach:J-2:a.txt"); n != i+1 {
+			t.Fatalf("tick %d: %d attach calls", i+1, n)
+		}
+	}
+	if h.log.has("comment:") {
+		t.Fatalf("the pass went on after a down error: %v", h.log.calls)
+	}
+	for _, e := range h.events(EvNote) {
+		if strings.Contains(e.Msg, "could not be attached") {
+			t.Fatalf("give-up note: %q", e.Msg)
+		}
+	}
+}
+
+func TestEngine_AnAttachTimeoutUsesUpTries(t *testing.T) {
+	h := onePiece(t)
+	ft := h.withTracker()
+	h.withTrackerDown(true)
+	ft.attachErr = fmt.Errorf("upload: %w", context.DeadlineExceeded)
+	h.tick()
+	deliverable(t, h, "a.txt", 5)
+	h.emitEv(Event{Kind: EvDecision, Piece: "P1", Msg: "after the attach"})
+	for range 4 {
+		h.tick()
+	}
+	if h.log.count("attach:J-2:a.txt") != 3 || h.log.count("comment:J-2") != 1 {
 		t.Fatalf("calls = %v", h.log.calls)
 	}
 }
@@ -139,7 +194,7 @@ func TestEngine_AttachIsGivenUpAfterThreeTries(t *testing.T) {
 func TestEngine_AFailedAttachDoesNotEndThePass(t *testing.T) {
 	h := onePiece(t)
 	h.withTracker()
-	h.withTrackerDown(true)
+	h.withTrackerDown(false)
 	h.tick()
 	deliverable(t, h, "a.txt", 5)
 	h.fail.failNext("attach", 1000)

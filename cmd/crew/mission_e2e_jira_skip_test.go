@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"slices"
 	"testing"
 
 	"github.com/crewfile-dev/crew/internal/jira"
@@ -19,9 +18,9 @@ func TestMission_EndToEnd_RefusedAttachmentsHoldUpNothing(t *testing.T) {
 	}
 	r.launchDeliverables()
 	for _, id := range []string{"P1", "P2"} {
-		st := r.tickUntil(id+"'s deliverable given up and in review", func(s mission.State) bool {
+		st := r.tickUntil(id+"'s uploads tried three times and the issue in review", func(s mission.State) bool {
 			p := piece(t, s, id)
-			return p.Deliverable != nil && slices.Equal(p.Deliverable.Attached, p.Deliverable.Files) && p.Jira.Lane == mission.LaneInReview
+			return p.Jira.Lane == mission.LaneInReview && p.Jira.Issue != "" && uploads(r, p.Jira.Issue) >= 3
 		})
 		r.srv.SetStatus(piece(t, st, id).Jira.Issue, "Done")
 	}
@@ -36,6 +35,29 @@ func TestMission_EndToEnd_RefusedAttachmentsHoldUpNothing(t *testing.T) {
 	if len(r.srv.Issues()) != 3 || st.Jira.Epic != "ACME-1" {
 		t.Fatalf("issues %+v epic %q", r.srv.Issues(), st.Jira.Epic)
 	}
+	for _, id := range []string{"P1", "P2"} {
+		if d := piece(t, st, id).Deliverable; d == nil || len(d.Attached) != 0 {
+			t.Errorf("%s: deliverable %+v, want its files still owed", id, d)
+		}
+		if n := uploads(r, piece(t, st, id).Jira.Issue); n != 3 {
+			t.Errorf("%s: %d uploads, want 3", id, n)
+		}
+	}
+}
+
+// uploads counts the attachment requests the site got for an issue.
+func uploads(r *jiraE2E, key string) int {
+	return countOf(r.srv.Requests(), "POST /rest/api/3/issue/"+key+"/attachments")
+}
+
+func countOf(list []string, want string) int {
+	n := 0
+	for _, s := range list {
+		if s == want {
+			n++
+		}
+	}
+	return n
 }
 
 func TestSetTracker_SetsTrackerDown(t *testing.T) {

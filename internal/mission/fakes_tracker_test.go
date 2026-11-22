@@ -23,6 +23,7 @@ type fakeTracker struct {
 	next      int
 	emptyKey  bool                     // Create returns "" with no error
 	onCreate  func(kind, label string) // called at the start of every Create
+	attachErr error                    // when set, every Attach returns it
 }
 
 func (f *fakeTracker) hit(op, id string) error {
@@ -77,6 +78,9 @@ func (f *fakeTracker) Flag(_ context.Context, key string, on bool) error {
 
 func (f *fakeTracker) Attach(_ context.Context, key, path string) error {
 	f.log.add("attach:%s:%s", key, filepath.Base(path))
+	if f.attachErr != nil {
+		return f.attachErr
+	}
 	return f.hit("attach", key)
 }
 

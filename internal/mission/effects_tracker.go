@@ -162,6 +162,9 @@ func (p *pass) send(op TrackerOp) (result, error) {
 		}
 		return carryOn, nil
 	}
+	if op.Kind == "attach" && t.e.stoppedTrying(op) {
+		return carryOn, nil // stays owed for crew jira sync, without a call or a note
+	}
 	cerr := p.call(op, key)
 	if cerr == nil {
 		return p.succeeded(op)
@@ -174,7 +177,7 @@ func (p *pass) send(op TrackerOp) (result, error) {
 	case t.permanent(cerr):
 		return p.givenUpOn(op)
 	case op.Kind == "attach":
-		return p.attachFailed(op)
+		return p.attachFailed(op, cerr)
 	case t.down(cerr):
 		return stopPass, nil
 	}
