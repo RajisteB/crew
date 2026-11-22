@@ -80,16 +80,55 @@ func TestBoard_CreateUnknownKind(t *testing.T) {
 	}
 }
 
+func countReq(srv *jiratest.Server, req string) int {
+	n := 0
+	for _, r := range srv.Requests() {
+		if r == req {
+			n++
+		}
+	}
+	return n
+}
+
 func TestBoard_AccountLookupRetriesAfterFailure(t *testing.T) {
 	b, srv := newBoard(t, nil)
-	srv.Fail(500, 2) // the search and nothing else would fail first; fail enough to hit myself
 	ctx := context.Background()
-	if _, err := b.Create(ctx, "piece", "l", "s", "", ""); err == nil {
-		t.Fatal("want an error")
+	srv.Fail(500, 1) // the first request is GET /myself
+	if _, err := b.assignee(ctx); err == nil {
+		t.Fatal("want an error from the failing lookup")
 	}
-	srv.Fail(0, 0)
-	if _, err := b.Create(ctx, "piece", "l", "s", "", ""); err != nil {
-		t.Fatalf("second try: %v", err)
+	if got := countReq(srv, "GET /rest/api/3/myself"); got != 1 {
+		t.Fatalf("after failure: %d GET /myself, want 1", got)
+	}
+	id, err := b.assignee(ctx)
+	if err != nil || id != "acc-1" {
+		t.Fatalf("second try: %q, %v", id, err)
+	}
+	if got := countReq(srv, "GET /rest/api/3/myself"); got != 2 {
+		t.Fatalf("after retry: %d GET /myself, want 2", got)
+	}
+	if _, err := b.assignee(ctx); err != nil || countReq(srv, "GET /rest/api/3/myself") != 2 {
+		t.Fatal("a successful lookup was not remembered")
+	}
+}
+
+func TestBoard_FlagLookupRetriesAfterFailure(t *testing.T) {
+	b, srv := newBoard(t, nil)
+	ctx := context.Background()
+	key, _ := b.Create(ctx, "piece", "l", "s", "", "")
+	srv.Fail(500, 1) // the first request of Flag is GET /field
+	err := b.Flag(ctx, key, true)
+	if err == nil || errors.Is(err, ErrNoFlag) {
+		t.Fatalf("err = %v, want a lookup error that is not ErrNoFlag", err)
+	}
+	if err := b.Flag(ctx, key, true); err != nil {
+		t.Fatalf("second Flag: %v", err)
+	}
+	if is, _ := srv.Issue(key); !is.Flagged {
+		t.Fatal("issue not flagged after retry")
+	}
+	if got := countReq(srv, "GET /rest/api/3/field"); got != 2 {
+		t.Fatalf("%d GET /field, want 2", got)
 	}
 }
 
