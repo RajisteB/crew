@@ -156,3 +156,26 @@ func TestJiraUsage(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestJiraSync_RefusesWithoutCredentials(t *testing.T) {
+	r := newJiraRig(t)
+	r.saveEntry(0)
+	id := r.plan()
+	finishMission(r, id)
+	setJiraEnv(t, "", testToken)
+	unlock, err := r.store(id).Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock() // a lock taken now would show as a changed lock file only through use; sync must not need it
+	before, _ := r.store(id).LoadState()
+	_, err = r.jira("sync", id)
+	want := "Jira is set up for acme/app, but CREW_JIRA_EMAIL is not set here; set it, or remove the repo from jira.yaml"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v", err)
+	}
+	after, _ := r.store(id).LoadState()
+	if before.Jira != after.Jira || len(r.srv.Requests()) != 0 {
+		t.Fatal("sync changed something")
+	}
+}

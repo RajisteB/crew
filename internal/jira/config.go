@@ -127,6 +127,9 @@ func (c Config) With(repo string, r Repo) Config {
 
 // SaveConfig writes <crewDir>/jira.yaml through a temp file and a rename, mode 0600.
 func SaveConfig(crewDir string, c Config) error {
+	if c.Version == 0 {
+		c.Version = 1
+	}
 	body, err := yaml.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("%s: %w", ConfigFile, err)

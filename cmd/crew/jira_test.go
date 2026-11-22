@@ -200,6 +200,9 @@ func TestJiraSetup_NoTerminalWritesNothing(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	r.noEntry()
+	if n := len(r.srv.Requests()); n != 0 {
+		t.Fatalf("%d requests were sent", n)
+	}
 }
 
 func TestJiraSetup_WrongPhraseWritesNothing(t *testing.T) {
@@ -227,7 +230,7 @@ func TestJiraSetup_RefusesOtherHosts(t *testing.T) {
 func TestJiraSetup_ProblemStops(t *testing.T) {
 	r := newJiraRig(t)
 	r.srv.DropStatus("In Review")
-	ttyNeverOpened(t)
+	screen := fakeTTY(t, "acme/app ACME\n")
 	out, err := r.setup()
 	if err == nil {
 		t.Fatalf("want error\n%s", out)
@@ -237,6 +240,21 @@ func TestJiraSetup_ProblemStops(t *testing.T) {
 		t.Fatalf("out lacks %q:\n%s", want, out)
 	}
 	r.noEntry()
+	if text := screen(); text != "" {
+		t.Fatalf("the confirmation was asked:\n%s", text)
+	}
+}
+
+func TestJiraSetup_FirstSaveIsVersion1(t *testing.T) {
+	r := newJiraRig(t)
+	fakeTTY(t, "acme/app ACME\n")
+	if out, err := r.setup(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	b, err := os.ReadFile(filepath.Join(r.crewDir, jira.ConfigFile))
+	if err != nil || !strings.Contains(string(b), "\nversion: 1\n") {
+		t.Fatalf("err = %v\n%s", err, b)
+	}
 }
 
 func TestJiraSetup_NeedsCredentials(t *testing.T) {

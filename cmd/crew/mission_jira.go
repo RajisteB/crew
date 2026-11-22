@@ -28,7 +28,12 @@ func printJiraLine(env missionEnv, slug string) {
 // jiraStartCheck refuses to start an engine that has a Jira project to write
 // to but no credentials. It makes no network call.
 func jiraStartCheck(env missionEnv, slug string) error {
-	cfg, err := jira.LoadConfig(env.crewDir)
+	return jiraCredentialsCheck(env.crewDir, slug)
+}
+
+// jiraCredentialsCheck is that check for a crew directory and a repo.
+func jiraCredentialsCheck(crewDir, slug string) error {
+	cfg, err := jira.LoadConfig(crewDir)
 	if err != nil {
 		return err
 	}

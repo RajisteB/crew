@@ -118,20 +118,6 @@ func jiraSetup(req jiraRequest, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	client := newJiraClient(repo, email, token)
-	if repo.Board == 0 {
-		var line string
-		repo.Board, line = chooseBoard(context.Background(), client, repo.Project)
-		fmt.Fprintln(out, line)
-	}
-	if n := jiraReport(context.Background(), client, slug, repo, out); n > 0 {
-		return errors.New("Jira can't be used as set; nothing was written")
-	}
-	return confirmAndSave(req, slug, repo, out)
-}
-
-// confirmAndSave asks on the terminal, and only then writes the entry.
-func confirmAndSave(req jiraRequest, slug string, repo jira.Repo, out io.Writer) error {
 	cfg, err := jira.LoadConfig(req.crewDir)
 	if err != nil {
 		return err
@@ -141,6 +127,20 @@ func confirmAndSave(req jiraRequest, slug string, repo jira.Repo, out io.Writer)
 		return fmt.Errorf("crew jira setup needs a terminal: %w", err)
 	}
 	defer tty.Close()
+	client := newJiraClient(repo, email, token)
+	if repo.Board == 0 {
+		var line string
+		repo.Board, line = chooseBoard(context.Background(), client, repo.Project)
+		fmt.Fprintln(out, line)
+	}
+	if n := jiraReport(context.Background(), client, slug, repo, out); n > 0 {
+		return errors.New("Jira can't be used as set; nothing was written")
+	}
+	return confirmAndSave(req, tty, cfg, slug, repo, out)
+}
+
+// confirmAndSave asks on the terminal, and only then writes the entry.
+func confirmAndSave(req jiraRequest, tty io.ReadWriter, cfg jira.Config, slug string, repo jira.Repo, out io.Writer) error {
 	phrase := slug + " " + repo.Project
 	fmt.Fprintf(tty, "\nRepo:     %s\nJira:     project %s on %s\n\nmissions in this repo will create issues, comments and attachments there.\n\n", slug, repo.Project, repo.Site)
 	if err := principal.Confirm(tty, fmt.Sprintf(`Type "%s" to confirm: `, phrase), phrase); err != nil {
@@ -208,6 +208,13 @@ func jiraSync(req jiraRequest, id string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	st, err := store.LoadState()
+	if err != nil {
+		return err
+	}
+	if err := jiraCredentialsCheck(req.crewDir, st.Repo); err != nil {
+		return err
+	}
 	unlock, err := store.Lock()
 	if err != nil {
 		if _, live := store.LockedBy(); live {
@@ -222,10 +229,6 @@ func jiraSync(req jiraRequest, id string, out io.Writer) error {
 	}
 	defer runs.Wait()
 	if e.Tracker == nil {
-		st, err := store.LoadState()
-		if err != nil {
-			return err
-		}
 		return fmt.Errorf("Jira is not set up for %s; run crew jira setup", st.Repo)
 	}
 	owed, err := e.SyncTracker(context.Background())
