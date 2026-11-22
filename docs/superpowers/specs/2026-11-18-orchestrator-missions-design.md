@@ -161,7 +161,7 @@ crew refuses the mission unless all of these hold:
 
 crew then adjusts and reports:
 
-- **Overlapping paths.** If two pieces that could run together have paths that intersect, crew makes the later one wait for the earlier one and says so. A piece with no paths can't be checked, and crew warns about it.
+- **Overlapping paths.** If two pieces that could run together have paths that intersect, crew makes the later one wait for the earlier one and says so. A piece with no paths can't be checked, and crew warns about it. The same check holds across a repo's missions (added 2026-11-22): a piece doesn't start while a piece of another mission has started, is not finished, and has paths that intersect its own.
 
 ### Repo confirmation
 
