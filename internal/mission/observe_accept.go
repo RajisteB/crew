@@ -39,10 +39,11 @@ func (t *tick) pieceMode(p PieceState) principal.AutoMode {
 }
 
 // movedDone reports whether the principal moved the piece's issue to Done.
-// crew reads the board only for an issue crew last left in In Review: finding
-// it in Done then is the principal's act, not a stale state.
+// crew reads the board only for an issue crew itself moved to In Review (not
+// a move Jira refused) since the deliverable was collected: finding it in
+// Done then is the principal's act, not a stale state.
 func (t *tick) movedDone(p PieceState) bool {
-	if t.e.Tracker == nil || p.Jira.Issue == "" || p.Jira.Lane != LaneInReview {
+	if t.e.Tracker == nil || p.Jira.Issue == "" || p.Jira.Lane != LaneInReview || p.Jira.Unconfirmed {
 		return false
 	}
 	done, err := t.e.Tracker.Done(t.ctx, p.Jira.Issue)

@@ -34,6 +34,9 @@ func Started(s State, piece, runID, branch, worktree string) State {
 func DeliverableCollected(s State, piece string, files []string, print string, now time.Time) State {
 	return update(s, piece, func(p *PieceState) {
 		p.Deliverable = &Deliverable{Files: slices.Clone(files), Print: print, Posted: now}
+		// Forget the recorded lane: the next sync moves the issue again, and
+		// a Done is read only after that move to In Review.
+		p.Jira.Lane, p.Jira.Unconfirmed = "", false
 	})
 }
 

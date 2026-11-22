@@ -82,6 +82,9 @@ type Tracked struct {
 	Lane    string `json:"lane,omitempty"`
 	Flagged bool   `json:"flagged,omitempty"`
 	Sprint  bool   `json:"sprint,omitempty"`
+	// Unconfirmed: Lane was recorded when Jira refused the move for good, so
+	// the board may show another lane.
+	Unconfirmed bool `json:"unconfirmed,omitempty"`
 }
 
 // TrackerState is what Jira already shows for the mission.

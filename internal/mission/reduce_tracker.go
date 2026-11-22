@@ -16,14 +16,24 @@ func IssueCreated(s State, piece, key string) State {
 	return update(s, piece, func(p *PieceState) { p.Jira.Issue, p.Jira.Lane = key, LaneToDo })
 }
 
-// LaneSet records the lane Jira now shows. piece "" is the epic.
+// LaneSet records the lane Jira now shows, confirmed. piece "" is the epic.
 func LaneSet(s State, piece, lane string) State {
 	if piece == "" {
 		c := s.Clone()
 		c.Jira.EpicLane = lane
 		return c
 	}
-	return update(s, piece, func(p *PieceState) { p.Jira.Lane = lane })
+	return update(s, piece, func(p *PieceState) { p.Jira.Lane, p.Jira.Unconfirmed = lane, false })
+}
+
+// LaneGivenUp records the lane of a move Jira refused for good, marked
+// unconfirmed: crew stops asking, but won't trust the board's Done for it.
+// piece "" is the epic, which needs no mark.
+func LaneGivenUp(s State, piece, lane string) State {
+	if piece == "" {
+		return LaneSet(s, "", lane)
+	}
+	return update(s, piece, func(p *PieceState) { p.Jira.Lane, p.Jira.Unconfirmed = lane, true })
 }
 
 // FlagSet records whether Jira shows the piece's issue flagged.

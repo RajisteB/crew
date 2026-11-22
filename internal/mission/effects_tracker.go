@@ -182,12 +182,18 @@ func (p *pass) send(op TrackerOp) (result, error) {
 }
 
 // givenUpOn handles an op that can never succeed: a create or a sprint is
-// tried again next tick, anything else is recorded as done.
+// tried again next tick, a move is recorded as unconfirmed (LaneGivenUp), and
+// anything else is recorded as done.
 func (p *pass) givenUpOn(op TrackerOp) (result, error) {
 	if op.Kind == "create" {
 		p.failed[op.Piece] = true
 	}
-	if op.Kind == "create" || op.Kind == "create-epic" || op.Kind == "sprint" {
+	switch op.Kind {
+	case "create", "create-epic", "sprint":
+		return carryOn, nil
+	case "move", "move-epic":
+		p.t.s = LaneGivenUp(p.t.s, op.Piece, op.Lane)
+		p.dirty = true
 		return carryOn, nil
 	}
 	return p.succeeded(op)

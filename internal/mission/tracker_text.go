@@ -8,6 +8,8 @@ import (
 const (
 	maxSummaryRunes = 120
 	maxCommentRunes = 1000
+	maxBodyRunes    = 30_000 // Jira refuses a description over 32,767 characters
+	bodyCutMark     = "\n… (cut: the full text is in the mission folder)"
 )
 
 // cut shortens text to at most n runes, never splitting one.
@@ -17,6 +19,14 @@ func cut(text string, n int) string {
 		return text
 	}
 	return string(r[:n])
+}
+
+// cutBody keeps a description within maxBodyRunes, and says so when it cut.
+func cutBody(body string) string {
+	if c := cut(body, maxBodyRunes); c != body {
+		return c + bodyCutMark
+	}
+	return body
 }
 
 // TrackerLabel is the label that ties an issue to its mission and piece.
@@ -29,7 +39,7 @@ func TrackerLabel(missionID, piece string) string {
 
 // EpicText is the summary and body of the mission's epic.
 func EpicText(missionID string, m Mission) (summary, body string) {
-	return cut(firstLine(m.Request), maxSummaryRunes), "Mission " + missionID + "\n\n" + m.Request
+	return cut(firstLine(m.Request), maxSummaryRunes), cutBody("Mission " + missionID + "\n\n" + m.Request)
 }
 
 // IssueText is the summary and body of a piece's issue.
@@ -41,7 +51,7 @@ func IssueText(missionID string, m Mission, p Piece) (summary, body string) {
 	summary = cut(p.ID+": "+firstLine(p.Brief), maxSummaryRunes)
 	body = fmt.Sprintf("Mission %s, piece %s\nDomain: %s\nFactory: %s\nWaits for: %s\n\n%s",
 		missionID, p.ID, p.Domain, p.Factory, waits, p.Brief)
-	return summary, body
+	return summary, cutBody(body)
 }
 
 // DeliverablesRel is the folder, relative to the repo, that holds a piece's deliverables.
