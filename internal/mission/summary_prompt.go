@@ -70,6 +70,9 @@ func (s Summary) dataText() string {
 	}
 	section(&b, "Piece", pieceText(s.Piece))
 	section(&b, "What happened", failureText(s))
+	if len(s.Outside) > 0 {
+		section(&b, "Files changed outside the piece's paths:", outsideText(s))
+	}
 	section(&b, "Route counts", routesText(s.Routes))
 	section(&b, "Last step", lastText(s))
 	section(&b, "Earlier decisions on this piece", decisionsText(s.Earlier))

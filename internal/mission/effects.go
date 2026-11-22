@@ -231,6 +231,9 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 	}
 	sum := BuildSummary(t.s.MissionID, t.m, ps, rs, f, last, stepsDir, t.lim, t.s.Additions)
 	sum = t.forPR(sum, a.Failure, ps)
+	if a.Failure == reasonOutOfPaths {
+		sum = sum.ForPaths(ps)
+	}
 	d, err := t.decide(sum)
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again

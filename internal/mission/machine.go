@@ -30,6 +30,8 @@ type RunObs struct {
 type GitObs struct {
 	Ahead int      // commits ahead of the base branch
 	Dirty []string // uncommitted paths
+	// Outside: changed files outside the piece's effective paths; nil when none.
+	Outside []string
 }
 
 // Obs is everything Decide may look at besides the mission and its state.
@@ -252,6 +254,10 @@ func (d *decider) failed(id string, rs run.State) {
 func (d *decider) ask(id, failure string) {
 	p := d.ps(id)
 	if !Allows(d.lim.OrchestratorCalls, p.Calls+1) {
+		if failure == reasonOutOfPaths {
+			d.wait(id, WaitPaths, pathsQuestion(*p), PieceRunning)
+			return
+		}
 		q := fmt.Sprintf("%s hit the orchestrator call limit after a %s failure", id, failure)
 		back := PieceRunning
 		if p.Status == PiecePROpen {
@@ -272,6 +278,7 @@ func (d *decider) done(id string) {
 	case len(g.Dirty) > 0:
 		d.ask(id, reasonUncommit)
 	case d.collects(id):
+	case g.Ahead > 0 && d.outsideStops(id, g):
 	case g.Ahead == 0:
 		d.dropsTakenBack(id)
 		if d.finished(id) {

@@ -150,7 +150,7 @@ func (a *applier) carryOut(d OrchDecision) (Mission, State, []Action, *RunStep) 
 		step = &RunStep{Piece: a.piece, Kind: "retry"}
 	case "goto":
 		a.resumeFromPR()
-		step = &RunStep{Piece: a.piece, Kind: "goto", Station: d.Station, Note: d.Note}
+		step = &RunStep{Piece: a.piece, Kind: "goto", Station: d.Station, Note: a.gotoNote(d.Note)}
 	case "cancel":
 		step = a.cancelPiece(a.piece, a.by)
 	case "rebrief":
@@ -277,7 +277,8 @@ func (a *applier) reject(d OrchDecision, action, why string) {
 // escalate puts a question to the principal and holds the piece until it is
 // answered.
 func (a *applier) escalate(question string) {
-	a.openWait(a.piece, WaitQuestion, question, a.backAfterQuestion())
+	kind, text := a.escalationWait(question)
+	a.openWait(a.piece, kind, text, a.backAfterQuestion())
 	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvEscalated, Piece: a.piece, By: a.by, Msg: question}})
 	a.notify(waitText(*a.ps(a.piece)))
 }

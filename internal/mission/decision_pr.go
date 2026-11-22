@@ -6,6 +6,9 @@ import "slices"
 // action, minus "retry" for "conflict" and "checks-failed" (the run is done;
 // there is no station to run again).
 func allowedFor(failure string) []string {
+	if failure == reasonOutOfPaths {
+		return []string{"goto", "cancel", "escalate"}
+	}
 	if failure == reasonConflict || failure == reasonChecksFailed {
 		return slices.DeleteFunc(slices.Clone(allowedActions), func(a string) bool { return a == "retry" })
 	}

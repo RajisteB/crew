@@ -39,7 +39,9 @@ type Summary struct {
 	Earlier                  []Decision
 	CallsLeft, AdditionsLeft string
 	Allowed                  []string
-	StepsDir                 string // where the full outputs are
+	StepsDir                 string   // where the full outputs are
+	Outside                  []string // for the orchestrator: the files outside the paths
+	OutsideMore              int
 }
 
 // BuildSummary gathers (id is the mission id) what the orchestrator needs to settle a stuck piece.

@@ -246,7 +246,11 @@ func (t *tick) observeRun(p PieceState) {
 		t.note(p.ID, "can't count commits: %v", err)
 		return
 	}
-	t.obs.Git[p.ID] = GitObs{Ahead: ahead, Dirty: dirty}
+	outside, ok := t.observeOutside(p, ahead)
+	if !ok {
+		return
+	}
+	t.obs.Git[p.ID] = GitObs{Ahead: ahead, Dirty: dirty, Outside: outside}
 	t.obs.Delivered[p.ID] = found
 }
 
