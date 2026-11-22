@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// checkPaths reports the first entry of a domain's paths that could never
+// CheckPaths reports the first entry of a domain's paths that could never
 // match what the author meant: an empty or absolute pattern, an empty or ..
 // segment, or a segment path.Match rejects. A leading ./ and a trailing / are
 // fine.
-func checkPaths(patterns []string) error {
+func CheckPaths(patterns []string) error {
 	for _, p := range patterns {
 		if why := badPath(p); why != "" {
 			return fmt.Errorf("paths: %q: %s", p, why)

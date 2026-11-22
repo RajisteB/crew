@@ -86,6 +86,9 @@ func checkPiece(p Piece, in CheckInput) []error {
 	if !domOK {
 		errs = append(errs, fmt.Errorf("%s: unknown domain %q", label(p), p.Domain))
 	}
+	if err := source.CheckPaths(p.Paths); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", p.ID, err))
+	}
 	errs = append(errs, checkRoute(p, dom, domOK, in)...)
 	return errs
 }
