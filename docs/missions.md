@@ -374,7 +374,7 @@ The notes are of two kinds: a piece that has no paths, and a piece whose own `pa
 
 **`apart_from`.** When two pieces overlap and neither waits for the other, crew writes `apart_from: [P1]` on the later one in the mission file, and the later piece doesn't start until P1 is complete or cancelled. The plan prints one line for each pair, as above. `apart_from` is crew's field: whatever a plan or an amendment supplies for it is replaced, and crew works it out again on every plan, start, amendment and added piece. A piece kept apart from a cancelled piece starts, because the piece in its way is gone. A piece that has already started is never given an `apart_from` entry (a piece parked on a question before it ever started still is): when it overlaps a later piece, that later piece is the one kept apart.
 
-When one piece already waits for the other, directly or through other pieces, there is nothing to separate, and crew adds nothing.
+When one piece already waits for the other through `waits_for`, directly or through other pieces, there is nothing to separate, and crew adds nothing: a piece whose dependency is cancelled is parked on a question, so that order holds. An order made only of `apart_from` links doesn't count, because a link stops counting when the piece it names is cancelled. So with three pieces on the same paths, P3 gets `apart_from: [P2, P1]`, not just `[P2]`, and cancelling P2 doesn't let P3 start beside a running P1. Each such entry goes in the direction the existing order already gives, so no loop can form.
 
 ## Two missions in one repo
 

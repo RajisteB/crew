@@ -40,6 +40,33 @@ func TestDecide_ApartFromACancelledPieceStarts(t *testing.T) {
 	}
 }
 
+func TestDecide_CancelledMiddlePieceStillKeepsTheOthersApart(t *testing.T) {
+	m := mis(nil, "P1", "P2", "P3")
+	m.Pieces[1].Apart = []string{"P1"}
+	m.Pieces[2].Apart = []string{"P2", "P1"}
+	o := obs(t0)
+	o.Runs["P1"] = RunObs{State: run.State{Status: run.StatusRunning}, Live: true}
+	_, as := Decide(m, st(m, PieceRunning, PieceCancelled, PieceQueued), o, limits(5, 3), 0)
+	if got := of[StartPiece](as); len(got) != 0 {
+		t.Fatalf("started beside a running P1: %+v", got)
+	}
+	_, as = Decide(m, st(m, PieceComplete, PieceCancelled, PieceQueued), obs(t0), limits(5, 3), 0)
+	if got := of[StartPiece](as); len(got) != 1 || got[0].Piece != "P3" {
+		t.Fatalf("got %+v", as)
+	}
+}
+
+func TestSeparateThenDecide_CancelledMiddlePieceDoesNotFreeTheLast(t *testing.T) {
+	m := Mission{Request: "r", Pieces: []Piece{pp("P1", "a/**"), pp("P2", "a/**"), pp("P3", "a/**")}}
+	m, _ = SeparateOverlaps(m, nil, nil)
+	o := obs(t0)
+	o.Runs["P1"] = RunObs{State: run.State{Status: run.StatusRunning}, Live: true}
+	_, as := Decide(m, st(m, PieceRunning, PieceCancelled, PieceQueued), o, limits(5, 3), 0)
+	if got := of[StartPiece](as); len(got) != 0 {
+		t.Fatalf("P3 started beside a running P1: %+v", got)
+	}
+}
+
 func TestDecide_ApartFromAMissingPieceStarts(t *testing.T) {
 	m := mis(nil, "P2")
 	m.Pieces[0].Apart = []string{"P9"}

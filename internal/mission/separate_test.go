@@ -3,6 +3,7 @@ package mission
 import (
 	"math/rand"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/crewfile-dev/crew/internal/source"
@@ -63,10 +64,10 @@ func TestSeparateOverlaps_UsesTheDomainsPaths(t *testing.T) {
 func TestSeparateOverlaps_ChainOfThree(t *testing.T) {
 	m := Mission{Pieces: []Piece{pp("P1", "a/**"), pp("P2", "a/**"), pp("P3", "a/**")}}
 	got, seps := SeparateOverlaps(m, nil, nil)
-	if want := map[string][]string{"P2": {"P1"}, "P3": {"P2"}}; !reflect.DeepEqual(apartOf(got), want) {
+	if want := map[string][]string{"P2": {"P1"}, "P3": {"P2", "P1"}}; !reflect.DeepEqual(apartOf(got), want) {
 		t.Fatalf("apart = %v", apartOf(got))
 	}
-	if len(seps) != 2 {
+	if len(seps) != 3 {
 		t.Fatalf("seps = %v", seps)
 	}
 }
@@ -125,7 +126,54 @@ func TestSeparateOverlaps_NeverMakesACircle(t *testing.T) {
 		if rings := waitCircles(joined.Pieces, index); len(rings) > 0 {
 			t.Fatalf("circle %v in %+v", rings, got.Pieces)
 		}
+		checkEveryOverlapIsHeld(t, got, settled)
 	}
+}
+
+// checkEveryOverlapIsHeld fails when two overlapping pieces of m are neither
+// ordered by waits_for alone, nor named by a direct apart_from entry, nor
+// either of them settled.
+func checkEveryOverlapIsHeld(t *testing.T, m Mission, settled map[string]bool) {
+	t.Helper()
+	index := map[string]int{}
+	for i, p := range m.Pieces {
+		index[p.ID] = i
+	}
+	for j, b := range m.Pieces {
+		for i, a := range m.Pieces[:j] {
+			if _, _, ok := PathsOverlap(a.Paths, b.Paths); !ok || settled[a.ID] || settled[b.ID] {
+				continue
+			}
+			if waitsReach(m.Pieces, index, i, j) || waitsReach(m.Pieces, index, j, i) {
+				continue
+			}
+			if slices.Contains(a.Apart, b.ID) || slices.Contains(b.Apart, a.ID) {
+				continue
+			}
+			t.Fatalf("%s and %s overlap with nothing holding them apart: %+v", a.ID, b.ID, m.Pieces)
+		}
+	}
+}
+
+// waitsReach says whether piece from reaches piece to through waits_for alone.
+func waitsReach(pieces []Piece, index map[string]int, from, to int) bool {
+	seen := map[int]bool{}
+	stack := []int{from}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, id := range pieces[cur].WaitsFor {
+			k := index[id]
+			if k == to {
+				return true
+			}
+			if !seen[k] {
+				seen[k] = true
+				stack = append(stack, k)
+			}
+		}
+	}
+	return false
 }
 
 func TestStartedPieces_ParkedBeforeStartingIsNotSettled(t *testing.T) {

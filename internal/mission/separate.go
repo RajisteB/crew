@@ -21,11 +21,17 @@ func (s Separation) String() string {
 
 // SeparateOverlaps clears every piece's Apart and sets it again. It takes each piece
 // in file order and looks at the pieces before it, from the nearest back to the
-// first: when the two could run together and their effective paths overlap, the
-// later piece is kept apart from the earlier. settled names pieces that have
-// already started: a settled piece is never given an entry, so the other piece of
-// the pair is kept apart from it, and a pair of two settled pieces is left alone.
-// It returns a new mission and the separations in the order made. It never changes m.
+// first. A pair whose paths overlap is left alone only when one piece already
+// reaches the other through waits_for alone: a cancelled dependency parks the
+// waiter, so that order holds. Otherwise one piece of the pair is kept apart from
+// the other directly, because an apart_from link stops counting when its target
+// is cancelled. When one piece already reaches the other through a chain holding
+// an apart_from link, the entry goes in the direction that chain implies, so no
+// circle can form; otherwise the later piece is kept apart from the earlier.
+// settled names pieces that have already started: a settled piece is never given
+// an entry, so the other piece of the pair is kept apart from it when no chain
+// says otherwise, and a pair of two settled pieces is left alone. It returns a
+// new mission and the separations in the order made. It never changes m.
 func SeparateOverlaps(m Mission, domains []source.Domain, settled map[string]bool) (Mission, []Separation) {
 	out := m
 	out.Pieces = make([]Piece, len(m.Pieces))
@@ -41,19 +47,15 @@ func SeparateOverlaps(m Mission, domains []source.Domain, settled map[string]boo
 	var seps []Separation
 	for j := range out.Pieces {
 		for i := j - 1; i >= 0; i-- {
-			if settled[out.Pieces[i].ID] && settled[out.Pieces[j].ID] {
-				continue
-			}
-			if reaches(out.Pieces, index, i, j) || reaches(out.Pieces, index, j, i) {
-				continue
-			}
 			pa, pb, ok := PathsOverlap(paths[i], paths[j])
 			if !ok {
 				continue
 			}
-			later, earlier := j, i
-			if settled[out.Pieces[j].ID] {
-				later, earlier = i, j
+			later, earlier, ok := apartDirection(out.Pieces, index, settled, i, j)
+			if !ok {
+				continue
+			}
+			if later == i {
 				pa, pb = pb, pa
 			}
 			out.Pieces[later].Apart = append(slices.Clone(out.Pieces[later].Apart), out.Pieces[earlier].ID)
@@ -63,15 +65,41 @@ func SeparateOverlaps(m Mission, domains []source.Domain, settled map[string]boo
 	return out, seps
 }
 
-// reaches says whether piece from depends on piece to, through waits_for and
-// apart_from, in any number of hops.
-func reaches(pieces []Piece, index map[string]int, from, to int) bool {
+// apartDirection says which piece of the overlapping pair i < j is kept apart
+// from the other, or false when the pair needs no entry: both are settled, one
+// reaches the other through waits_for alone, or the only safe direction would
+// give a settled piece an entry.
+func apartDirection(pieces []Piece, index map[string]int, settled map[string]bool, i, j int) (later, earlier int, ok bool) {
+	si, sj := settled[pieces[i].ID], settled[pieces[j].ID]
+	switch {
+	case si && sj:
+		return 0, 0, false
+	case reaches(pieces, index, i, j, false) || reaches(pieces, index, j, i, false):
+		return 0, 0, false
+	case reaches(pieces, index, j, i, true):
+		return j, i, !sj
+	case reaches(pieces, index, i, j, true):
+		return i, j, !si
+	case sj:
+		return i, j, true
+	default:
+		return j, i, true
+	}
+}
+
+// reaches says whether piece from depends on piece to, in any number of hops,
+// through waits_for and, when withApart is set, apart_from.
+func reaches(pieces []Piece, index map[string]int, from, to int, withApart bool) bool {
 	seen := make([]bool, len(pieces))
 	stack := []int{from}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		for _, id := range slices.Concat(pieces[cur].WaitsFor, pieces[cur].Apart) {
+		next := pieces[cur].WaitsFor
+		if withApart {
+			next = slices.Concat(next, pieces[cur].Apart)
+		}
+		for _, id := range next {
 			k, ok := index[id]
 			switch {
 			case !ok || seen[k]:
