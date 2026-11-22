@@ -142,6 +142,7 @@ func TestLoop_NoActiveSprintDoesNotDrain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	start := time.Now()
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(ctx, time.Hour); err != nil {
 		t.Fatal(err)
 	}

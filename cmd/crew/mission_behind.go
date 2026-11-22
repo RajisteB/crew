@@ -58,7 +58,7 @@ func behindText(st mission.State, id string) string {
 	}
 	stopped := ""
 	if p.Behind.Stopped {
-		stopped = ", which is stopped"
+		stopped = mission.NotRunningSuffix
 	}
 	return fmt.Sprintf("starts after %s of mission %s%s (paths overlap)", p.Behind.Piece, p.Behind.Mission, stopped)
 }

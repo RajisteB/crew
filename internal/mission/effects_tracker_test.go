@@ -296,6 +296,7 @@ func TestLoop_DrainsThenSaysWhatIsLeft(t *testing.T) {
 	h.withTracker()
 	h.edit(func(s *State) { s.Pieces[0].Status = PieceComplete })
 	h.fail.failNext("create-epic", 1000)
+	h.undrive() // Loop takes the mission lock itself
 	st, err := h.e.Loop(context.Background(), time.Millisecond)
 	if err != nil || st.Status != StatusDone {
 		t.Fatalf("st %+v err %v", st, err)
@@ -319,6 +320,7 @@ func TestLoop_StopsDrainingWhenJiraRecovers(t *testing.T) {
 	h.withTracker()
 	h.edit(func(s *State) { s.Pieces[0].Status = PieceComplete })
 	h.fail.failNext("create-epic", 3)
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(context.Background(), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}

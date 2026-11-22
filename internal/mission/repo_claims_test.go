@@ -120,7 +120,7 @@ func TestBlocker_String(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	b.Stopped = true
-	if got, want := b.String(), "P1 of mission 20261122-ab12, which is stopped: their paths overlap (api/**, api/v2/**)"; got != want {
+	if got, want := b.String(), "P1 of mission 20261122-ab12, which is not running: their paths overlap (api/**, api/v2/**)"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }

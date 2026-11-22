@@ -318,7 +318,9 @@ Waiting on you:
 
 A piece that changed more than 200 files lists the first 200 and ends with `and <n> more (too many to accept: send the piece back or cancel it)`.
 
-A queued piece that crew keeps apart says why in the "Queued" section: `P3  starts after P1 (paths overlap)`, or, for a piece kept behind another mission's piece, `P3  starts after P1 of mission m-20261121-101500-ab12 (paths overlap)` (with `, which is stopped` after the mission id when it is).
+A queued piece that crew keeps apart says why in the "Queued" section: `P3  starts after P1 (paths overlap)`, or, for a piece kept behind another mission's piece, `P3  starts after P1 of mission m-20261121-101500-ab12 (paths overlap)` (with `, which is not running` after the mission id when that mission is stopped or its engine has ended).
+
+A queued piece that nothing in the plan keeps back reads `ready to start`, unless something else does: `on hold` while the mission is on hold for its step budget, or `waiting for a free run: 3 of 3 in use across this repo's missions` when one more run would pass `runs_at_once`. Only missions that are running with a live engine count toward that number.
 
 A `deliverable` wait reads like the others: `w1  P1  deliverable  <question>  waiting 4m`. Deliverables a piece has left are listed in their own section, with their files, who has to act and where crew keeps them. A deliverable of a piece that was cancelled before it was accepted shows `cancelled` there:
 
@@ -378,15 +380,22 @@ When one piece already waits for the other through `waits_for`, directly or thro
 
 ## Two missions in one repo
 
-`runs_at_once` is shared: every mission in the repo draws on the same limit, counting only missions that are running. Overlap is checked across missions too. A piece doesn't start while a piece of another mission with overlapping paths has started and is not complete or cancelled. A piece that has started is never held back, so two missions can't block each other for good.
+`runs_at_once` is shared: every mission in the repo draws on the same limit, counting only missions that are running with a live engine. Overlap is checked across missions too. A piece doesn't start while a piece of another mission with overlapping paths has started and is not complete or cancelled. A piece that has started is never held back, so two missions can't block each other for good.
 
-This holds when the other mission is stopped. A stopped mission's pieces that started and haven't finished still hold their paths. Three things get you out:
+**A mission that is not running.** A mission is not running when it is stopped, or when it is marked running but its engine has ended (after a reboot or a killed process, for example). Such a mission holds no run slots, but its pieces that started and haven't finished still hold their paths: their work is unmerged and comes back when the mission does. Only resuming it moves anything. No engine looks at its pull requests, so even one you merge on GitHub stays open in its state until you resume it. An amendment to it is only queued and is applied when it resumes, in its first tick, before crew starts or picks up any piece.
 
-1. Let the piece finish.
-2. `crew mission resume` that mission, so it can finish.
-3. Cancel that piece with `crew mission amend`.
+So for a piece kept behind such a mission, there are two ways out:
 
-When a piece is kept behind another mission's piece, `crew mission plan`, `start`, `go` and `resume` print a line for each piece that hasn't started, `P1 starts after P2 of mission m-...`, and `crew mission status` shows the same under "Queued" (see "Status"). When the mission in the way is stopped, crew notifies you once, naming the piece and the two ways out.
+1. `crew mission resume` that mission, so it can finish the piece.
+2. To drop the piece instead, cancel it with `crew mission amend` (a plan without it) and then resume the mission: the amendment is applied before anything runs. Cancelling a piece that has started stops its run if one is going, removes its worktree (one with uncommitted work is left for you, with a note), and leaves its pull request open: close it on GitHub yourself.
+
+There is no command that abandons a stopped mission. To abandon one, cancel all of its unfinished pieces with `crew mission amend` and resume it: with every piece complete or cancelled, the mission is done.
+
+When a piece is kept behind another mission's piece, `crew mission plan`, `start`, `go` and `resume` print a line for each piece that hasn't started, `P1 starts after P2 of mission m-...`, and `crew mission status` shows the same under "Queued" (see "Status"). When the mission in the way is not running, crew notifies you once:
+
+```
+P1 can't start: it overlaps P2 of mission m-20261121-101500-ab12, which is not running. Resume it with crew mission resume m-20261121-101500-ab12. To drop that piece instead, cancel it with crew mission amend and then resume: the amendment is applied before anything runs.
+```
 
 Two limits of the check:
 

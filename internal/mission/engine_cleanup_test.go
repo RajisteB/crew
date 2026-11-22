@@ -21,6 +21,7 @@ func TestEngine_CleanupFailureRetriedOnResume(t *testing.T) {
 	}
 	wt := st.Pieces[0].Worktree
 	before := h.log.count("RemoveWorktree")
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(context.Background(), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +39,7 @@ func TestEngine_CancelledPieceCleanupIsNotForced(t *testing.T) {
 	h.edit(func(s *State) { s.Pieces[0].Status = PieceCancelled })
 	wt := h.piece("P1").Worktree
 	h.fail.failNext("RemoveWorktree", 1)
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(context.Background(), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +54,7 @@ func TestEngine_CancelledPieceCleanupIsNotForced(t *testing.T) {
 	if h.piece("P1").Worktree != wt {
 		t.Fatal("worktree cleared although removal failed")
 	}
+	h.undrive() // Loop takes the mission lock itself
 	if _, err := h.e.Loop(context.Background(), time.Millisecond); err != nil {
 		t.Fatal(err)
 	}

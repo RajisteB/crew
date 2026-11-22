@@ -30,15 +30,16 @@ func HoldingRuns(s State) int {
 	return n
 }
 
-// RunsElsewhere counts the runs held by the repo's other missions whose status
-// is running. It reads their saved state and takes none of their locks. A
-// folder that is not a mission is ignored; a mission whose state can't be read
-// is an error, since its runs can't be counted.
+// RunsElsewhere counts the runs held by the repo's other missions that are
+// being driven (see otherMission.Driven). It reads their saved state and
+// takes none of their locks. A folder that is not a mission is ignored; a
+// mission whose state can't be read is an error, since its runs can't be
+// counted.
 func RunsElsewhere(repoRoot, missionID string) (int, error) {
 	n := 0
-	err := walkOtherMissions(repoRoot, missionID, func(st State) error {
-		if st.Status == StatusRunning {
-			n += HoldingRuns(st)
+	err := walkOtherMissions(repoRoot, missionID, func(o otherMission) error {
+		if o.Driven {
+			n += HoldingRuns(o.State)
 		}
 		return nil
 	})
@@ -48,11 +49,18 @@ func RunsElsewhere(repoRoot, missionID string) (int, error) {
 	return n, nil
 }
 
-// walkOtherMissions calls fn with the saved state of each of the repo's other
-// missions, in mission id order. It skips what is not a mission (see
-// loadMissionState) and stops at the first mission that can't be read or the
-// first error fn returns.
-func walkOtherMissions(repoRoot, missionID string, fn func(st State) error) error {
+// otherMission is another mission of the repo as its folder holds it. ID is
+// the folder's name, which its state's mission id must match.
+type otherMission struct {
+	ID     string
+	State  State
+	Driven bool // its status is running and a live engine holds its mission lock
+}
+
+// walkOtherMissions calls fn with each of the repo's other missions, in
+// mission id order. It skips what is not a mission (see loadMissionState) and
+// stops at the first mission that can't be read or the first error fn returns.
+func walkOtherMissions(repoRoot, missionID string, fn func(o otherMission) error) error {
 	entries, err := os.ReadDir(missionsDir(repoRoot))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -71,11 +79,23 @@ func walkOtherMissions(repoRoot, missionID string, fn func(st State) error) erro
 		if !found {
 			continue
 		}
-		if err := fn(st); err != nil {
+		if err := fn(otherMission{ID: e.Name(), State: st, Driven: beingDriven(repoRoot, e.Name(), st)}); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// beingDriven says whether the mission is being driven: its status is
+// running and a live engine holds its mission lock. A mission that is
+// stopped, or marked running after its engine ended (a reboot, a killed
+// process), is not.
+func beingDriven(repoRoot, id string, st State) bool {
+	if st.Status != StatusRunning {
+		return false
+	}
+	_, live := Store{Dir: filepath.Join(missionsDir(repoRoot), id)}.LockedBy()
+	return live
 }
 
 // lockStarts takes the repo's start lock, <repoRoot>/.crew/missions/starts.lock,
@@ -147,6 +167,9 @@ func loadMissionState(repoRoot, name string) (st State, found bool, err error) {
 	}
 	if err != nil {
 		return State{}, false, fmt.Errorf("mission %s: %w", name, err)
+	}
+	if st.MissionID != name {
+		return State{}, false, fmt.Errorf("mission %s: its state names mission %q", name, st.MissionID)
 	}
 	return st, true, nil
 }

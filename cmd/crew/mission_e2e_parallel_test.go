@@ -61,6 +61,18 @@ func (r *e2eRig) mergePR() {
 	}
 }
 
+// drive holds the mission lock until the test ends, as a live engine does,
+// so the repo's other missions count this one as being driven.
+func (r *e2eRig) drive() {
+	r.t.Helper()
+	unlock, err := r.store.Lock()
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.driven = true
+	r.t.Cleanup(unlock)
+}
+
 func hasPR(t *testing.T, id string) func(mission.State) bool {
 	return func(s mission.State) bool { p := piece(t, s, id); return p.PR != 0 && p.Wait != nil }
 }
@@ -112,6 +124,7 @@ func TestMission_EndToEnd_TwoMissionsTakeTurns(t *testing.T) {
 	a.launchPieces(touching("P1", "src", []string{"src/**"}))
 	b := *a
 	b.launchPieces(touching("P1", "src", []string{"src/**"}))
+	a.drive()
 
 	a.tickUntil("mission A's pull request", hasPR(t, "P1"))
 	st := b.tick()

@@ -275,7 +275,15 @@ type harness struct {
 	notif *fakeNotifier
 	store Store
 	id    string
+	// release lets go of the mission lock the harness holds, as a live
+	// engine would. It is safe to call more than once.
+	release func()
 }
+
+// undrive lets go of the mission lock, so the mission is not being driven:
+// for a mission whose engine is gone, or before the test calls Loop, which
+// takes the lock itself.
+func (h *harness) undrive() { h.release() }
 
 func twoPieces() []Piece {
 	return []Piece{

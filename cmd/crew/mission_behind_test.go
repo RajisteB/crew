@@ -19,6 +19,11 @@ func TestMissionPlan_PrintsOtherMissionsOverlap(t *testing.T) {
 		s.Status = mission.StatusRunning
 		s.Pieces[0].Status = mission.PieceRunning
 	})
+	unlock, err := r.store(first).Lock() // a live engine drives it
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
 	r.stdin = string(planFile("Build more.", pathPiece("P1", "api/v2/**"), pathPiece("P2", "docs/**")))
 	out, err = r.cmd("plan")
 	if err != nil {
@@ -49,7 +54,7 @@ func TestStartChecks_PrintsOtherMissionsOverlap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v\n%s", err, out)
 	}
-	want := "P1 starts after P1 of mission " + first + ", which is stopped: their paths overlap"
+	want := "P1 starts after P1 of mission " + first + ", which is not running: their paths overlap"
 	if !strings.Contains(out, want) {
 		t.Errorf("start output missing %q:\n%s", want, out)
 	}
@@ -63,7 +68,7 @@ func TestMissionStatus_QueuedPieceBehindAnotherMission(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	b.Stopped = true
-	if got, want := waitsText(m, st, "P1"), "starts after P7 of mission 20261122-ab12, which is stopped (paths overlap)"; got != want {
+	if got, want := waitsText(m, st, "P1"), "starts after P7 of mission 20261122-ab12, which is not running (paths overlap)"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }

@@ -52,10 +52,11 @@ func TestDecide_BehindAStoppedMissionNotifiesOnce(t *testing.T) {
 	if len(ns) != 1 {
 		t.Fatalf("notifications = %+v", ns)
 	}
-	for _, want := range []string{"P1", "P9", behindA.Mission, "crew mission amend", "which is stopped"} {
-		if !strings.Contains(ns[0].Body, want) {
-			t.Errorf("body %q lacks %q", ns[0].Body, want)
-		}
+	want := "P1 can't start: it overlaps P9 of mission " + behindA.Mission + ", which is not running. " +
+		"Resume it with crew mission resume " + behindA.Mission + ". To drop that piece instead, cancel it with " +
+		"crew mission amend and then resume: the amendment is applied before anything runs."
+	if ns[0].Body != want {
+		t.Errorf("body = %q\nwant   %q", ns[0].Body, want)
 	}
 	if !strings.HasPrefix(ns[0].Title, "crew mission ") {
 		t.Errorf("title = %q", ns[0].Title)

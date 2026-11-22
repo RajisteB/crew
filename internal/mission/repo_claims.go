@@ -3,6 +3,7 @@ package mission
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/crewfile-dev/crew/internal/source"
 )
@@ -13,24 +14,24 @@ type Claim struct {
 	Mission string // the other mission's id
 	Piece   string
 	Paths   []string // its effective paths; never empty
-	Stopped bool     // that mission's status is stopped
+	Stopped bool     // that mission is not being driven: stopped, or its engine is gone
 }
 
-// holdsPaths says whether a piece in this status has started and is not
+// holdsPaths says whether the piece has started (see hasStarted) and is not
 // finished.
-func holdsPaths(s PieceStatus) bool {
-	return s != PieceQueued && s != PieceComplete && s != PieceCancelled
+func holdsPaths(p PieceState) bool {
+	return hasStarted(p) && p.Status != PieceComplete && p.Status != PieceCancelled
 }
 
 // ClaimsElsewhere lists what the repo's other missions hold, by mission id, then
 // in piece order. A piece holds its effective paths from the moment it starts
-// until it is complete or cancelled, whatever its mission's status. A piece
+// until it is complete or cancelled, whatever its mission's state. A piece
 // with no effective paths holds nothing. A mission that holds a piece but
 // whose mission.md can't be read is an error: crew can't tell what it holds.
 func ClaimsElsewhere(repoRoot, missionID string, domains map[string]source.Domain) ([]Claim, error) {
 	var claims []Claim
-	err := walkOtherMissions(repoRoot, missionID, func(st State) error {
-		mine, err := claimsOf(repoRoot, st, domains)
+	err := walkOtherMissions(repoRoot, missionID, func(o otherMission) error {
+		mine, err := claimsOf(repoRoot, o, domains)
 		claims = append(claims, mine...)
 		return err
 	})
@@ -40,29 +41,25 @@ func ClaimsElsewhere(repoRoot, missionID string, domains map[string]source.Domai
 	return claims, nil
 }
 
-func claimsOf(repoRoot string, st State, domains map[string]source.Domain) ([]Claim, error) {
-	holding := false
-	for _, p := range st.Pieces {
-		holding = holding || holdsPaths(p.Status)
-	}
-	if !holding {
+func claimsOf(repoRoot string, o otherMission, domains map[string]source.Domain) ([]Claim, error) {
+	if !slices.ContainsFunc(o.State.Pieces, holdsPaths) {
 		return nil, nil
 	}
-	m, err := Store{Dir: filepath.Join(missionsDir(repoRoot), st.MissionID)}.Mission()
+	m, err := Store{Dir: filepath.Join(missionsDir(repoRoot), o.ID)}.Mission()
 	if err != nil {
-		return nil, fmt.Errorf("mission %s: %w", st.MissionID, err)
+		return nil, fmt.Errorf("mission %s: %w", o.ID, err)
 	}
 	var out []Claim
-	for _, ps := range st.Pieces {
-		if !holdsPaths(ps.Status) {
+	for _, ps := range o.State.Pieces {
+		if !holdsPaths(ps) {
 			continue
 		}
 		p, ok := m.Piece(ps.ID)
 		if !ok {
-			return nil, fmt.Errorf("mission %s: piece %s is not in mission.md", st.MissionID, ps.ID)
+			return nil, fmt.Errorf("mission %s: piece %s is not in mission.md", o.ID, ps.ID)
 		}
 		if paths := EffectivePaths(p, domains[p.Domain]); len(paths) > 0 {
-			out = append(out, Claim{Mission: st.MissionID, Piece: ps.ID, Paths: paths, Stopped: st.Status == StatusStopped})
+			out = append(out, Claim{Mission: o.ID, Piece: ps.ID, Paths: paths, Stopped: !o.Driven})
 		}
 	}
 	return out, nil

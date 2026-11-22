@@ -24,6 +24,7 @@ func TestEngine_LoopStopMarksStoppedAndStopsRuns(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
+		h.undrive() // Loop takes the mission lock itself
 		st, err := h.e.Loop(ctx, 5*time.Millisecond)
 		done <- result{st, err}
 	}()
@@ -47,6 +48,7 @@ func TestEngine_LoopStopMarksStoppedAndStopsRuns(t *testing.T) {
 func TestEngine_LoopReturnsWhenMissionIsDone(t *testing.T) {
 	h := newHarness(t, twoPieces()[0])
 	h.edit(func(s *State) { s.Pieces[0].Status = PieceComplete })
+	h.undrive() // Loop takes the mission lock itself
 	st, err := h.e.Loop(context.Background(), time.Millisecond)
 	if err != nil || st.Status != StatusDone {
 		t.Fatalf("st = %+v, err = %v", st, err)
@@ -54,13 +56,8 @@ func TestEngine_LoopReturnsWhenMissionIsDone(t *testing.T) {
 }
 
 func TestEngine_SecondLoopRefused(t *testing.T) {
-	h := newHarness(t, twoPieces()[0])
-	unlock, err := h.store.Lock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unlock()
-	_, err = h.e.Loop(context.Background(), time.Millisecond)
+	h := newHarness(t, twoPieces()[0]) // the harness holds the mission lock
+	_, err := h.e.Loop(context.Background(), time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "already being driven") {
 		t.Fatalf("err = %v", err)
 	}

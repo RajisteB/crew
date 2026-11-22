@@ -149,14 +149,19 @@ func SeparatedWithLog(before, m Mission, domains []source.Domain, settled map[st
 	return next, seps, true
 }
 
-// StartedPieces names the pieces of s that have started: not queued, and not
-// parked on a wait that goes back to queued.
+// StartedPieces names the pieces of s that have started (see hasStarted).
 func StartedPieces(s State) map[string]bool {
 	out := map[string]bool{}
 	for _, p := range s.Pieces {
-		if p.Status != PieceQueued && !(p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceQueued) {
+		if hasStarted(p) {
 			out[p.ID] = true
 		}
 	}
 	return out
+}
+
+// hasStarted says whether the piece has started: it is not queued, and not
+// parked on a wait that goes back to queued.
+func hasStarted(p PieceState) bool {
+	return p.Status != PieceQueued && !(p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceQueued)
 }

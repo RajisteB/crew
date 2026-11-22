@@ -16,7 +16,8 @@ type gitFacts struct {
 }
 
 // newHarnessIn builds a mission in the repo root given, so two missions can
-// share one repo.
+// share one repo. It holds the mission lock until the test ends, as a live
+// engine does, so other missions count it as driven; see undrive.
 func newHarnessIn(t *testing.T, root string, pieces ...Piece) *harness {
 	t.Helper()
 	if len(pieces) == 0 {
@@ -39,6 +40,12 @@ func newHarnessIn(t *testing.T, root string, pieces ...Piece) *harness {
 		orch:  &fakeOrch{log: log},
 		notif: &fakeNotifier{log: log},
 	}
+	release, err := store.Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.release = release
+	t.Cleanup(release)
 	h.e = &Engine{
 		Store: store, RepoRoot: root, Checks: exInput(),
 		Settings: Settings{Version: 1, Approval: "off", Limits: Limits{
