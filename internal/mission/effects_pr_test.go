@@ -220,17 +220,16 @@ func TestEngine_ConflictMergedCleanly(t *testing.T) {
 	if evs := h.events(EvConflict); evs[0].Msg != "main was merged into the branch; checks run again" {
 		t.Fatalf("event = %+v", evs[0])
 	}
-	if evs := h.events(EvConflict); evs[0].Msg != "main was merged into the branch; checks run again" {
-		t.Fatalf("event = %+v", evs[0])
-	}
 }
 
 func TestEngine_ConflictAlreadyMergedDoesNothing(t *testing.T) {
 	h := prHarness(t, principal.AutoOn, passing())
 	h.conflicting()
+	recent := testNow.Add(-5 * time.Minute)
+	h.edit(func(s *State) { s.Pieces[0].PRSince = recent })
 	h.tick()
 	p := h.piece("P1")
-	if h.log.has("Push") || !p.PRSince.Equal(oldSince) || p.Head != "h1" {
+	if h.log.has("Push") || !p.PRSince.Equal(recent) || p.Head != "h1" || p.Wait != nil {
 		t.Fatalf("calls %v piece %+v", h.log.calls, p)
 	}
 	if len(h.events(EvConflict)) != 0 {

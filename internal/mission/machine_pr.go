@@ -21,16 +21,16 @@ const (
 // pull request was observed. It records no event for a conflict, a send back
 // or a merge: the engine records them when the effect succeeds.
 func (d *decider) prOpen(id string) {
+	p := d.ps(id)
+	green := p.GreenSince
+	p.GreenSince = time.Time{} // only the rule 12 condition on an open pull request keeps it
 	pr, ok := d.o.PRs[id]
 	if !ok {
 		return
 	}
-	p := d.ps(id)
 	if d.ended(id, pr) || pr.State != "OPEN" {
 		return
 	}
-	green := p.GreenSince
-	p.GreenSince = time.Time{} // only the rule 12 condition keeps it
 	if p.Wait != nil && (p.Wait.Kind == WaitQuestion || p.Wait.Kind == WaitLimit) {
 		return
 	}

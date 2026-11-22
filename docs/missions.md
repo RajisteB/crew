@@ -378,15 +378,16 @@ This happens with auto-merge off too: crew sends a piece back for failed checks 
 
 A pull request waits for you, in a `merge` item, a `question` or a `pr-closed` item, for one of these reasons. The text of the item says which, and `crew mission status` shows it beside the link:
 
-1. Another domain it touches has auto-merge off.
-2. The branch has commits crew didn't push. crew never merges a head it didn't push. This is reported after 2 minutes.
-3. The pull request was opened before crew recorded what it pushed, so crew won't merge it.
-4. The pull request has no checks. This is reported after 2 minutes.
-5. Checks are still running 30 minutes after crew pushed the head. crew still merges when they pass.
-6. GitHub hasn't said whether the pull request can be merged after 30 minutes.
-7. GitHub refused the merge. crew keeps trying, and completes the piece when a try goes through or you merge it yourself.
-8. GitHub reports a conflict that crew can't find after 30 minutes: the base merges into the branch cleanly, but GitHub still says it conflicts.
-9. Failed checks or a conflict that two tries didn't fix, and the orchestrator couldn't settle either.
+1. Auto-merge is off for the piece's own domain, which is the default. The pull request waits for you to merge it.
+2. Another domain it touches has auto-merge off.
+3. The branch has commits crew didn't push. crew never merges a head it didn't push. This is reported after 2 minutes.
+4. The pull request was opened before crew recorded what it pushed, so crew won't merge it.
+5. The pull request has no checks. This is reported after 2 minutes.
+6. Checks are still running 30 minutes after crew pushed the head. crew still merges when they pass.
+7. GitHub hasn't said whether the pull request can be merged after 30 minutes.
+8. GitHub refused the merge. crew keeps trying, and completes the piece when a try goes through or you merge it yourself.
+9. GitHub reports a conflict that crew can't find after 30 minutes: the base merges into the branch cleanly, but GitHub still says it conflicts.
+10. Failed checks or a conflict that two tries didn't fix, and the orchestrator couldn't settle either.
 
 A pull request that was closed without being merged is a `pr-closed` item.
 

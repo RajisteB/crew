@@ -143,15 +143,9 @@ func automergeSet(req amRequest, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	mode := principal.AutoOff
-	switch {
-	case req.mode == "on" && req.noChecks:
-		mode = principal.AutoWithoutChecks
-	case req.mode == "on":
-		mode = principal.AutoOn
-		if err := requireChecks(req, info, domains); err != nil {
-			return err
-		}
+	mode, err := requestedMode(req, info, domains)
+	if err != nil {
+		return err
 	}
 	noPaths, err := domainsWithoutPaths(req.crewDir, domains)
 	if err != nil {
@@ -175,6 +169,18 @@ func automergeSet(req amRequest, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "auto-merge %s for %s in %s\n", mode, strings.Join(domains, ", "), info.Slug)
 	return nil
+}
+
+// requestedMode is the mode the command sets; `on` without --without-checks
+// first needs a repo that has checks.
+func requestedMode(req amRequest, info gh.RepoInfo, domains []string) (principal.AutoMode, error) {
+	switch {
+	case req.mode == "on" && req.noChecks:
+		return principal.AutoWithoutChecks, nil
+	case req.mode == "on":
+		return principal.AutoOn, requireChecks(req, info, domains)
+	}
+	return principal.AutoOff, nil
 }
 
 // resolveAMDomains applies the --domain / --all / --without-checks rules.

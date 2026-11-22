@@ -191,3 +191,35 @@ func TestPRWaits_OpensOrRefreshes(t *testing.T) {
 		t.Fatal("non-pr-open piece changed")
 	}
 }
+
+func TestDecide_ReopenedPRSettlesAgain(t *testing.T) {
+	m, s, o := prCase(10*time.Minute, principal.AutoOn, chk("pass"))
+	s.Pieces[0].GreenSince = t0.Add(-30 * time.Second)
+	closed := withPR(o, func(p *gh.PR) { p.State = "CLOSED" })
+	s1, _ := decide(m, s, closed)
+	if g := piece(t, s1, "a").GreenSince; !g.IsZero() {
+		t.Fatalf("closed tick kept GreenSince = %v", g)
+	}
+	// Reopened: the wait the close opened is gone, as after a retry answer.
+	s1.Pieces[0].Wait = nil
+	s2, as := decide(m, s1, o)
+	if len(of[Merge](as)) != 0 || !piece(t, s2, "a").GreenSince.Equal(t0) {
+		t.Fatalf("reopened tick: actions %#v green %v", as, piece(t, s2, "a").GreenSince)
+	}
+	o.Now = t0.Add(61 * time.Second)
+	_, as = decide(m, s2, o)
+	if len(of[Merge](as)) != 1 {
+		t.Fatalf("61s later: %#v", as)
+	}
+}
+
+func TestDecide_UnreadPRRestartsSettle(t *testing.T) {
+	m, s, o := prCase(10*time.Minute, principal.AutoOn, chk("pass"))
+	s.Pieces[0].GreenSince = t0.Add(-30 * time.Second)
+	o.PRs = map[string]gh.PR{}
+	s1, as := decide(m, s, o)
+	wantNoActions(t, as)
+	if g := piece(t, s1, "a").GreenSince; !g.IsZero() {
+		t.Fatalf("unread tick kept GreenSince = %v", g)
+	}
+}
