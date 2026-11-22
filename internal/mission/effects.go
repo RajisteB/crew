@@ -57,6 +57,25 @@ func (t *tick) perform(actions []Action) error {
 	return nil
 }
 
+// freshWorktree fetches the base and makes a new worktree for the piece,
+// clearing any left over. A step that fails is a note and returns false.
+func (t *tick) freshWorktree(id, wt, branch, base string) bool {
+	git := t.e.Git
+	if err := git.Fetch(t.ctx, base); err != nil {
+		t.note(id, "can't start: fetch %s: %v", base, err)
+		return false
+	}
+	if err := git.RemoveWorktree(t.ctx, wt, true); err != nil {
+		t.note(id, "can't start: clear leftover worktree: %v", err)
+		return false
+	}
+	if err := git.AddWorktree(t.ctx, wt, branch, "origin/"+base); err != nil {
+		t.note(id, "can't start: add worktree: %v", err)
+		return false
+	}
+	return true
+}
+
 func (t *tick) startPiece(a StartPiece) error {
 	p, _, ok := t.pieceMission(a.Piece)
 	if !ok {
@@ -71,19 +90,7 @@ func (t *tick) startPiece(a StartPiece) error {
 		return nil
 	}
 	defer release()
-	if !t.startClear(p) {
-		return nil
-	}
-	if err := e.Git.Fetch(t.ctx, base); err != nil {
-		t.note(p.ID, "can't start: fetch %s: %v", base, err)
-		return nil
-	}
-	if err := e.Git.RemoveWorktree(t.ctx, wt, true); err != nil {
-		t.note(p.ID, "can't start: clear leftover worktree: %v", err)
-		return nil
-	}
-	if err := e.Git.AddWorktree(t.ctx, wt, branch, "origin/"+base); err != nil {
-		t.note(p.ID, "can't start: add worktree: %v", err)
+	if !t.startClear(p) || !t.freshWorktree(p.ID, wt, branch, base) {
 		return nil
 	}
 	earlier, err := t.prepareScratch(p, wt)

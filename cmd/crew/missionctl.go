@@ -227,6 +227,9 @@ func missionResume(env missionEnv, id string) error {
 	if st.Status != mission.StatusStopped && st.Status != mission.StatusRunning {
 		return fmt.Errorf("mission %s is %s; only a stopped mission (or a running one whose engine died) can be resumed", id, st.Status)
 	}
+	if pid, live := store.LockedBy(); live { // before startChecks, which may save mission.md
+		return drivenError{id: id, pid: pid}
+	}
 	if _, err := startChecks(env, store); err != nil {
 		return err
 	}

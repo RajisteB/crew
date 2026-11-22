@@ -37,10 +37,14 @@ func BlockedBy(paths []string, claims []Claim) (Blocker, bool) {
 
 // settleBehind brings the piece's Behind in line with the observation and
 // says whether the piece is held back. Only a ready piece is held; any other
-// keeps no Behind. A change of blocker is recorded as a note on the piece, and
+// keeps no Behind. On a tick when the other missions can't be read, Behind
+// stays as it was, so a blocker is not told twice. A change of blocker is recorded as a note on the piece, and
 // one whose mission is not being driven is also sent to the principal.
 func (d *decider) settleBehind(id string, ready bool) bool {
 	p := d.ps(id)
+	if ready && d.o.ElsewhereUnknown {
+		return p.Behind != nil // the other missions couldn't be read: keep what was known
+	}
 	b, behind := d.o.Behind[id]
 	if !ready || !behind {
 		p.Behind = nil

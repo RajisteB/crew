@@ -416,7 +416,7 @@ The orchestrator is asked what to do. It may send the piece back to a station wi
 crew mission answer m-20261121-162953-e991 w2 --do accept --words "those files are fine"
 ```
 
-- `accept` takes all of the files listed. The pull request opens. A file you accept stays accepted: if the piece is sent back later and changes more files outside its paths, crew asks only about the new ones.
+- `accept` takes all of the files listed. The pull request opens, and crew notifies you that the files were accepted (`P3: 4 files outside its paths were accepted: README.md, go.mod, main.go and 1 more`), so an acceptance you didn't make doesn't go unseen. A file you accept stays accepted: if the piece is sent back later and changes more files outside its paths, crew asks only about the new ones.
 - `goto --station build` sends the piece back to a station, with a note naming the files.
 - `cancel` abandons the piece.
 
@@ -610,7 +610,7 @@ What an amendment may do: add pieces, change a queued piece (its brief, its doma
 
 `crew mission stop <id>` applies to a running mission. It tells the engine to shut down, which interrupts the running pieces' runs where they are. Worktrees and branches stay in place. A mission that hasn't started has nothing to stop, and one that is already stopped or done is left alone.
 
-`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that has been started, which is to say one with an `approved.md` (written by `go`, or by `start` when approval is off); a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was.
+`crew mission resume <id>` continues a stopped mission, and also a mission marked running whose engine has died. It needs a mission that has been started, which is to say one with an `approved.md` (written by `go`, or by `start` when approval is off); a planned mission needs `start` instead. It re-runs the start checks, marks the mission running and starts the engine again, which picks up each piece where it was. A mission whose engine is still live is refused (`mission <id> is being driven (pid <n>)`) before anything is checked or written. Amendments and answers queued while the mission was stopped are applied in the engine's first tick, before any piece starts or is picked up again.
 
 If the engine process crashes, a supervisor restarts it up to three times and records each restart as an event. After that it marks the mission stopped and notifies you. A reboot also ends the engine; run `resume` afterwards.
 

@@ -119,6 +119,7 @@ func answerPaths(d *decider, id string, a Answer) (step *RunStep, done bool) {
 				p.Allowed = append(p.Allowed, f)
 			}
 		}
+		d.notify(acceptedText(*p))
 		p.Outside = nil
 		d.add(Record{Event: Event{Time: d.o.Now, Kind: EvDecision, Piece: id, By: principalBy,
 			Msg: fmt.Sprintf("accepted %d files outside the paths", n)}})
@@ -127,6 +128,21 @@ func answerPaths(d *decider, id string, a Answer) (step *RunStep, done bool) {
 		return &RunStep{Piece: id, Kind: "goto", Station: a.Station, Note: withNote(*p, a.Note)}, true
 	}
 	return nil, false
+}
+
+// acceptedText tells the principal that a piece's outside files were
+// accepted, so an acceptance they did not make is seen.
+func acceptedText(p PieceState) string {
+	n := len(p.Outside)
+	first := shownNames(p.Outside[:min(n, questionShown)])
+	text := fmt.Sprintf("%s: %d files outside its paths were accepted: %s", p.ID, n, strings.Join(first, ", "))
+	if n == 1 {
+		text = fmt.Sprintf("%s: 1 file outside its paths was accepted: %s", p.ID, first[0])
+	}
+	if more := n - len(first); more > 0 {
+		text += fmt.Sprintf(" and %d more", more)
+	}
+	return text
 }
 
 // shownName is a file name made fit to show: git allows any bytes in a name,

@@ -138,11 +138,15 @@ func (t *tick) observeElsewhere() {
 }
 
 // takeStartSlot takes the start lock and checks the limit under it. When it
-// says no, the piece stays queued with no note and the lock is already let go.
-// release is safe to call more than once.
+// says no, the piece stays queued and the lock is already let go. A lock held
+// by another engine leaves no note; a lock that can't be taken for any other
+// reason does. release is safe to call more than once.
 func (t *tick) takeStartSlot() (release func(), ok bool) {
 	unlock, err := lockStarts(t.e.RepoRoot)
 	if err != nil {
+		if !errors.Is(err, flock.ErrHeld) {
+			t.note("", "can't take the repo's start lock: %v", err)
+		}
 		return nil, false
 	}
 	if !t.startGateOpen() {
