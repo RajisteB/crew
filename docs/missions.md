@@ -196,7 +196,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 | `crew mission start <id>` | Runs the start checks. With approval on, stops at "awaiting go". |
 | `crew mission go <id>` | Your go. Re-runs the checks, then starts the engine. |
 | `crew mission status [<id>] [--since N]` | Lists missions, or shows one in detail. |
-| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. |
+| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. `accept` is for a `deliverable` wait and for a `paths` wait. |
 | `crew mission amend <id> [-\|@FILE] --words TEXT` | Changes the plan after the mission has started. |
 | `crew mission stop <id>` | Stops a running mission. |
 | `crew mission resume <id>` | Continues a stopped mission. |
@@ -374,7 +374,7 @@ The notes are of two kinds: a piece that has no paths, and a piece whose own `pa
 
 **`apart_from`.** When two pieces overlap and neither waits for the other, crew writes `apart_from: [P1]` on the later one in the mission file, and the later piece doesn't start until P1 is complete or cancelled. The plan prints one line for each pair, as above. `apart_from` is crew's field: whatever a plan or an amendment supplies for it is replaced, and crew works it out again on every plan, start, amendment and added piece. A piece kept apart from a cancelled piece starts, because the piece in its way is gone. A piece that has already started is never given an `apart_from` entry (a piece parked on a question before it ever started still is): when it overlaps a later piece, that later piece is the one kept apart.
 
-If two pieces already wait for each other through `waits_for`, there is nothing to separate, and crew adds nothing.
+When one piece already waits for the other, directly or through other pieces, there is nothing to separate, and crew adds nothing.
 
 ## Two missions in one repo
 
@@ -422,13 +422,13 @@ A piece with no paths isn't checked.
 | `runs_at_once` | Pieces running together across the repo's missions. | Queued pieces wait until one stops counting. |
 | `pieces` | Pieces in a plan. | `plan` and `amend` refuse a plan with more. |
 | `steps` | Station steps a mission has taken, over all its pieces. | The mission goes on hold (below). |
-| `orchestrator_calls_per_piece` | Decisions the orchestrator makes for one piece. | The next failure of that piece becomes a `limit` wait for you, with no further call. The event `budget-hit` is recorded. |
+| `orchestrator_calls_per_piece` | Decisions the orchestrator makes for one piece. | The next failure of that piece becomes a `limit` wait for you (a `paths` wait for a piece stopped for files outside its paths), with no further call. The event `budget-hit` is recorded. |
 | `orchestrator_additions` | Pieces the orchestrator adds on its own. | An `add` is refused. |
 | `delegation_depth` | How deep a piece may delegate. | Not enforced: crew reads it, and delegation doesn't exist yet. |
 
 **On hold.** A station step is one station of a factory running. When a mission has taken as many steps as `limits.steps` allows, crew puts it on hold: it records a `budget-hit` event, tells you once, and `crew mission status` shows `On hold: 60 of 60 station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute.`
 
-On hold, crew starts no new piece, sends no piece back to a station, doesn't ask the orchestrator for decisions, and doesn't resolve a conflicted pull request (that can send a piece back to a station), because each of those takes more steps. Runs that are already going are not stopped: they carry on to the end of their run. Everything that costs no step goes on: pull requests are opened and watched, merges are seen, complete pieces are cleaned up, answers you give are applied.
+On hold, crew starts no new piece, sends no piece back to a station, doesn't ask the orchestrator for decisions, and doesn't resolve a conflicted pull request (that can send a piece back to a station), because each of those takes more steps. Runs that are already going are not stopped: they carry on to the end of their run. A run that has lost its driver (the engine restarted, or the mission was stopped and resumed) is not picked up again until the hold lifts, and a running piece that fails is not put to the orchestrator until then. Everything that costs no step goes on: pull requests are opened and watched, merges are seen, complete pieces are cleaned up, answers you give are applied.
 
 To lift the hold, raise `limits.steps` (or the repo's override under `repos:`) in `missions.yaml`. Nothing else lifts it, and nothing crew or an agent does changes the file. While a mission is on hold the engine reads `missions.yaml` again at the start of each tick (once a minute), so it sees the new number without a restart and notes that work goes on. If the file can't be read at that moment, it keeps the old limit and says so in a note.
 

@@ -172,6 +172,10 @@ func TestMission_EndToEnd_StepBudget(t *testing.T) {
 	if want := "On hold: 2 of 2 station steps used."; !strings.Contains(status, want) {
 		t.Fatalf("status missing %q:\n%s", want, status)
 	}
+	st = r.tick()
+	if got := piece(t, st, "P2").Status; st.Hold == nil || got != mission.PieceQueued {
+		t.Fatalf("a tick later P2 is %s and hold is %v, want queued and still on hold", got, st.Hold)
+	}
 	r.setLimit("steps", "20")
 	r.tickUntil("P2 starts", func(s mission.State) bool {
 		return s.Hold == nil && piece(t, s, "P2").Status != mission.PieceQueued

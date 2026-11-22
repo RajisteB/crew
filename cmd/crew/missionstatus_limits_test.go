@@ -25,7 +25,7 @@ func TestMissionStatus_OnHoldAndPathsWait(t *testing.T) {
 	}
 	lines := strings.Split(out, "\n")
 	if want := "On hold: 60 of 60 station steps used. Raise limits.steps in missions.yaml; the engine reads it again within a minute."; len(lines) < 2 || lines[1] != want {
-		t.Errorf("second line = %q, want %q", lines[1], want)
+		t.Errorf("second line of status is not %q:\n%s", want, out)
 	}
 	for _, want := range []string{
 		"  w1  P1  paths  P1 changed 9 files outside its paths: a.txt, b, c.txt and 6 more  waiting ",
