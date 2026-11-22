@@ -68,7 +68,7 @@ func printOpenPRs(env missionEnv, m mission.Mission, st mission.State) {
 		if piece, ok := m.Piece(p.ID); ok {
 			domain = piece.Domain
 		}
-		lines = append(lines, fmt.Sprintf("%s  PR #%d  %s  auto-merge %s", p.ID, p.PR, p.PRURL, modeText(recs, err, domain)))
+		lines = append(lines, fmt.Sprintf("%s  PR #%d  %s  auto-merge %s", withKey(p), p.PR, p.PRURL, modeText(recs, err, domain)))
 	}
 	section(env.out, "Open pull requests", lines)
 }
