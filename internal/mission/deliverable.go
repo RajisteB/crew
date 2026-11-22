@@ -74,10 +74,16 @@ func listDelivered(dir string) (Found, error) {
 	return Found{Files: slices.Clone(taken), Print: hex.EncodeToString(h.Sum(nil)), Extra: len(all) - len(taken)}, nil
 }
 
+// unsafeRune is a control character, a line or paragraph separator, or a
+// format character such as a bidi override.
+func unsafeRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)
+}
+
 // safeName is false for a name that holds a control character or isn't UTF-8:
 // names go into another agent's instructions and into messages.
 func safeName(name string) bool {
-	return utf8.ValidString(name) && !strings.ContainsFunc(name, unicode.IsControl)
+	return utf8.ValidString(name) && !strings.ContainsFunc(name, unsafeRune)
 }
 
 // notPlainError says a folder crew needs is a link or a file.

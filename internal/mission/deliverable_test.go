@@ -283,3 +283,14 @@ func TestPlainDir(t *testing.T) {
 		t.Fatalf("file: %v %v", ok, err)
 	}
 }
+
+func TestSafeName(t *testing.T) {
+	if !safeName("brief v2.md") {
+		t.Error("a plain name was refused")
+	}
+	for _, name := range []string{"a\nb", "a b", "a b", "a‮b", "a\xffb"} {
+		if safeName(name) {
+			t.Errorf("%q was accepted", name)
+		}
+	}
+}

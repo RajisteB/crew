@@ -212,3 +212,52 @@ func TestEngine_FailedCollectKeepsTheOldCopy(t *testing.T) {
 		t.Fatalf("no note: %v", h.notes())
 	}
 }
+
+func TestEngine_StartRefusesALinkedCrewFolder(t *testing.T) {
+	h := newHarness(t)
+	st := h.state()
+	st.Pieces[0].Status = PieceComplete
+	if err := h.store.SaveState(st); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	wt := filepath.Join(h.e.RepoRoot, ".crew", "worktrees", h.id+"-P2")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wt, ".crew")); err != nil {
+		t.Fatal(err)
+	}
+	if p := h.tick().Pieces[1]; p.Status != PieceQueued {
+		t.Fatalf("P2 should not start: %+v", p)
+	}
+	var found bool
+	for _, n := range h.notes() {
+		found = found || strings.Contains(n, "can't start: prepare the deliverables folders: ")
+	}
+	if !found {
+		t.Fatalf("no note: %v", h.notes())
+	}
+	if ents, err := os.ReadDir(outside); err != nil || len(ents) != 0 {
+		t.Fatalf("something was written through the link: %v %v", ents, err)
+	}
+}
+
+func TestEngine_StartRefusesALinkedGitignore(t *testing.T) {
+	h := newHarness(t)
+	st := h.state()
+	st.Pieces[0].Status = PieceComplete
+	if err := h.store.SaveState(st); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(h.e.RepoRoot, ".crew", "worktrees", h.id+"-P2")
+	if err := os.MkdirAll(filepath.Join(wt, ".crew"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "x"), filepath.Join(wt, ".crew", ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	if p := h.tick().Pieces[1]; p.Status != PieceQueued {
+		t.Fatalf("P2 should not start: %+v", p)
+	}
+}

@@ -85,8 +85,14 @@ func swapInto(dest, from string, files []string) error {
 // prepareScratch makes the worktree's deliverables folder and copies in the
 // deliverables of the pieces this one waits for. It returns them for the input.
 func (t *tick) prepareScratch(p Piece, worktree string) ([]Earlier, error) {
+	if _, err := plainDir(worktree, run.CrewDir); err != nil {
+		return nil, err // before EnsureCrewDir, which would write through a link
+	}
 	if err := run.EnsureCrewDir(worktree); err != nil {
 		return nil, err
+	}
+	if info, err := os.Lstat(scratchPath(worktree, ".gitignore")); err == nil && !info.Mode().IsRegular() {
+		return nil, &notPlainError{Path: scratchPath(worktree, ".gitignore")}
 	}
 	if _, err := plainDir(worktree, run.CrewDir, scratchIn); err != nil {
 		return nil, err
