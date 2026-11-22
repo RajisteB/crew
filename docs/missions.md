@@ -225,7 +225,7 @@ Add a health endpoint and show its status on the settings page.
 
 A piece's `paths` records where the piece is meant to work. It is optional, and crew doesn't enforce it yet.
 
-`crew mission plan` checks it before creating anything: every domain and factory must exist, the factory must be one of that domain's, no piece may wait for itself or for a missing piece, pieces can't wait on each other in a loop, every brief must be filled in, the piece count must be no more than your limit, and every station's harness must be able to apply deny rules. If anything fails it lists every problem and creates nothing. If the plan passes, it prints the mission id, a table of pieces, a diagram, and the next command:
+`crew mission plan` checks it before creating anything: every domain and factory must exist, the factory must be one of that domain's, no piece may wait for itself or for a missing piece, pieces can't wait on each other in a loop, every brief must be filled in, the piece count must be no more than your limit, and every station's harness must be able to apply deny rules. A piece id is letters, digits, `-` and `_`, and the id `epic` is reserved in any case, because crew labels the mission's Jira epic with it (`piece id "epic" is reserved`). If anything fails it lists every problem and creates nothing. If the plan passes, it prints the mission id, a table of pieces, a diagram, and the next command:
 
 ```
 mission m-20261121-162953-e991 planned (/home/you/src/app/.crew/missions/m-20261121-162953-e991)
@@ -293,9 +293,9 @@ The Jira line gives the epic and its address. When the board is behind, it also 
 Jira: ACME-1  https://example.atlassian.net/browse/ACME-1 (2 writes not sent yet)
 ```
 
-If Jira is set up but the epic couldn't be created yet, the line reads `Jira: epic not created yet` and the same count. The count reads `1 write not sent yet` for one and `<n> writes not sent yet` otherwise. A piece's Jira key follows its id in the open pull requests, deliverables and finished lines, as `P1 (ACME-2)`.
+If Jira is set up and the mission has started but nothing has reached the board yet (the epic couldn't be created), the line reads `Jira: nothing has reached the board yet`, with no count: until the epic exists crew can't tell how many writes will follow it. Otherwise the count reads `1 write not sent yet` for one and `<n> writes not sent yet` for more. A piece's Jira key follows its id in the open pull requests, deliverables and finished lines, as `P1 (ACME-2)`.
 
-A `deliverable` wait reads like the others: `w1  P1  deliverable  <question>  waiting 4m`. Deliverables a piece has left are listed in their own section, with their files, who has to act and where crew keeps them:
+A `deliverable` wait reads like the others: `w1  P1  deliverable  <question>  waiting 4m`. Deliverables a piece has left are listed in their own section, with their files, who has to act and where crew keeps them. A deliverable of a piece that was cancelled before it was accepted shows `cancelled` there:
 
 ```
 Deliverables:
@@ -509,7 +509,7 @@ crew writes to Jira. The orchestrator and the stations don't: no agent is asked 
 - **Comments** on the issue for the things that matter, in plain words: the pull request was opened (with its link), a decision was made and by whom, the piece was escalated to you, it is waiting on you, its brief was changed, it was cancelled, a deliverable was posted or accepted. A change you make to the plan with `amend` is a comment on the epic.
 - **Attachments**: the files of a deliverable (see "Deliverables").
 
-crew never copies anything else to Jira: no file contents of the repo, no run logs, no credentials.
+That is all crew sends to Jira: your request and the briefs (in the epic and the issues), the comments above, which carry text written by others by design (a station's summary when it asks for your approval, the orchestrator's reasons for a decision, the words you passed with an answer or an amendment), and the deliverable files. It sends no other file of the repo, no run logs and no credentials. A description longer than 30,000 characters is cut, with a line that says the full text is in the mission folder.
 
 ### Setting it up
 
@@ -526,7 +526,7 @@ Then, inside the repo:
 crew jira setup --site https://example.atlassian.net --key ACME
 ```
 
-Add `--board N` to use the sprints of board `N`, and `--assignee ACCOUNT_ID` to assign issues to someone other than the token's owner. Without `--board`, crew uses the project's only board when there is exactly one; with none or several it says so and doesn't use sprints.
+Add `--board N` to use the sprints of board `N`, and `--assignee ACCOUNT_ID` to assign issues to someone other than the token's owner. Without `--board`, crew uses the project's only board when there is exactly one; with none or several it says so and doesn't use sprints. A board that has no sprints at all, such as a Kanban board, is fine: the check prints `board: <n> has no sprints: issues are not put in a sprint`, and setup saves `board: 0`. `crew jira check` prints the same line for an entry whose board has no sprints.
 
 `crew jira setup` needs a terminal. With none, it refuses before it contacts Jira and sends nothing. Otherwise it makes a read-only check against the live site and prints what it found: the account the token belongs to, whether the project exists, whether its issue types have the four statuses, which board and active sprint it will use, and whether the Flagged field is there (without it, a waiting piece gets a comment but no flag). If anything is wrong it stops and writes nothing. If all is well, it then asks you to type `<owner/name> <KEY>` (for example `acme/app ACME`) in a terminal, and only then writes the entry to `jira.yaml` in your crew directory. The phrase can't be answered by a pipe, so a session can't set Jira up for you. New crew directories deny `crew jira setup` to sessions as well. In a crew directory that already existed, the deny list is as you left it, and the typed phrase in a terminal is what stops a session.
 
@@ -536,7 +536,9 @@ All three `crew jira` commands take `--dir` (the crew directory) and `--project`
 crew jira check
 ```
 
-`crew mission start` refuses when the repo has an entry but the two variables aren't set in your shell. The engine needs them as well, so start the engine from a shell that has them.
+`crew mission start`, `go` and `resume` refuse when the repo has an entry but the two variables aren't set in the shell that runs them: `Jira is set up for <repo>, but CREW_JIRA_TOKEN is not set here. Run this command yourself in a terminal where CREW_JIRA_EMAIL and CREW_JIRA_TOKEN are set.`
+
+The engine is started by whoever runs `crew mission go` or `crew mission resume`, and it reads the two variables from that shell. If the orchestrator runs those commands, the shell the orchestrator session runs in must hold the token, and that session can read it. To keep the token away from every session, don't export it in the shell you start sessions from, and run `go` and `resume` yourself in a terminal where it is set. crew tells the orchestrator to hand you the command when that is the case: when one of these commands is refused for the missing variables, the orchestrator doesn't try to set them and doesn't touch `jira.yaml`; it gives you the command to run.
 
 ### jira.yaml
 
@@ -567,23 +569,27 @@ With a `board`, crew puts each new issue in the board's active sprint. crew neve
 
 ### What crew reads back
 
-One thing. When a piece has posted a deliverable that you haven't accepted, and crew itself has moved its issue to In Review, crew looks at that issue now and then, and if it is in Done, it takes that as your acceptance (see "Deliverables"). Nothing else you do on the board changes the mission: moving other issues, closing the epic or editing a summary are left alone, and crew's next write puts the issue back where the mission says it belongs.
+One thing. When a piece has posted a deliverable that you haven't accepted, and crew itself has moved its issue to In Review, crew looks at that issue now and then, and if it is in Done, it takes that as your acceptance (see "Deliverables"). crew reads Done only after a move to In Review that crew made itself and Jira accepted, since the deliverable was last collected. When Jira refuses that move, or the piece is reworked and its files are collected again, an issue already in Done is not taken as your acceptance until crew has moved it to In Review again; answer the wait instead. Nothing else you do on the board changes the mission: moving other issues, closing the epic or editing a summary are left alone. crew doesn't move an issue back at once: it moves it only when the piece next changes lane, or after a deliverable is collected again, and then to where the mission says it belongs.
 
 ### When Jira is down
 
-Jira never stops a piece. A failed write is a note in the mission's events, and crew plans it again on the next tick, so the board catches up once Jira is back. One bad write doesn't hold up the others. A file crew can never send, because it is over 10 MB or vanished, is noted and left in the mission folder.
+Jira never stops a piece. A failed write is a note in the mission's events, and crew plans it again on the next tick, so the board catches up once Jira is back.
 
-`crew mission status <id>` shows `(<n> writes not sent yet)` on its Jira line while the board is behind. After the mission has ended with writes still unsent, the engine tries 10 more times, a minute apart, and then leaves a note that says to run:
+When Jira can't be reached at all (the network fails, a call times out, the site rejects the credentials, or it answers 408, 429 or a 5xx), crew notes it once and sends nothing more that tick. When one write fails by itself, for example a 403 on one kind of call, crew notes it, skips that write for the tick and sends the rest; the skipped write is tried again on the next tick. A few writes hold up others: while the epic can't be created nothing else is sent, while a piece's issue can't be created that piece's other writes wait, and a comment that fails holds the comments after it, so they stay in order. A write Jira refuses for good, such as a move the workflow doesn't allow, is noted once and not tried again.
+
+An attachment upload has its own time limit, 30 seconds plus one second per 100 KB, and a failed upload never holds up the other writes. crew tries each file three times; after the third failure it notes `Jira: <file> could not be attached after 3 tries and stays in the mission folder` and stops trying. A file crew can never send, because it is over 10 MB or vanished, is noted and left in the mission folder at once.
+
+`crew mission status <id>` shows `(<n> writes not sent yet)` on its Jira line while the board is behind, or `Jira: nothing has reached the board yet` while there is no epic. After the mission has ended with writes still unsent, the engine tries 10 more times, a minute apart, and then leaves a note: `Jira is behind: <n> writes were not sent; run crew jira sync <mission>` (`1 write was not sent` for one, and `Jira is behind: nothing reached the board; run crew jira sync <mission>` when the epic was never created). It says to run:
 
 ```sh
 crew jira sync <mission>
 ```
 
-`crew jira sync` sends what is owed, once, and prints `Jira is up to date for mission <id>`, or `<n> writes still not sent; see the notes in crew mission status <id>` (`1 write` when it is one). It refuses while the mission's engine is alive, since the engine sends the writes itself. It also refuses when the repo is set up for Jira but `CREW_JIRA_EMAIL` or `CREW_JIRA_TOKEN` isn't set in that shell: `Jira is set up for <repo>, but CREW_JIRA_TOKEN is not set here; set it, or remove the repo from jira.yaml`.
+`crew jira sync` sends what is owed, once, and prints `Jira is up to date for mission <id>`, or `<n> writes still not sent; see the notes in crew mission status <id>` (`1 write` when it is one). It refuses while the mission's engine is alive, since the engine sends the writes itself. It refuses a mission that hasn't started (planned, or waiting for `go`): `mission <id> hasn't started: there is nothing to send`. It also refuses when the repo is set up for Jira but `CREW_JIRA_EMAIL` or `CREW_JIRA_TOKEN` isn't set in that shell: `Jira is set up for <repo>, but CREW_JIRA_TOKEN is not set here. Run this command yourself in a terminal where CREW_JIRA_EMAIL and CREW_JIRA_TOKEN are set.`
 
 ### Your token and the sessions crew starts
 
-crew sends the token only to your `https://<name>.atlassian.net` site, and never follows a redirect with it. crew removes `CREW_JIRA_EMAIL` and `CREW_JIRA_TOKEN` from the environment of every station and orchestrator process it starts. But a shell that exports the token lets any session started from that shell read it, for example an orchestrator you launch yourself from the same terminal. If that matters to you, export the variables only in the shell that runs `crew jira` and the engine, or give the token to a Jira account with narrow rights.
+crew sends the token only to your `https://<name>.atlassian.net` site, and never follows a redirect with it. crew removes `CREW_JIRA_EMAIL` and `CREW_JIRA_TOKEN` from the environment of every station and orchestrator process it starts, and of the `git`, `gh` and notification commands it runs itself, so a hook or `core.fsmonitor` setting a station leaves in its worktree can't read them either. Only the engine keeps them. But a shell that exports the token lets any session started from that shell read it, for example an orchestrator you launch yourself from the same terminal. If that matters to you, export the variables only in the shell that runs `crew jira` and the engine, or give the token to a Jira account with narrow rights.
 
 ## Deliverables
 
@@ -594,13 +600,13 @@ A piece doesn't have to end as a pull request. A piece that does research, write
 The station writes them to `.crew/deliverables/` in its worktree. When the run ends, crew collects them:
 
 - crew copies them to `.crew/missions/<id>/deliverables/<piece>/` in the repo. That copy is the one crew keeps and hands on. The worktree's copy is scratch.
-- A deliverable is at most 20 files, regular files only. A file past the twentieth is left out, with a note. Symlinks are skipped, and so is a file whose name holds control or invisible formatting characters or whose path is over 255 bytes. If `.crew/deliverables` (or `.crew` itself) in the worktree is not a real folder, crew ignores it with a note and the piece goes on as if it left no deliverable.
-- When Jira is set up, crew attaches each file to the piece's issue. A file over 10 MB can't be attached: crew notes it and the file stays in the mission folder. Attachments are the only thing crew puts in Jira from the files, and no file content is in `state.json`.
+- A deliverable is at most 20 files, regular files only. A file past the twentieth is left out, with a note. Symlinks are skipped, and so is a file with more than one hard link (it could be any file the station can read), a file whose name holds control or invisible formatting characters, and a file whose path is over 255 bytes. If `.crew/deliverables` (or `.crew` itself) in the worktree is not a real folder, crew ignores it with a note and the piece goes on as if it left no deliverable.
+- When Jira is set up, crew attaches each file to the piece's issue. A file over 10 MB can't be attached: crew notes it and the file stays in the mission folder. So does a file that fails to upload three times. Attachments are the only thing crew puts in Jira from the files, and no file content is in `state.json`.
 - Without Jira, nothing else changes: the files stay in the mission folder, and you read them there.
 
 A piece that ends in a deliverable and no pull request has no pull request to merge, so its piece is "delivered" and waits for you to accept the deliverable. A piece that ends in both opens its pull request as usual. After the pull request is merged, the piece is delivered and waits for you to accept the deliverable as well.
 
-crew keeps its own files (missions, runs, worktrees) in `.crew` in your project. If `.crew` in the project is a symlink, or `.crew/.gitignore` is not a regular file, crew refuses to run there and says so, because it would otherwise write through the link.. This is about the project's `.crew`; a worktree's `.crew/deliverables` that isn't a real folder is only ignored, as below.
+crew keeps its own files (missions, runs, worktrees) in `.crew` in your project. If `.crew` in the project is a symlink, or `.crew/.gitignore` is not a regular file, crew refuses to run there and says so, because it would otherwise write through the link. This is about the project's `.crew`; a worktree's `.crew/deliverables` that isn't a real folder is only ignored, as described above.
 
 ### How later pieces get them
 
@@ -610,7 +616,7 @@ A piece that lists the deliverable's piece in `waits_for` gets the files in its 
 
 A deliverable waits until it is accepted. Three things accept it:
 
-1. **You move its issue to Done on the board.** This is the one thing crew reads back (see "Jira"). It works only when Jira is set up and crew has moved that issue to In Review.
+1. **You move its issue to Done on the board.** This is the one thing crew reads back (see "Jira"). It works only when Jira is set up and, since the files were collected, crew has moved that issue to In Review and Jira accepted the move.
 2. **You answer the wait with accept:**
 
    ```sh
