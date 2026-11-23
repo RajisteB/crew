@@ -94,7 +94,7 @@ func PathsWithin(child, parent []string) (outside string, ok bool)
   - `TestParentLevelUnderAncestors`: the examples in the comments above, plus `Under("P3", "P3")` false, `Under("P30.1", "P3")` false, `Ancestors("P1")` empty.
   - `TestMissionChildren`: `P3`, `P3.1`, `P3.1.1`, `P3.2`, `P4` → `Children("P3")` is `P3.1`, `P3.2`.
   - `TestNextChildID`: none → `P3.1`; state holds `P3.1`, `P3.2` (cancelled) and `P3.2.1` → `P3.3`.
-  - `TestPatternWithin`, a table: yes for (`brand/logos/**` in `brand/**`), (`brand` in `brand/**`), (`brand/**` in `brand`), (`brand/*.svg` in `brand/**`), (`brand/*.svg` in `brand/*`), (`brand/**/x` in `brand/**`), (`a/b.md` in `a/*.md`), (`x` in `**`); no for (`site/**` in `brand/**`), (`**` in `brand/**`), (`brand/**` in `brand/**/x`), (`a/b` in `a/*`), (`brand/a*.svg` in `brand/*.svg`: can't tell), (`brand/[` in `brand/**`: malformed), (`` in `brand/**`).
+  - `TestPatternWithin`, a table: yes for (`brand/logos/**` in `brand/**`), (`brand` in `brand/**`), (`brand/**` in `brand`), (`brand/*.svg` in `brand/**`), (`brand/*.svg` in `brand/*`), (`brand/**/x` in `brand/**`), (`a/*.md` in `a/*.md`), (`x` in `**`); no for (`a/b.md` in `a/*.md`: a pattern with no wildcard also covers what is under it), (`site/**` in `brand/**`), (`**` in `brand/**`), (`brand/**` in `brand/**/x`), (`a/b` in `a/*`), (`brand/a*.svg` in `brand/*.svg`: can't tell), (`brand/[` in `brand/**`: malformed), (`` in `brand/**`).
   - `TestPathsWithin`: `[brand/a/**, brand/b/**]` in `[brand/**]` ok; `[brand/a/**, site/**]` in `[brand/**]` → `site/**`; anything in an empty parent ok.
 - [ ] **Step 2: Run** `go test ./internal/mission/ -run 'Parent|Children|NextChild|Within'` — Expected: FAIL (undefined).
 - [ ] **Step 3: Implement.**
