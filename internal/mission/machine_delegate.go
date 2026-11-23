@@ -40,13 +40,17 @@ func lastPlanReason(p PieceState) string {
 
 // delegated finishes each delegated piece whose pieces are all finished,
 // deepest level first so a piece waiting on a finished one is freed in the
-// same call. A delegated piece never had a run, so nothing is cleaned up.
+// same call. A delegated piece never had a run, so nothing is cleaned up. One
+// with no piece under it in the state goes back to the queue to be planned.
 func (d *decider) delegated() {
 	ids := d.idsWith(PieceDelegated)
 	slices.SortStableFunc(ids, func(a, b string) int { return Level(b) - Level(a) })
 	for _, id := range ids {
-		if complete, cancelled, open := d.childCounts(id); open || complete+cancelled == 0 {
+		if complete, cancelled, open := d.childCounts(id); open {
 			continue
+		} else if complete+cancelled == 0 {
+			d.ps(id).Status = PieceQueued
+			d.record(EvNote, id, id+" has no pieces under it; it will be planned again")
 		} else if complete > 0 {
 			d.complete(id)
 		} else {

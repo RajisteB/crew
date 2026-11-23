@@ -221,14 +221,6 @@ func TestDecide_PieceWaitingForADelegatedPieceStartsWhenItFinishes(t *testing.T)
 	}
 }
 
-func TestDecide_DelegatedPieceWithNoSubPiecesIsLeftAlone(t *testing.T) {
-	m := delegating([]string{"P1"}, "P1")
-	ns, as := Decide(m, st(m, PieceDelegated), obs(t0), limits(5, 3), 0)
-	if piece(t, ns, "P1").Status != PieceDelegated || len(as) != 0 || ns.Status != StatusRunning {
-		t.Fatalf("status %s actions %+v", piece(t, ns, "P1").Status, as)
-	}
-}
-
 func TestDecide_DelegatedPieceIgnoresOtherMissions(t *testing.T) {
 	m := delegating([]string{"P1"}, "P1")
 	s := st(m, PieceQueued)

@@ -31,7 +31,8 @@ func ApplySubPlan(m Mission, s State, parent string, sp SubPlan, in CheckInput, 
 	case sp.Question != "":
 		return refuse("the plan holds both pieces and a question")
 	}
-	pieces, err := namePieces(m, s, pp, sp.Pieces, in)
+	base := withoutLeftovers(m, s, parent)
+	pieces, err := namePieces(base, s, pp, sp.Pieces, in)
 	if err != nil {
 		return refuse(cutText(err.Error(), maxReasonRunes))
 	}
@@ -39,17 +40,29 @@ func ApplySubPlan(m Mission, s State, parent string, sp SubPlan, in CheckInput, 
 	for i, p := range pieces {
 		ids[i] = p.ID
 	}
-	next := m.WithChange(Change{Time: now, By: scopedBy(parent), What: "planned " + parent + " as " + strings.Join(ids, ", "), Why: sp.Reason})
+	next := base.WithChange(Change{Time: now, By: scopedBy(parent), What: "planned " + parent + " as " + strings.Join(ids, ", "), Why: sp.Reason})
 	next.Pieces = append(next.Pieces, pieces...)
 	if errs := Check(next, in); len(errs) > 0 {
 		return refuse(cutText(firstMessages(errs), maxReasonRunes))
 	}
 	settled := StartedPieces(s)
 	settled[parent] = true
-	next, _, _ = SeparatedWithLog(m, next, in.Domains, settled, now)
+	next, _, _ = SeparatedWithLog(base, next, in.Domains, settled, now)
 	d := &decider{m: next, s: s.Clone(), o: Obs{Now: now}}
 	d.delegate(parent, ids, sp.Reason)
 	return d.m, d.s, d.actions
+}
+
+// withoutLeftovers is m without the pieces under parent that have no state.
+// A queued delegated piece has none, so any in m were left by a save that
+// wrote the mission and not the state.
+func withoutLeftovers(m Mission, s State, parent string) Mission {
+	out := m
+	out.Pieces = slices.DeleteFunc(slices.Clone(m.Pieces), func(p Piece) bool {
+		_, has := s.Piece(p.ID)
+		return Under(p.ID, parent) && !has
+	})
+	return out
 }
 
 // askForPlan holds the delegated piece on the scoped orchestrator's question.
