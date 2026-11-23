@@ -94,6 +94,9 @@ func (d *decider) applyChanges(changes []pieceChange, words string) []RunStep {
 // in the queue, so the next Decide looks at its changed plan afresh.
 func (d *decider) unpark(id string) {
 	if p := d.ps(id); p != nil && p.Status == PieceWaiting && p.Wait != nil && p.Wait.Back == PieceQueued {
+		if p.Wait.Kind == WaitPlan {
+			p.Calls = 0
+		}
 		p.Status, p.Wait = PieceQueued, nil
 	}
 }

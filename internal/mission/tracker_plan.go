@@ -15,6 +15,8 @@ func Lane(p PieceState) string {
 	switch p.Status {
 	case PieceQueued:
 		return LaneToDo
+	case PieceDelegated:
+		return LaneInProgress
 	case PieceWaiting:
 		if p.Wait != nil && p.Wait.Back == PieceQueued {
 			return LaneToDo

@@ -78,6 +78,10 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 		d.ps(id).Status = PiecePROpen
 		return nil
 	}
+	if w.Kind == WaitPlan {
+		d.ps(id).Calls = 0
+		return nil
+	}
 	return &RunStep{Piece: id, Kind: "retry"}
 }
 
@@ -133,7 +137,7 @@ func answerChoices(p PieceState, w Wait) []string {
 		return []string{answerCancel}
 	case w.Kind == WaitQuestion || w.Kind == WaitLimit:
 		return []string{answerRetry, answerGoto, answerCancel}
-	case w.Kind == WaitPRClosed:
+	case w.Kind == WaitPRClosed || w.Kind == WaitPlan:
 		return []string{answerRetry, answerCancel}
 	case w.Kind == WaitMerge:
 		return []string{answerCancel}

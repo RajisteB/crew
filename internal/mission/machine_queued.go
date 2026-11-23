@@ -24,6 +24,13 @@ func (d *decider) queued(id string) {
 			ready = false
 		}
 	}
+	if piece.Delegate {
+		d.ps(id).Behind = nil
+		if ready {
+			d.plan(id)
+		}
+		return
+	}
 	if d.settleBehind(id, ready) {
 		return
 	}

@@ -127,6 +127,7 @@ func Decide(m Mission, s State, o Obs, lim Limits, remind time.Duration) (State,
 		}
 	}
 	d.deliverables()
+	d.delegated()
 	for _, id := range d.idsWith(PieceQueued) {
 		d.queued(id)
 	}
