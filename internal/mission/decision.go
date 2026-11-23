@@ -226,6 +226,8 @@ func (a *applier) addProblem(d OrchDecision) string {
 	switch {
 	case d.Piece == nil:
 		return "add needs a piece"
+	case ParentID(d.Piece.ID) != "":
+		return `the new piece's id can't hold a "."`
 	case strings.TrimSpace(a.quote) == "" || !strings.Contains(a.m.Request, a.quote):
 		return "the quote is not in the request"
 	case !Allows(a.in.Limits.Additions, a.s.Additions+1):

@@ -213,7 +213,7 @@ func missionPlan(env missionEnv, args []string) error {
 	if err != nil {
 		return err
 	}
-	if errs := mission.Check(m, chk.in); len(errs) > 0 {
+	if errs := mission.CheckNew(m, chk.in); len(errs) > 0 {
 		return printCheckErrors(env.out, errs)
 	}
 	m, seps, _ := mission.SeparatedWithLog(mission.Mission{}, m, chk.in.Domains, nil, time.Now())
@@ -386,6 +386,6 @@ func loadChecks(crewDir, repo string) (checks, error) {
 }
 
 func newChecks(p *verify.Project, settings mission.Settings, repo string) checks {
-	in := mission.CheckInput{Domains: p.Domains, Factories: p.Factories, Registry: p.Registry, Limits: settings.For(repo)}
+	in := mission.CheckInput{Domains: p.Domains, Factories: p.Factories, Registry: p.Registry, Limits: settings.For(repo), OrchestratorHarness: settings.Harness}
 	return checks{in: in, settings: settings, project: p}
 }

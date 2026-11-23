@@ -13,6 +13,7 @@ func waitCircles(pieces []Piece, index map[string]int) [][]string {
 				next[i] = append(next[i], j)
 			}
 		}
+		next[i] = append(next[i], treeEdges(pieces, index, i)...)
 	}
 	t := &tarjan{next: next, idx: make([]int, n), low: make([]int, n), on: make([]bool, n)}
 	for i := range t.idx {
