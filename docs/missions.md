@@ -13,7 +13,7 @@ This guide is for the owner of a crew setup who has used factories and has not u
 - **Factory**: a fixed line of stations, the same factories you already run with `crew run`.
 - **Station**: one step in a factory, done by one agent.
 - **Run**: one pass of a factory. Each piece gets one run, in its own worktree.
-- **Orchestrator**: the agent you talk to. It plans the mission, shows you the plan and relays what is waiting on you. It never edits files, never merges anything, and never turns auto-merge on.
+- **Orchestrator**: the agent you talk to. It plans the mission, shows you the plan and relays what is waiting on you. It also starts and watches plain runs. It never edits files, never merges anything, and never turns auto-merge on.
 - **Engine**: the crew process that does the work once you say go. It starts pieces, watches their runs, pushes branches and opens pull requests.
 
 ## What this stage does and doesn't do
@@ -78,10 +78,10 @@ Under `foreman:`, the two orchestrator lines:
     foreman:
       launch: "claude --agent {name}"
       orchestrator_launch: "claude --agent {name} --settings {settings}"
-      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"]
+      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
 ```
 
-`orchestrator_allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, and reading and searching files. Any other command, `crew run approve` included, makes it ask you first, as it would in any session.
+`orchestrator_allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, `crew factory diagram`, `crew run status`, `crew run say` and `crew run resume`, and reading and searching files. Starting a run, `crew run goto` and `crew run approve` are not on the list, so the session asks you first each time. Any other command makes it ask too, as it would in any session.
 
 Next to `foreman:`, the `deny:` block:
 
@@ -853,6 +853,34 @@ crew mission answer <id> <wait> --do goto --station build --note "add the cost e
 ```
 
 The piece runs again from that station, and the old deliverable is cleared. When it finishes, crew collects the files again, and what it collects waits for your acceptance. Files collected after a rework are a new deliverable and must be accepted again: accepting one does not carry over to different files. A deliverable that comes with a pull request can't be sent back with `goto`; answer `accept` or `cancel`, and use the pull request to ask for changes.
+
+## Plain runs
+
+A plain run is one factory run on its own, outside any mission. It has no worktree, no branch and no pull request. The stations work in your project directory itself.
+
+The orchestrator uses a plain run when you ask to run a factory, when the factory belongs to no domain, or when the project has no GitHub remote. Otherwise it plans a mission.
+
+It starts one like this, with your words on stdin so the shell expands nothing:
+
+```sh
+crew run <factory> --detach --input - <<'CREW_TEXT'
+<what the run should produce>
+CREW_TEXT
+```
+
+It then watches with `crew run status <id> --since <cursor> --wait 90s`. The command returns as soon as there is news, prints the new events and ends with `cursor N`; the next call passes that N. It tells you about notes, drift redirects, retries, a route close to its limit, a failure and the result. What you say for the work goes to the next station with `crew run say <id> -`. `-` means the text comes from stdin; `--input`, `say` and `approve --note` all accept it.
+
+A plain run works in your main checkout, and crew does not check it against the pieces of a mission. Before it starts one, the orchestrator looks at `crew mission status`. If a mission in the repo has pieces that have started and are not finished, it tells you and goes on only if you say so.
+
+Three commands make the session ask you first, each time:
+
+- Starting a run.
+- `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop.
+- `crew run goto`. It moves the work to another station, and so it can step past an approval stop the same way `approve` does.
+
+`crew run status`, `say` and `resume` need no confirmation.
+
+A run that belongs to a mission shows `owner: mission <id> piece <id>` in `crew run status`. `crew run say`, `goto`, `approve` and `resume` refuse it. Use the `crew mission` commands for those.
 
 ## Where things live
 

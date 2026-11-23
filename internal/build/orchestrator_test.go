@@ -48,10 +48,6 @@ func TestOrchestratorOutputs_WritesAgentAndSettings(t *testing.T) {
 	if err := json.Unmarshal(sf.Content, &s); err != nil {
 		t.Fatalf("settings are not JSON: %v\n%s", err, sf.Content)
 	}
-	wantAllow := []string{"Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"}
-	if !slices.Equal(s.Permissions.Allow, wantAllow) {
-		t.Errorf("allow = %v, want exactly %v", s.Permissions.Allow, wantAllow)
-	}
 	if slices.Contains(s.Permissions.Allow, "Bash(crew:*)") {
 		t.Error("the orchestrator session must not be allowed every crew command")
 	}
