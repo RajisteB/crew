@@ -91,11 +91,21 @@ func checkSubPaths(p, parent Piece, in CheckInput) []error {
 // waits_for of each ancestor, and, for a delegated piece, each of its
 // children (it finishes after them).
 func treeEdges(pieces []Piece, index map[string]int, i int) []int {
+	return treeEdgesWith(pieces, index, i, false)
+}
+
+// treeEdgesWith is treeEdges, and with withApart set the ancestors' apart_from
+// links count as well as their waits_for.
+func treeEdgesWith(pieces []Piece, index map[string]int, i int, withApart bool) []int {
 	p := pieces[i]
 	var out []int
 	for _, a := range Ancestors(p.ID) {
 		if j, ok := index[a]; ok {
-			for _, w := range pieces[j].WaitsFor {
+			links := pieces[j].WaitsFor
+			if withApart {
+				links = slices.Concat(links, pieces[j].Apart)
+			}
+			for _, w := range links {
 				if k, ok := index[w]; ok && k != i {
 					out = append(out, k)
 				}

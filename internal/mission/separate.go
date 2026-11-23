@@ -20,7 +20,9 @@ func (s Separation) String() string {
 }
 
 // SeparateOverlaps clears every piece's Apart and sets it again. It takes each piece
-// in file order and looks at the pieces before it, from the nearest back to the
+// in file order (a piece is never compared with one above or below it in the
+// piece tree, and two pieces whose branches part at two planned pieces with
+// paths are not compared either: see skipForTree) and looks at the pieces before it, from the nearest back to the
 // first. A pair whose paths overlap is left alone only when one piece already
 // reaches the other through waits_for alone: a cancelled dependency parks the
 // waiter, so that order holds. Otherwise one piece of the pair is kept apart from
@@ -48,7 +50,7 @@ func SeparateOverlaps(m Mission, domains []source.Domain, settled map[string]boo
 	for j := range out.Pieces {
 		for i := j - 1; i >= 0; i-- {
 			pa, pb, ok := PathsOverlap(paths[i], paths[j])
-			if !ok {
+			if !ok || skipForTree(out.Pieces, index, paths, i, j) {
 				continue
 			}
 			later, earlier, ok := apartDirection(out.Pieces, index, settled, i, j)
@@ -88,21 +90,17 @@ func apartDirection(pieces []Piece, index map[string]int, settled map[string]boo
 }
 
 // reaches says whether piece from depends on piece to, in any number of hops,
-// through waits_for and, when withApart is set, apart_from.
+// through waits_for and, when withApart is set, apart_from. It knows the piece
+// tree: see linksOf.
 func reaches(pieces []Piece, index map[string]int, from, to int, withApart bool) bool {
 	seen := make([]bool, len(pieces))
 	stack := []int{from}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		next := pieces[cur].WaitsFor
-		if withApart {
-			next = slices.Concat(next, pieces[cur].Apart)
-		}
-		for _, id := range next {
-			k, ok := index[id]
+		for _, k := range linksOf(pieces, index, cur, withApart) {
 			switch {
-			case !ok || seen[k]:
+			case seen[k]:
 			case k == to:
 				return true
 			default:
