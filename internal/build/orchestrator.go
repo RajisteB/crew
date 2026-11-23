@@ -21,6 +21,27 @@ const (
 
 var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
 
+// canHostMainSession: the harness runs custom agents as a main session and can
+// give one a shell.
+func canHostMainSession(h config.Harness) bool {
+	return h.Foreman != nil && h.Agents.Supported && len(h.Capabilities["shell"]) > 0
+}
+
+// mainSessionHarness is a copy of h whose agents.static is merged with the
+// main-session static keys. h is never modified.
+func mainSessionHarness(h config.Harness) config.Harness {
+	c := h
+	static := make(map[string]any, len(h.Agents.Static)+len(h.Foreman.Static))
+	for k, v := range h.Agents.Static {
+		static[k] = v
+	}
+	for k, v := range h.Foreman.Static {
+		static[k] = v
+	}
+	c.Agents.Static = static
+	return c
+}
+
 // hasOrchestratorLaunch: the harness says how to start the orchestrator.
 func hasOrchestratorLaunch(h config.Harness) bool {
 	return h.Foreman != nil && h.Foreman.OrchestratorLaunch != ""
@@ -30,7 +51,7 @@ func hasOrchestratorLaunch(h config.Harness) bool {
 // rules. The orchestrator has a shell, so without a deny list a session could
 // run commands only the owner may run.
 func canHostOrchestrator(h config.Harness) bool {
-	return canHostForeman(h) && hasOrchestratorLaunch(h) && run.CanDeny(h)
+	return canHostMainSession(h) && hasOrchestratorLaunch(h) && run.CanDeny(h)
 }
 
 // orchestratorSettingsPath is always under the build directory: the file holds
@@ -63,10 +84,10 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// orchestratorOutputs renders the orchestrator agent like a foreman, and the
+// orchestratorOutputs renders the orchestrator agent, and the
 // settings file that carries its allow and deny rules.
 func orchestratorOutputs(p *verify.Project, hn, crewDir, dir string, link bool, o Opts) ([]File, error) {
-	h := foremanHarness(p.Registry.Harnesses[hn])
+	h := mainSessionHarness(p.Registry.Harnesses[hn])
 	a := mission.OrchestratorAgent()
 	content, err := renderAgent(p.Registry, h, verify.Selected{Agent: a, Model: source.ModelInherit})
 	if err != nil {

@@ -3,7 +3,7 @@ package run
 import "fmt"
 
 // FormatEvent renders one event as a terminal line. `crew run` prints these
-// live and `crew run status` prints them for the foreman.
+// live and `crew run status` prints them.
 func FormatEvent(ev Event) string {
 	ts := ev.Time.Format("15:04:05")
 	switch ev.Kind {

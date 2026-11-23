@@ -22,7 +22,6 @@ import (
 
 	"github.com/crewfile-dev/crew/internal/build"
 	"github.com/crewfile-dev/crew/internal/config"
-	"github.com/crewfile-dev/crew/internal/factory"
 	"github.com/crewfile-dev/crew/internal/migrate"
 	"github.com/crewfile-dev/crew/internal/scaffold"
 	"github.com/crewfile-dev/crew/internal/verify"
@@ -216,7 +215,6 @@ func printMatrix(w io.Writer, p *verify.Project, o build.Opts) {
 	for _, hn := range p.Enabled {
 		h := p.Registry.Harnesses[hn]
 		fmt.Fprintf(tw, "\n%s (%s) — %d skills\n", h.Display, hn, len(p.Skills))
-		printForemen(tw, h, p)
 		printOrchestrator(tw, hn, p, o)
 		sel := p.Selection[hn]
 		if !h.Agents.Supported {
@@ -242,18 +240,6 @@ func printMatrix(w io.Writer, p *verify.Project, o build.Opts) {
 	}
 	tw.Flush()
 	fmt.Fprintln(w)
-}
-
-func printForemen(w io.Writer, h config.Harness, p *verify.Project) {
-	if h.Foreman == nil || len(p.Factories) == 0 {
-		return
-	}
-	var names []string
-	for _, f := range p.Factories {
-		n := factory.ForemanPrefix + f.Name
-		names = append(names, fmt.Sprintf("%s (launch: %s)", n, strings.ReplaceAll(h.Foreman.Launch, "{name}", n)))
-	}
-	fmt.Fprintf(w, "  foremen: %s\n", strings.Join(names, ", "))
 }
 
 // printOrchestrator prints the line that starts the orchestrator, if this

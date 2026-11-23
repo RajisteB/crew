@@ -21,7 +21,7 @@ const (
 )
 
 // Factory is factories/<name>.md: the frontmatter is the station graph, the
-// body is the briefing every station and the foreman receive.
+// body is the briefing every station receives.
 type Factory struct {
 	Name        string             `yaml:"name"`
 	Description string             `yaml:"description"`

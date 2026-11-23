@@ -12,7 +12,7 @@ import (
 
 // Engine drives one run until it finishes, fails, pauses for approval or is
 // interrupted. It is the only thing that routes, counts and runs stations;
-// `crew run` and the foreman both go through it.
+// `crew run` and the mission engine both go through it.
 type Engine struct {
 	Store    Store
 	Factory  source.Factory // the frozen copy from Store.Factory()
@@ -40,7 +40,7 @@ func (e *Engine) Drive(ctx context.Context) (State, error) {
 	}
 	st, err := e.loop(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) && st.RunID != "" {
-		// Record it, so `crew run status` and the foreman see why the run
+		// Record it, so `crew run status` shows why the run
 		// stopped instead of a run that looks forever "running".
 		st = FailRetryable(st, err.Error())
 		e.emit(Event{Kind: EvFailed, Station: st.Current, Msg: st.Reason})

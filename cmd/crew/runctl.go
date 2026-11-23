@@ -8,7 +8,7 @@ import (
 )
 
 // runStatus lists runs, or prints one run's state and the events after
-// --since, ending with "cursor N" for the foreman's next poll.
+// --since, ending with "cursor N" for the next poll.
 func runStatus(pos []string, f runFlags, out io.Writer) error {
 	if len(pos) == 0 {
 		if f.wait != 0 {

@@ -371,45 +371,6 @@ func planFiles(t *testing.T, dir string, o build.Opts) ([]build.File, []build.No
 	return files, notes
 }
 
-func TestPlan_ForemanPerFactory(t *testing.T) {
-	dir, out := setup(t)
-	files, _ := planFiles(t, dir, build.Opts{Out: out})
-	var cc, oc string
-	for _, f := range files {
-		if f.Name != "foreman-ship-change" || f.Link != "" {
-			continue
-		}
-		switch f.Harnesses[0] {
-		case "claude-code":
-			cc = string(f.Content)
-		case "opencode":
-			oc = string(f.Content)
-		}
-	}
-	if !strings.Contains(cc, "name: foreman-ship-change") || !strings.Contains(cc, "tools: Read, Bash") || strings.Contains(cc, "\nmodel:") {
-		t.Fatalf("claude-code foreman:\n%s", cc)
-	}
-	if !strings.Contains(oc, "mode: primary") || strings.Contains(oc, "mode: subagent") {
-		t.Fatalf("opencode foreman must be a primary agent:\n%s", oc)
-	}
-}
-
-func TestPlan_ForemanNoteWhenUnsupported(t *testing.T) {
-	dir, out := setup(t)
-	edit(t, filepath.Join(dir, "crew.yaml"), "  codex:\n    enabled: false", "  codex:\n    enabled: true")
-	edit(t, filepath.Join(dir, "agents/code-explorer.md"), "per_harness:\n", "per_harness:\n  codex: {model: gpt-6-luna, effort: low}\n")
-	for _, a := range []string{"epic-planner", "spike-researcher", "ticket-worker"} {
-		edit(t, filepath.Join(dir, "agents", a+".md"), "per_harness:\n", "per_harness:\n  codex: {model: gpt-6-luna, effort: low}\n")
-	}
-	_, notes := planFilesAllowWarnings(t, dir, build.Opts{Out: out})
-	for _, n := range notes {
-		if n.Harness == "codex" && strings.Contains(n.Msg, "no foreman") {
-			return
-		}
-	}
-	t.Fatalf("expected a no-foreman note for codex, got %+v", notes)
-}
-
 func planFilesAllowWarnings(t *testing.T, dir string, o build.Opts) ([]build.File, []build.Note) {
 	t.Helper()
 	p, rep := verify.Run(dir)

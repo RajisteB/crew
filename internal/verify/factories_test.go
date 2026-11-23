@@ -60,12 +60,14 @@ func TestFactories_ReservedName(t *testing.T) {
 	expectError(t, dir, `factory name "status" is reserved`)
 }
 
-func TestFactories_ForemanNameClash(t *testing.T) {
+func TestFactories_AgentMayBeNamedLikeAnOldForeman(t *testing.T) {
 	dir := fresh(t)
 	b, _ := os.ReadFile(filepath.Join(dir, "agents", "code-explorer.md"))
 	os.WriteFile(filepath.Join(dir, "agents", "foreman-ship-change.md"),
 		[]byte(strings.Replace(string(b), "name: code-explorer", "name: foreman-ship-change", 1)), 0o644)
-	expectError(t, dir, `agent "foreman-ship-change" clashes with the foreman crew generates`)
+	if _, rep := verify.Run(dir); !rep.OK(false) {
+		t.Fatalf("an agent named foreman-ship-change must verify: %+v", rep.Issues)
+	}
 }
 
 func TestFactories_StarIsInfoNotWarning(t *testing.T) {

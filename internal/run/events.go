@@ -27,7 +27,7 @@ const (
 )
 
 // Event is one line of <run>/events.jsonl. The engine and the CLI append to
-// it; `crew run status --since N` and the foreman read it.
+// it; `crew run status --since N` reads it.
 type Event struct {
 	Seq     int       `json:"seq"`
 	Time    time.Time `json:"time"`

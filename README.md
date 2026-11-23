@@ -60,7 +60,7 @@ crew compile --out /tmp/crew-preview
 
 ## Factories
 
-A factory chains agents into a production line. Each **station** runs one agent; the agent's result picks a **route**, which sends the work forward or back to *any* earlier station. `crew run` drives it; a **foreman** agent lets you talk to a run while it works.
+A factory chains agents into a production line. Each **station** runs one agent; the agent's result picks a **route**, which sends the work forward or back to *any* earlier station. `crew run` drives it; the `orchestrator` agent lets you talk to a run while it works.
 
 ```markdown
 ---
@@ -140,9 +140,11 @@ A `-` reads stdin wherever text or `@file` is taken (`--input -`, `say <id> -`, 
 
 Each run lives in `<project>/.crew/runs/<id>/` (crew writes `.crew/.gitignore` so it never reaches git): `input.md`, a frozen `factory.md`, `state.json`, `events.jsonl`, and `steps/<n>-<station>/{prompt,output,verdict}`. Every station's prompt points at earlier outputs by path. Only one process drives a run at a time.
 
-### The foreman
+### Talking to a run
 
-`crew compile` also writes a `foreman-<factory>` agent for every harness that can host one as the main session. Start it with `claude --agent foreman-ship-change` (in OpenCode, press Tab to pick it). It starts the run with `--detach`, polls `crew run status`, tells you what matters, passes what you say to the stations, and asks you at approval stops. It never runs a station, edits files or chooses routes: the engine does all of that, so a factory behaves the same with or without a foreman.
+`crew compile` prints an `orchestrator:` line for each harness that can host one as the main session. Start the orchestrator with that line, then tell it which factory to run and what to produce. It starts the run, watches it, tells you what matters, passes what you say to the stations, and asks you at approval stops. In its session `crew run status`, `say` and `resume` are pre-approved; starting a run, `crew run goto` and `crew run approve` each ask you to confirm first. It never runs a station, edits files or chooses routes: the engine does all of that, so a factory behaves the same with or without the orchestrator.
+
+An older `foreman-<factory>` agent is removed by the next `crew compile`.
 
 ## Missions
 

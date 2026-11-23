@@ -133,11 +133,3 @@ func TestOrchestratorLaunch_QuotesUnsafePaths(t *testing.T) {
 		t.Fatalf("path not quoted: %q", line)
 	}
 }
-
-func TestCompile_StillEmitsForemen(t *testing.T) {
-	dir, out := setup(t)
-	files, _ := planFiles(t, dir, build.Opts{Out: out})
-	if _, ok := findFile(files, filepath.Join("claude-code", "agents", "foreman-ship-change.md")); !ok {
-		t.Fatal("foreman missing next to the orchestrator")
-	}
-}

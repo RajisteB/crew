@@ -1,6 +1,6 @@
 // Package run is the factory engine: a pure state machine (machine.go), the
 // run folder it persists to (store.go), and the pieces that run one station
-// (prompt, verdict, snapshot, runner). Both `crew run` and the foreman drive
+// (prompt, verdict, snapshot, runner). Both `crew run` and the mission engine drive
 // factories through it, so routing, limits, guards and approvals live here
 // and nowhere else.
 package run
