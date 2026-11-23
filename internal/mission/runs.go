@@ -70,12 +70,8 @@ func (l *LocalRuns) Start(p Piece, input, worktree string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("piece %s: %w", p.ID, err)
 	}
-	store, st, err := run.NewRun(l.RepoRoot, f, src, input, time.Now())
+	store, _, err := run.NewOwnedRun(l.RepoRoot, f, src, input, RunOwner(l.MissionID, p.ID), time.Now())
 	if err != nil {
-		return "", err
-	}
-	st.Owner = RunOwner(l.MissionID, p.ID)
-	if err := store.SaveState(st); err != nil {
 		return "", err
 	}
 	return filepath.Base(store.Dir), nil

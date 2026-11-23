@@ -32,6 +32,11 @@ func (s Store) path(name string) string { return filepath.Join(s.Dir, name) }
 // NewRun creates the run folder, freezing a copy of the factory source so
 // edits to the factory can't change a run already in progress.
 func NewRun(project string, f source.Factory, factorySrc []byte, input string, now time.Time) (Store, State, error) {
+	return NewOwnedRun(project, f, factorySrc, input, "", now)
+}
+
+// NewOwnedRun is NewRun for a run that something other than `crew run` drives: owner is saved in the first write.
+func NewOwnedRun(project string, f source.Factory, factorySrc []byte, input, owner string, now time.Time) (Store, State, error) {
 	if err := EnsureCrewDir(project); err != nil {
 		return Store{}, State{}, err
 	}
@@ -49,6 +54,7 @@ func NewRun(project string, f source.Factory, factorySrc []byte, input string, n
 		}
 	}
 	st := Begin(f, id)
+	st.Owner = owner
 	return s, st, s.SaveState(st)
 }
 
