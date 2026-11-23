@@ -148,7 +148,7 @@ An older `foreman-<factory>` agent is removed by the next `crew compile`.
 
 ## Missions
 
-A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub (or crew merges, if you switch auto-merge on for its domain); crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands.
+A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub (or crew merges, if you switch auto-merge on for its domain); crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands. The same agent also starts and watches a single factory run when that is all you need.
 
 ```sh
 crew mission setup                    # once, for an older crew directory: missions.yaml and domains/

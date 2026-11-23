@@ -24,7 +24,7 @@ Running together is safe only when pieces don't change the same files, so crew c
 
 Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
 
-Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. A piece can hand its work on to pieces of its own: delegation (see "Delegation"). Still missing: releases (`crew release approve` doesn't exist yet) and the cutover.
+Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. A piece can hand its work on to pieces of its own: delegation (see "Delegation"). Still missing: releases (`crew release approve` doesn't exist yet). The orchestrator also starts and watches plain runs of a single factory (see "Plain runs"), and the per-factory foreman agents are gone.
 
 ## Setting up
 
@@ -183,6 +183,8 @@ claude-code:
 ```
 
 Run that line in a terminal inside the repo you want to work on. The `--settings` file carries the deny rules and the allowed tools. If you start the orchestrator any other way, for example `claude --agent orchestrator`, the session has only its tool list and its prompt, with no deny rules. Use the printed line.
+
+The same session starts plain runs (see "Plain runs").
 
 Then tell it the job. It runs `crew mission status`, looks at your domains and factories, writes a plan, and runs `crew mission plan`. You don't have to type any of the commands below yourself, but you can, and it is worth knowing them: they are what the orchestrator runs on your behalf, and what you use when you'd rather not go through it.
 
@@ -916,7 +918,7 @@ Agent sessions run as your own Unix user, with your GitHub login. No file, check
 What crew promises is this: crew itself never merges a pull request unless you switched auto-merge on for its domain, never closes or releases anything without your approval, and every session crew starts is launched with rules that refuse the commands that would. Three layers do the work.
 
 1. **Only crew acts.** No agent prompt asks an agent to merge or release. The only code that merges is the engine's merge step, and it merges only a head commit crew pushed itself, after reading the switch again.
-2. **Session rules.** Every session crew starts, whether a station or an orchestrator call, gets the deny rules from `harnesses.yaml`: merging or closing a pull request, force-pushing, pushing to `main`, `crew automerge`, `crew repo confirm`, `crew release approve`, and writing anywhere in your crew directory. Stations and headless orchestrator calls also can't run `crew run` or `crew mission`, so a station can't pass an approval stop or answer for you. A harness that can't apply deny rules can't run mission pieces, and `crew verify` says which ones.
+2. **Session rules.** Every session crew starts, whether a station or an orchestrator call, gets the deny rules from `harnesses.yaml`: merging or closing a pull request, force-pushing, pushing to `main`, `crew automerge`, `crew repo confirm`, `crew release approve`, and writing anywhere in your crew directory. Stations and headless orchestrator calls also can't run `crew run` or `crew mission`, so a station can't pass an approval stop or answer for you. The orchestrator's own session pre-approves `crew run status`, `crew run say` and `crew run resume`, and asks you before it starts a run, runs `crew run goto` or runs `crew run approve`. A harness that can't apply deny rules can't run mission pieces, and `crew verify` says which ones.
 3. **Commands only you can run.** `crew repo confirm` and `crew automerge` need a terminal and a typed confirmation, with no flag and no piped input that skips it. The switch that `crew automerge` writes is your approval to merge.
 
 The limits, specifically:
@@ -931,6 +933,7 @@ The limits, specifically:
 - **The auto-merge file has a checksum, nothing more.** `automerge.json` in `<crew dir>/principal/` is sealed like the repo confirmation. A file that has been edited by hand, or has no checksum, reads as off for every domain.
 - **The orchestrator session is yours.** crew can only apply the deny rules to it if you start it from the printed launch line.
 - **Answers relayed by the orchestrator are recorded word for word, but nothing proves you said them.**
+- **A plain run's approval is your confirmation in the session, and nothing records your words for it**, unlike a mission's answer.
 - **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 - **Checks are only as good as the repo's CI.** The factory's review station is the only thing between an agent's work and your review of the pull request.
 - **Pushing publishes in a public repo.** After you confirm a repo once, every piece branch in a public repo is public.
