@@ -49,6 +49,24 @@ func (a *applier) raise(question string) {
 	a.askPassing(a.piece, a.failure, a.by+" asked: "+question)
 }
 
+// addShapeProblem is what is wrong with the piece an add names, before the
+// plan is checked: none, a scope that is gone, a delegated piece, or a dotted
+// id from the main orchestrator. "" when nothing is.
+func (a *applier) addShapeProblem(d OrchDecision) string {
+	_, scopeKnown := a.m.Piece(a.scope)
+	switch {
+	case d.Piece == nil:
+		return "add needs a piece"
+	case a.scope != "" && !scopeKnown:
+		return "the scope " + a.scope + " is not a piece of the mission"
+	case d.Piece.Delegate:
+		return "the new piece can't be delegated; add the pieces themselves"
+	case a.scope == "" && ParentID(d.Piece.ID) != "":
+		return `the new piece's id can't hold a "."`
+	}
+	return ""
+}
+
 // scopedAdd makes an add by a scoped orchestrator one that crew names: the id
 // is the scope's next child, an empty domain is the scope's, and no paths are
 // the scope's effective paths. The decision's own id is never used.

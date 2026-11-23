@@ -15,7 +15,7 @@ func ApplySubPlan(m Mission, s State, parent string, sp SubPlan, in CheckInput, 
 	if st, found := s.Piece(parent); !ok || !pp.Delegate || !found || st.Status != PieceQueued {
 		return m, s, nil
 	}
-	sp.Question = cutText(sp.Question, maxReasonRunes)
+	sp.Question = cutText(strings.TrimSpace(sp.Question), maxReasonRunes) // a blank question is none
 	sp.Reason = cutText(sp.Reason, maxReasonRunes)
 	refuse := func(why string) (Mission, State, []Action) {
 		next, acts := PlanRefused(s, parent, why, now)

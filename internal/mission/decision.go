@@ -228,11 +228,9 @@ func (a *applier) rebriefProblem(d OrchDecision) string {
 }
 
 func (a *applier) addProblem(d OrchDecision) string {
-	switch {
-	case d.Piece == nil:
-		return "add needs a piece"
-	case a.scope == "" && ParentID(d.Piece.ID) != "":
-		return `the new piece's id can't hold a "."`
+	switch why := a.addShapeProblem(d); {
+	case why != "":
+		return why
 	case strings.TrimSpace(a.quote) == "" || !strings.Contains(a.m.Request, a.quote):
 		return "the quote is not in the request"
 	case !Allows(a.in.Limits.Additions, a.s.Additions+1):
