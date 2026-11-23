@@ -12,19 +12,17 @@ import (
 // foremanAllowed lists the files that may still name the old foreman key:
 // they handle the old key or describe an old compile.
 var foremanAllowed = map[string]bool{
-	"internal/config/config.go":                 true,
-	"internal/config/oldkey.go":                 true,
-	"internal/config/oldkey_test.go":            true,
-	"internal/scaffold/upgrade.go":              true,
-	"internal/scaffold/upgrade_orchestrator.go": true,
-	"internal/build/cutover_test.go":            true,
-	"internal/build/oldkey_test.go":             true,
-	"internal/build/build.go":                   true,
-	"internal/verify/factories_test.go":         true,
-	"cmd/crew/factory_test.go":                  true,
-	"cmd/crew/cutover_words_test.go":            true,
-	"docs/missions.md":                          true,
-	"README.md":                                 true,
+	"internal/config/config.go":         true,
+	"internal/config/oldkey.go":         true,
+	"internal/config/oldkey_test.go":    true,
+	"internal/build/cutover_test.go":    true,
+	"internal/build/oldkey_test.go":     true,
+	"internal/build/build.go":           true,
+	"internal/verify/factories_test.go": true,
+	"cmd/crew/factory_test.go":          true,
+	"cmd/crew/cutover_words_test.go":    true,
+	"docs/missions.md":                  true,
+	"README.md":                         true,
 }
 
 var foremanSkipped = map[string]bool{
@@ -34,8 +32,33 @@ var foremanSkipped = map[string]bool{
 	"docs/superpowers": true,
 }
 
+// foremanAllowedPath: under internal/scaffold/ only the upgrade's two files,
+// its tests and its test fixtures, not the template a user's config is made from.
 func foremanAllowedPath(rel string) bool {
-	return foremanAllowed[rel] || strings.HasPrefix(rel, "internal/scaffold/")
+	if foremanAllowed[rel] {
+		return true
+	}
+	rest, ok := strings.CutPrefix(rel, "internal/scaffold/")
+	if !ok {
+		return false
+	}
+	return rest == "upgrade.go" || rest == "upgrade_orchestrator.go" || strings.HasSuffix(rest, "_test.go") || strings.HasPrefix(rest, "testdata/")
+}
+
+func TestCutover_ScaffoldAllowsOnlyTheUpgradeItsTestsAndFixtures(t *testing.T) {
+	for rel, want := range map[string]bool{
+		"internal/scaffold/upgrade.go":                             true,
+		"internal/scaffold/upgrade_orchestrator.go":                true,
+		"internal/scaffold/upgrade_ask_test.go":                    true,
+		"internal/scaffold/testdata/harnesses-before-cutover.yaml": true,
+		"internal/scaffold/template/harnesses.yaml":                false,
+		"internal/scaffold/scaffold.go":                            false,
+		"internal/scaffold/upgrade_new.go":                         false,
+	} {
+		if got := foremanAllowedPath(rel); got != want {
+			t.Errorf("foremanAllowedPath(%s) = %v, want %v", rel, got, want)
+		}
+	}
 }
 
 func TestCutover_ForemanIsNamedOnlyWhereTheOldKeyIsHandled(t *testing.T) {

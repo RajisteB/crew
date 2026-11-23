@@ -60,7 +60,10 @@ func TestCLI_OwnedRunRefusesSayGotoApproveResume(t *testing.T) {
 				t.Errorf("%s: output lacks %q:\n%s", verb, want, out)
 			}
 		}
-		after, _ := os.ReadFile(statePath)
+		after, err := os.ReadFile(statePath)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !bytes.Equal(before, after) {
 			t.Errorf("%s changed state.json", verb)
 		}
@@ -97,10 +100,13 @@ func TestCLI_StatusShowsTheOwner(t *testing.T) {
 
 func TestCLI_PlainRunHasNoOwnerLine(t *testing.T) {
 	e := newCLIEnv(t, verdict("ready"), verdict("done"), verdict("pass"))
-	out, _ := e.crew("run", "ship-change", "--input", "x")
+	out, _ := e.crew("run", "ship-change", "--input", "x") // stops for approval
 	id := runID(t, out)
-	status, _ := e.crew("run", "status", id)
-	list, _ := e.crew("run", "status")
+	status, code := e.crew("run", "status", id)
+	list, listCode := e.crew("run", "status")
+	if code != 0 || listCode != 0 {
+		t.Fatalf("status exit %d, list exit %d", code, listCode)
+	}
 	if strings.Contains(status, "owner:") || strings.Contains(list, "mission") {
 		t.Fatalf("a plain run shows an owner:\n%s\n%s", status, list)
 	}

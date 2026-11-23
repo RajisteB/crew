@@ -93,11 +93,16 @@ func TestCLI_StatusWaitGivesUpAfterTheTime(t *testing.T) {
 func TestCLI_StatusWaitSeesAnEventThatArrivesLater(t *testing.T) {
 	fastPoll(t)
 	e, store, last := runningRun(t)
+	emitted := make(chan error, 1)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		store.Emit(run.Event{Kind: run.EvNote, Msg: "a late note"})
+		_, err := store.Emit(run.Event{Kind: run.EvNote, Msg: "a late note"})
+		emitted <- err
 	}()
 	out, code, took := e.status(filepath.Base(store.Dir), "--since", last, "--wait", "10s")
+	if err := <-emitted; err != nil {
+		t.Fatalf("emit: %v", err)
+	}
 	if code != 0 || took > 5*time.Second || !strings.Contains(out, "a late note") {
 		t.Fatalf("exit %d after %v:\n%s", code, took, out)
 	}
