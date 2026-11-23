@@ -87,6 +87,7 @@ func missionStatus(env missionEnv, id string) error {
 	printOpenPRs(env, m, st)
 	printDeliverables(out, st)
 	printRunning(out, env.repoRoot, st)
+	printDelegatedPieces(out, m, st)
 	printQueued(out, m, st, readyText(env, st))
 	printEnded(out, "Complete", st, mission.PieceComplete)
 	printEnded(out, "Cancelled", st, mission.PieceCancelled)
@@ -154,7 +155,7 @@ func printQueued(out io.Writer, m mission.Mission, st mission.State, ready strin
 		}
 		text := waitsText(m, st, p.ID)
 		if text == readyToStart {
-			text = ready
+			text = readyTextFor(m, p.ID, ready)
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s", p.ID, text))
 	}

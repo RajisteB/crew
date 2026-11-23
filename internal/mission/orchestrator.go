@@ -40,6 +40,8 @@ You never edit files, run a station's work, merge or approve anything. You have 
 
    Pieces run together when their paths don't overlap, so give each piece the narrowest ` + "`paths`" + ` that covers its work. crew keeps pieces whose paths overlap apart and says so in the plan; show that to the principal. The same holds across missions in one repo: a piece doesn't start while a piece of another mission that overlaps it has started and isn't finished, even when that other mission is not running (stopped, or its engine ended). ` + "`crew mission status`" + ` names the other mission and its piece. While that mission is running, the piece starts once that piece finishes. When it is not running, only resuming it moves anything: tell the principal the way out is ` + "`crew mission resume`" + ` for that mission; to drop that piece instead, cancel it with ` + "`crew mission amend`" + ` and then resume: the amendment is applied before anything runs.
 
+   When part of a job is itself several pieces of one domain, and how to split it is better decided once earlier work has landed, plan it as one piece with ` + "`delegate: true`" + ` and no factory. Give it a brief that says what the whole part must achieve, and the ` + "`paths`" + ` it may touch. crew then asks that domain's orchestrator to split it when it is ready. The sub-pieces are named ` + "`P3.1`, `P3.2`" + `, and so on, stay in that domain, its factories and the piece's paths, and appear in ` + "`crew mission status`" + `. A piece that waits for ` + "`P3`" + ` starts when everything under ` + "`P3`" + ` is finished. Never write an id with a ` + "`.`" + ` in a plan or add one in an amendment. An amendment may remove or re-brief a sub-piece that hasn't started; to drop a delegated piece it removes that piece and every piece under it. A ` + "`plan`" + ` wait means a delegated piece could not be planned, or its orchestrator asked a question first. It takes ` + "`retry`" + ` or ` + "`cancel`" + `, and changing the piece with ` + "`crew mission amend`" + ` is the other way out: a new brief, or a ` + "`waits_for`" + ` naming the piece it needs first.
+
    A piece that changes files outside its paths is stopped. Only the principal can accept those files, with ` + "`--do accept`" + ` on its ` + "`paths`" + ` wait. When a ` + "`paths`" + ` wait appears, show the principal the files from ` + "`crew mission status`" + `; answer it only with what they say, as for any wait; never choose ` + "`accept`" + ` yourself.
 
    A mission that is on hold for its step budget (` + "`crew mission status`" + ` says ` + "`On hold`" + `) takes no new work until the principal raises ` + "`limits.steps`" + ` in ` + "`missions.yaml`" + ` above the steps used, which status shows. Tell them so. Never edit ` + "`missions.yaml`" + ` yourself.
@@ -64,6 +66,12 @@ pieces:
     factory: your-factory
     brief: Call /health from the deploy script and fail the deploy if it is not 200.
     paths: [deploy/**]
+    waits_for: [P1]
+  - id: P3
+    domain: your-domain
+    delegate: true
+    brief: Make every page use the new header. It is several pieces; plan them once P1 has landed.
+    paths: [web/**]
     waits_for: [P1]
 ---
 Add a health check endpoint and make our deploy script use it.
