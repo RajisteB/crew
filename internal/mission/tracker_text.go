@@ -49,8 +49,16 @@ func IssueText(missionID string, m Mission, p Piece) (summary, body string) {
 		waits = strings.Join(p.WaitsFor, ", ")
 	}
 	summary = cut(p.ID+": "+firstLine(p.Brief), maxSummaryRunes)
-	body = fmt.Sprintf("Mission %s, piece %s\nDomain: %s\nFactory: %s\nWaits for: %s\n\n%s",
-		missionID, p.ID, p.Domain, p.Factory, waits, p.Brief)
+	factory := p.Factory
+	if p.Delegate {
+		factory = "none (delegated: its pieces are planned when it is ready)"
+	}
+	partOf := ""
+	if parent := ParentID(p.ID); parent != "" {
+		partOf = "Part of: " + parent + "\n"
+	}
+	body = fmt.Sprintf("Mission %s, piece %s\n%sDomain: %s\nFactory: %s\nWaits for: %s\n\n%s",
+		missionID, p.ID, partOf, p.Domain, factory, waits, p.Brief)
 	return summary, cutBody(body)
 }
 

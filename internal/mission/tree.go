@@ -61,3 +61,43 @@ func NextChildID(s State, parent string) string {
 	}
 	return parent + "." + strconv.Itoa(highest+1)
 }
+
+// InputsFor lists the pieces whose deliverables piece id receives: the pieces
+// it waits for and the pieces each of its ancestors waits for, where a
+// delegated piece stands for every piece under it that is not delegated. In
+// file order, each once. It reads the plan only, not the state.
+func InputsFor(m Mission, id string) []string {
+	byID := make(map[string]Piece, len(m.Pieces))
+	for _, p := range m.Pieces {
+		byID[p.ID] = p
+	}
+	found := map[string]bool{}
+	seen := map[string]bool{}
+	var expand func(dep string)
+	expand = func(dep string) {
+		if seen[dep] {
+			return
+		}
+		seen[dep] = true
+		p, ok := byID[dep]
+		if !ok || !p.Delegate {
+			found[dep] = true
+			return
+		}
+		for _, c := range m.Children(dep) {
+			expand(c.ID)
+		}
+	}
+	for _, owner := range append([]string{id}, Ancestors(id)...) {
+		for _, dep := range byID[owner].WaitsFor {
+			expand(dep)
+		}
+	}
+	var out []string
+	for _, p := range m.Pieces {
+		if found[p.ID] && p.ID != id {
+			out = append(out, p.ID)
+		}
+	}
+	return out
+}

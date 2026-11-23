@@ -83,6 +83,11 @@ type Orchestrator interface {
 func PieceInput(id string, m Mission, p Piece, d source.Domain, earlier []Earlier) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Your piece: %s (mission %s)\n\n%s\n\n", p.ID, id, strings.TrimSpace(p.Brief))
+	for _, a := range Ancestors(p.ID) {
+		if ap, ok := m.Piece(a); ok {
+			fmt.Fprintf(&b, "## The piece yours is part of: %s\n\n%s\n\n", a, strings.TrimSpace(ap.Brief))
+		}
+	}
 	fmt.Fprintf(&b, "## The whole request (for context; do only your piece)\n\n%s\n\n", m.Request)
 	if changes := m.PrincipalChanges(); len(changes) > 0 {
 		fmt.Fprintf(&b, "## %s\n\n%s\n\n", principalChangesTitle, bulletList(changes))
