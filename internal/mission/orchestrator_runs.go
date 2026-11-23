@@ -15,7 +15,7 @@ const orchestratorRuns = `7. A plain run is one factory run on its own, outside 
    CREW_TEXT
    ` + "```" + `
 
-   Starting a run, ` + "`" + `crew run goto` + "`" + ` and ` + "`" + `crew run approve` + "`" + ` are not pre-approved in this session: the principal is asked to confirm each one. That is intended. Never look for another way to run them.
+   Starting a run, ` + "`" + `crew run goto` + "`" + ` and ` + "`" + `crew run approve` + "`" + ` are not pre-approved in this session: the principal is normally asked to confirm each one. That is intended. Never look for another way to run them, and if one of them runs without the principal being asked, tell them so.
 
    Note the run id it prints. Watch with ` + "`" + `crew run status <id> --since <cursor> --wait 90s` + "`" + `: it returns as soon as there is news, prints the new events and ends with ` + "`" + `cursor N` + "`" + `. Pass that N the next time; start at 0. Tell the principal, in one line each: notes, drift redirects, retries, a route close to its limit, a failure, and the result. Skip routine step lines unless they ask. Stop watching when status says ` + "`" + `done` + "`" + `, ` + "`" + `failed` + "`" + `, ` + "`" + `interrupted` + "`" + ` or ` + "`" + `awaiting-approval` + "`" + `, or when the principal wants to talk about something else.
 

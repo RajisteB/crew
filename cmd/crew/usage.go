@@ -10,7 +10,7 @@ Usage:
   crew capabilities [--harness H | --all] which native tools each capability becomes
   crew plan     [--dir D] [scope flags]   show what each harness gets, models, costs, notes, file changes
   crew compile  [--dir D] [scope flags]   verify, then write files
-  crew run <factory> --input TEXT|@FILE [--detach]   run a factory (see crew run --help)
+  crew run <factory> --input TEXT|@FILE|- [--detach] run a factory (see crew run --help)
   crew run status|say|goto|approve|resume <id> …    watch and steer a run
   crew factory list | diagram <name>     list factories, or print one as a Mermaid flowchart
   crew domain list [--dir D]              list domains (name, factory count, description)

@@ -45,9 +45,9 @@ If you created your crew directory before missions existed, run this (add `--dir
 crew mission setup
 ```
 
-It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, and the orchestrator launch line and allow list. Your comments and every value you already have stay as they are. The one exception: a `harnesses.yaml` that differs from the default only by comments is replaced by the new default, and your comments are in the backup copy. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
+It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, the orchestrator launch line and allow list, and, for `claude-code`, the `ask` rules for `crew run approve` and `crew run goto`. It adds the `ask` rules to an `orchestrator:` block that has no `ask` key, a file that already says `orchestrator:` included; a block with an `ask` key, even `ask: []`, is left as it is, which is how you opt out. Your comments and every value you already have stay as they are. The one exception: a `harnesses.yaml` that differs from the default only by comments is replaced by the new default, and your comments are in the backup copy. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
 
-An older file may still have the block under its old name, `foreman:`. Setup renames it to `orchestrator:`. In the block, it drops the foreman `launch` line (that line started foremen, which no longer exist), turns `orchestrator_launch` into `launch` and `orchestrator_allow` into `allow`, and keeps `static`. It adds the allow rules for plain runs (`crew run status`, `crew run say`, `crew run resume` and `crew factory diagram`) to an allow list that lacks them, after the rules you already have. If `harnesses.yaml.before-missions` already exists, the new copy is called `harnesses.yaml.before-missions.2`, then `.3`, up to `.9`; an earlier copy is never overwritten. A file you haven't upgraded yet keeps working with `foreman:`, and `crew compile` prints a note for each harness that still says it: `harnesses.yaml still says foreman: for <name>; crew mission setup renames it to orchestrator:`. A harness that has both `foreman:` and `orchestrator:` is an error when the file loads; keep `orchestrator:` and remove `foreman:`.
+An older file may still have the block under its old name, `foreman:`. Setup renames it to `orchestrator:`. In the block, it drops the foreman `launch` line (that line started foremen, which no longer exist), turns `orchestrator_launch` into `launch` and `orchestrator_allow` into `allow`, and keeps `static`. When it renames the block, it adds the allow rules for plain runs (`crew run status`, `crew run say`, `crew run resume` and `crew factory diagram`) to an allow list that lacks them, after the rules you already have. A file that already says `orchestrator:` keeps its allow list as you left it. The `foreman:` key's comment becomes the template's when it is empty or is about foremen; any other comment you wrote there stays. If `harnesses.yaml.before-missions` already exists, the new copy is called `harnesses.yaml.before-missions.2`, then `.3`, up to `.9`; an earlier copy is never overwritten. A file you haven't upgraded yet keeps working with `foreman:`, and `crew compile` prints a note for each harness that still says it: `harnesses.yaml still says foreman: for <name>; crew mission setup renames it to orchestrator: and adds the rules for plain runs`. Such a file has no `ask` rules until you run `crew mission setup`. A harness that has both `foreman:` and `orchestrator:` is an error when the file loads; keep `orchestrator:` and remove `foreman:`.
 
 The one case it leaves alone is a `headless.command` you changed by hand. It prints a `skipped` line for that harness; add `--settings "{settings}"` to the command yourself and run `crew mission setup` again.
 
@@ -74,15 +74,16 @@ In `headless:`, the command gets `--settings "{settings}"` to the command and th
       output: claude-json
 ```
 
-Under `orchestrator:`, the launch line and the allow list:
+Under `orchestrator:`, the launch line, the allow list and the ask rules:
 
 ```yaml
     orchestrator:                 # the orchestrator runs as the main session
       launch: "claude --agent {name} --settings {settings}"
       allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
+      ask: ["Bash(crew run approve:*)", "Bash(crew run goto:*)"]
 ```
 
-`allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, `crew factory diagram`, `crew run status`, `crew run say` and `crew run resume`, and reading and searching files. Starting a run, `crew run goto` and `crew run approve` are not on the list, so the session asks you first each time. Any other command makes it ask too, as it would in any session.
+`allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, `crew factory diagram`, `crew run status`, `crew run say` and `crew run resume`, and reading and searching files. `ask` lists `crew run approve` and `crew run goto`. Claude Code checks `deny` rules first, then `ask`, then `allow`, across all its settings files, so with these rules the session asks you before either command whatever another setting allows. A session started with permission checks bypassed asks about nothing. Starting a run has no `ask` rule, since no single prefix names it: the session asks only when no other setting allows it and the session is in a mode that asks. Answer that question with a one-time yes, not "don't ask again". Any other command makes the session ask too, as it would in any session.
 
 Next to `orchestrator:`, the `deny:` block:
 
@@ -871,19 +872,23 @@ crew run <factory> --detach --input - <<'CREW_TEXT'
 CREW_TEXT
 ```
 
-It then watches with `crew run status <id> --since <cursor> --wait 90s`. The command returns as soon as there is news, prints the new events and ends with `cursor N`; the next call passes that N. It tells you about notes, drift redirects, retries, a route close to its limit, a failure and the result. What you say for the work goes to the next station with `crew run say <id> -`. `-` means the text comes from stdin; `--input`, `say` and `approve --note` all accept it.
+It then watches with `crew run status <id> --since <cursor> --wait 90s`. The command returns as soon as there is news, prints the new events and ends with `cursor N`; the next call passes that N. It tells you about notes, drift redirects, retries, a route close to its limit, a failure and the result. What you say for the work goes to the next station with `crew run say <id> -`. `-` means the text comes from stdin; `--input`, `say` and `approve --note` all accept it. Nothing on stdin, or more than 1 MB, is refused, and so is a flag the command doesn't take.
 
 A plain run works in your main checkout, and crew does not check it against the pieces of a mission. Before it starts one, the orchestrator looks at `crew mission status`. If a mission in the repo has pieces that have started and are not finished, it tells you and goes on only if you say so.
 
-Three commands make the session ask you first, each time:
+Three commands need your confirmation:
 
-- Starting a run.
+- Starting a run. There is no `ask` rule for it, since no single prefix names it, so the session asks only when no other Claude Code setting allows it and the session is in a mode that asks. Answer it with a one-time yes, not "don't ask again".
 - `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop.
 - `crew run goto`. It moves the work to another station, and so it can step past an approval stop the same way `approve` does.
 
+For `approve` and `goto`, a `harnesses.yaml` set up by this version makes the confirmation hold: crew writes `ask` rules for both into the orchestrator's settings file, and Claude Code checks `ask` rules before `allow` rules across all its settings files, so the session asks you even when another setting allows them. A session started with permission checks bypassed asks about nothing. A file that still says `foreman:` gets no `ask` rules until you run `crew mission setup`.
+
+If you used foremen, open `/permissions` in the repo and remove rules that allow `crew run` as a whole, `crew run approve` or `crew run goto`. A "don't ask again" answer from that time may have saved one. The `ask` rules outweigh it for `approve` and `goto`, but `Bash(crew run:*)` still lets a run start without asking.
+
 `crew run status`, `say` and `resume` need no confirmation.
 
-A run that belongs to a mission shows `owner: mission <id> piece <id>` in `crew run status`. `crew run say`, `goto`, `approve` and `resume` refuse it. Use the `crew mission` commands for those.
+A run that belongs to a mission shows `owner: mission <id> piece <id>` and `driven by its mission: use crew mission status` in `crew run status`. crew knows a run belongs to a mission from its own state or, for a run started before this version, from the mission's `state.json` that names it. `crew run say`, `goto`, `approve` and `resume` refuse it. Use the `crew mission` commands for those. If a mission's `state.json` can't be read, crew can't tell which runs it owns: those four commands refuse any run that doesn't name its owner, with a message naming the file, and `crew run status` shows `owner: unknown (…)`.
 
 ## Where things live
 
@@ -918,7 +923,7 @@ Agent sessions run as your own Unix user, with your GitHub login. No file, check
 What crew promises is this: crew itself never merges a pull request unless you switched auto-merge on for its domain, never closes or releases anything without your approval, and every session crew starts is launched with rules that refuse the commands that would. Three layers do the work.
 
 1. **Only crew acts.** No agent prompt asks an agent to merge or release. The only code that merges is the engine's merge step, and it merges only a head commit crew pushed itself, after reading the switch again.
-2. **Session rules.** Every session crew starts, whether a station or an orchestrator call, gets the deny rules from `harnesses.yaml`: merging or closing a pull request, force-pushing, pushing to `main`, `crew automerge`, `crew repo confirm`, `crew release approve`, and writing anywhere in your crew directory. Stations and headless orchestrator calls also can't run `crew run` or `crew mission`, so a station can't pass an approval stop or answer for you. The orchestrator's own session pre-approves `crew run status`, `crew run say` and `crew run resume`, and asks you before it starts a run, runs `crew run goto` or runs `crew run approve`. A harness that can't apply deny rules can't run mission pieces, and `crew verify` says which ones.
+2. **Session rules.** Every session crew starts, whether a station or an orchestrator call, gets the deny rules from `harnesses.yaml`: merging or closing a pull request, force-pushing, pushing to `main`, `crew automerge`, `crew repo confirm`, `crew release approve`, and writing anywhere in your crew directory. Stations and headless orchestrator calls also can't run `crew run` or `crew mission`, so a station can't pass an approval stop or answer for you. The orchestrator's own session pre-approves `crew run status`, `crew run say` and `crew run resume`. crew writes `ask` rules for `crew run approve` and `crew run goto` into its settings file, and Claude Code checks `ask` rules before `allow` rules, so the session asks you before either one whatever other settings allow. Starting a run asks only when no other setting allows it (see "Plain runs"). A harness that can't apply deny rules can't run mission pieces, and `crew verify` says which ones.
 3. **Commands only you can run.** `crew repo confirm` and `crew automerge` need a terminal and a typed confirmation, with no flag and no piped input that skips it. The switch that `crew automerge` writes is your approval to merge.
 
 The limits, specifically:
@@ -934,6 +939,7 @@ The limits, specifically:
 - **The orchestrator session is yours.** crew can only apply the deny rules to it if you start it from the printed launch line.
 - **Answers relayed by the orchestrator are recorded word for word, but nothing proves you said them.**
 - **A plain run's approval is your confirmation in the session, and nothing records your words for it**, unlike a mission's answer.
+- **The confirmation is the harness's question.** `crew run approve` and `crew run goto` ask because of the `ask` rules crew writes; a session started with permission checks bypassed asks about nothing. Starting a run has no `ask` rule: another setting that allows it, or a mode that doesn't ask, skips the question. A `harnesses.yaml` that still says `foreman:` has no `ask` rules until `crew mission setup`.
 - **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 - **Checks are only as good as the repo's CI.** The factory's review station is the only thing between an agent's work and your review of the pull request.
 - **Pushing publishes in a public repo.** After you confirm a repo once, every piece branch in a public repo is public.
