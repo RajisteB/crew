@@ -18,9 +18,9 @@ type Claim struct {
 }
 
 // holdsPaths says whether the piece has started (see hasStarted) and is not
-// finished.
+// finished. A delegated piece never has a run, so it holds nothing.
 func holdsPaths(p PieceState) bool {
-	return hasStarted(p) && p.Status != PieceComplete && p.Status != PieceCancelled
+	return hasStarted(p) && p.Status != PieceComplete && p.Status != PieceCancelled && p.Status != PieceDelegated
 }
 
 // ClaimsElsewhere lists what the repo's other missions hold, by mission id, then

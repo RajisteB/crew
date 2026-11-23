@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -40,13 +41,25 @@ func ApplyAnswer(m Mission, s State, a Answer, in CheckInput, now time.Time) (Mi
 	}
 	d := &decider{m: m, s: s.Clone(), o: Obs{Now: now}}
 	p := d.ps(id)
-	p.Wait = nil
+	p.Wait, p.Up = nil, 0
 	if w.Back != "" {
 		p.Status = w.Back
 	}
-	p.Decisions = append(p.Decisions, Decision{Time: now, By: principalBy, Action: a.Do, Station: a.Station, Note: a.Note})
+	p.Decisions = append(p.Decisions, answerDecision(w, a, now))
 	d.add(Record{Event: Event{Time: now, Kind: EvAnswered, Piece: id, By: principalBy, Msg: cutRunes(a.Words, maxAnswerRunes)}})
 	return m, d.s, d.actions, answerStep(d, id, w, a), nil
+}
+
+// answerDecision records the answer on the piece. The answer to a plan wait
+// is a plan decision, so the next planning call is told it: the note, or the
+// principal's words when there is none.
+func answerDecision(w Wait, a Answer, now time.Time) Decision {
+	d := Decision{Time: now, By: principalBy, Action: a.Do, Station: a.Station, Note: a.Note}
+	if w.Kind == WaitPlan {
+		d.Failure = failurePlan
+		d.Note = cutText(cmp.Or(strings.TrimSpace(a.Note), strings.TrimSpace(a.Words)), maxReasonRunes)
+	}
+	return d
 }
 
 // answerStep applies what the principal chose and returns the run step.
@@ -76,6 +89,10 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 	}
 	if w.Kind == WaitPRClosed {
 		d.ps(id).Status = PiecePROpen
+		return nil
+	}
+	if w.Kind == WaitPlan {
+		d.ps(id).Calls = 0
 		return nil
 	}
 	return &RunStep{Piece: id, Kind: "retry"}
@@ -133,7 +150,7 @@ func answerChoices(p PieceState, w Wait) []string {
 		return []string{answerCancel}
 	case w.Kind == WaitQuestion || w.Kind == WaitLimit:
 		return []string{answerRetry, answerGoto, answerCancel}
-	case w.Kind == WaitPRClosed:
+	case w.Kind == WaitPRClosed || w.Kind == WaitPlan:
 		return []string{answerRetry, answerCancel}
 	case w.Kind == WaitMerge:
 		return []string{answerCancel}

@@ -18,10 +18,11 @@ func printPieceTable(out io.Writer, m mission.Mission, domains []source.Domain) 
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "PIECE\tDOMAIN\tFACTORY\tWAITS FOR\tPATHS")
 	for _, p := range m.Pieces {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.ID, p.Domain, p.Factory,
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.ID, p.Domain, factoryCell(p),
 			listOrDash(p.WaitsFor), listOrDash(mission.EffectivePaths(p, domainNamed(domains, p.Domain))))
 	}
 	tw.Flush()
+	printDelegated(out, m, domains)
 	for _, p := range m.Pieces {
 		d := domainNamed(domains, p.Domain)
 		if outside := mission.OutsideDomain(p, d); len(outside) > 0 {

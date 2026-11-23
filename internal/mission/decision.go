@@ -1,10 +1,8 @@
 package mission
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -71,16 +69,7 @@ func ParseDecision(reply string) (OrchDecision, error) {
 	if !ok {
 		return OrchDecision{}, errors.New("the reply has no fenced block tagged `decision`")
 	}
-	dec := json.NewDecoder(strings.NewReader(body))
-	dec.DisallowUnknownFields()
-	var d OrchDecision
-	if err := dec.Decode(&d); err != nil {
-		return OrchDecision{}, fmt.Errorf("the decision block is not one valid JSON object: %w", err)
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return OrchDecision{}, errors.New("the decision block has content after the JSON object")
-	}
-	return d, nil
+	return decodeOne[OrchDecision](body, decisionTag)
 }
 
 // lastTaggedBlock returns the body of the last closed fenced block whose info
@@ -119,15 +108,25 @@ type applier struct {
 	failure string
 	quote   string  // the model's full quote: checked uncut
 	next    Mission // the plan with an added piece, when the action is add
+	scope   string  // the delegated piece whose orchestrator decides; "" for the main one
 }
 
 // ApplyDecision carries out the orchestrator's decision. A decision that
 // can't be used, or repeats an earlier one for the same stop, becomes a
 // question for the principal instead. m and s are never modified.
 func ApplyDecision(m Mission, s State, piece, failure string, d OrchDecision, by string, in CheckInput, now time.Time) (Mission, State, []Action, *RunStep) {
-	a := &applier{decider: decider{m: m, s: s.Clone(), o: Obs{Now: now}}, in: in, by: by, piece: piece, failure: failure, quote: d.Quote}
+	return applyDecision(m, s, piece, failure, d, by, "", in, now)
+}
+
+// applyDecision is ApplyDecision for the orchestrator scoped to scope, or the
+// main one when scope is "".
+func applyDecision(m Mission, s State, piece, failure string, d OrchDecision, by, scope string, in CheckInput, now time.Time) (Mission, State, []Action, *RunStep) {
+	a := &applier{decider: decider{m: m, s: s.Clone(), o: Obs{Now: now}, lim: in.Limits}, in: in, by: by, piece: piece, failure: failure, quote: d.Quote, scope: scope}
 	long := tooLong(d)
 	d = cutDecision(d) // validation below sees full values only through long and quote
+	if scope != "" {
+		d = a.scopedAdd(d)
+	}
 	if a.ps(piece) == nil {
 		return m, a.s, nil, nil
 	}
@@ -145,6 +144,9 @@ func ApplyDecision(m Mission, s State, piece, failure string, d OrchDecision, by
 
 func (a *applier) carryOut(d OrchDecision) (Mission, State, []Action, *RunStep) {
 	var step *RunStep
+	if d.Action != "escalate" {
+		a.ps(a.piece).Up = 0 // the stop is dealt with
+	}
 	switch d.Action {
 	case "retry":
 		step = &RunStep{Piece: a.piece, Kind: "retry"}
@@ -158,7 +160,7 @@ func (a *applier) carryOut(d OrchDecision) (Mission, State, []Action, *RunStep) 
 	case "add":
 		a.addPiece(d)
 	case "escalate":
-		a.escalate(d.Note)
+		a.pass(d.Note)
 	}
 	return a.m, a.s, a.actions, step
 }
@@ -180,10 +182,11 @@ func (a *applier) rejection(d OrchDecision) (why, action string) {
 }
 
 // repeats reports whether the piece already got this action and station for
-// this failure.
+// this failure. An escalation is never a repeat: the question passes through
+// each level.
 func (a *applier) repeats(d OrchDecision) bool {
 	for _, e := range a.ps(a.piece).Decisions {
-		if e.Failure == a.failure && e.Action == d.Action && e.Station == d.Station {
+		if d.Action != "escalate" && e.Failure == a.failure && e.Action == d.Action && e.Station == d.Station {
 			return true
 		}
 	}
@@ -212,6 +215,8 @@ func (a *applier) fieldProblem(d OrchDecision) string {
 func (a *applier) rebriefProblem(d OrchDecision) string {
 	target, ok := a.s.Piece(d.Target)
 	switch {
+	case a.scope != "" && !Under(d.Target, a.scope):
+		return fmt.Sprintf("rebrief target %q is outside %s", d.Target, a.scope)
 	case !ok:
 		return fmt.Sprintf("rebrief target %q is not a piece", d.Target)
 	case target.Status != PieceQueued:
@@ -223,9 +228,9 @@ func (a *applier) rebriefProblem(d OrchDecision) string {
 }
 
 func (a *applier) addProblem(d OrchDecision) string {
-	switch {
-	case d.Piece == nil:
-		return "add needs a piece"
+	switch why := a.addShapeProblem(d); {
+	case why != "":
+		return why
 	case strings.TrimSpace(a.quote) == "" || !strings.Contains(a.m.Request, a.quote):
 		return "the quote is not in the request"
 	case !Allows(a.in.Limits.Additions, a.s.Additions+1):
@@ -256,7 +261,7 @@ func firstMessages(errs []error) string {
 }
 
 func (a *applier) change(what, why string) Change {
-	return Change{Time: a.o.Now, By: orchestratorBy, What: what, Why: why}
+	return Change{Time: a.o.Now, By: a.by, What: what, Why: why}
 }
 
 // accept logs a usable decision on the piece.
@@ -268,10 +273,11 @@ func (a *applier) accept(d OrchDecision, action, reason string) {
 	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvDecision, Piece: a.piece, By: a.by, Msg: msg}})
 }
 
-// reject logs a decision that can't be used and asks the principal instead.
+// reject logs a decision that can't be used and passes the question on: to
+// the principal, or one level up for a scoped orchestrator.
 func (a *applier) reject(d OrchDecision, action, why string) {
 	a.accept(d, action, why)
-	a.escalate(invalidPrefix + why)
+	a.pass(invalidPrefix + why)
 }
 
 // escalate puts a question to the principal and holds the piece until it is
@@ -297,7 +303,7 @@ func (a *applier) addPiece(d OrchDecision) {
 	a.m = a.next
 	a.s.Pieces = append(a.s.Pieces, PieceState{ID: d.Piece.ID, Status: PieceQueued, Added: true})
 	a.s.Additions++
-	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvPieceAdded, Piece: d.Piece.ID, By: a.by, Msg: "added by the orchestrator"}})
+	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvPieceAdded, Piece: d.Piece.ID, By: a.by, Msg: "added by the " + a.by}})
 	a.notify("added piece " + d.Piece.ID)
 }
 

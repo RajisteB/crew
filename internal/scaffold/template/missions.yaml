@@ -15,8 +15,8 @@ merge_method: squash        # how crew merges a pull request when auto-merge is 
 
 limits:
   runs_at_once: 3             # across all of this repo's missions. A piece crew sends back from its pull request runs again at once, whatever this says
-  delegation_depth: 2
-  pieces: 12
+  delegation_depth: 2         # how many levels a piece may be handed down: 0 switches delegation off
+  pieces: 12                  # sub-pieces included
   steps: 60
   orchestrator_calls_per_piece: 3
   orchestrator_additions: 2

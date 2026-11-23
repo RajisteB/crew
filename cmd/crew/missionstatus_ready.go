@@ -10,12 +10,15 @@ import (
 // own plan or in another mission keeps back.
 const readyToStart = "ready to start"
 
+// onHoldText is what status shows for a ready piece of a mission on hold.
+const onHoldText = "on hold"
+
 // readyText says why a piece that is ready hasn't started yet: the mission is
 // on hold, or one more run would pass runs_at_once across the repo's missions
 // that are being driven. Otherwise it is readyToStart.
 func readyText(env missionEnv, st mission.State) string {
 	if st.Hold != nil && st.Status != mission.StatusDone {
-		return "on hold"
+		return onHoldText
 	}
 	settings, err := mission.LoadSettings(env.crewDir)
 	if err != nil {

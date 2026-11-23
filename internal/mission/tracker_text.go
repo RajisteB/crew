@@ -49,14 +49,32 @@ func IssueText(missionID string, m Mission, p Piece) (summary, body string) {
 		waits = strings.Join(p.WaitsFor, ", ")
 	}
 	summary = cut(p.ID+": "+firstLine(p.Brief), maxSummaryRunes)
-	body = fmt.Sprintf("Mission %s, piece %s\nDomain: %s\nFactory: %s\nWaits for: %s\n\n%s",
-		missionID, p.ID, p.Domain, p.Factory, waits, p.Brief)
+	factory := p.Factory
+	if p.Delegate {
+		factory = "none (delegated: its pieces are planned when it is ready)"
+	}
+	partOf := ""
+	if parent := ParentID(p.ID); parent != "" {
+		partOf = "Part of: " + parent + "\n"
+	}
+	body = fmt.Sprintf("Mission %s, piece %s\n%sDomain: %s\nFactory: %s\nWaits for: %s\n\n%s",
+		missionID, p.ID, partOf, p.Domain, factory, waits, p.Brief)
 	return summary, cutBody(body)
 }
 
 // DeliverablesRel is the folder, relative to the repo, that holds a piece's deliverables.
 func DeliverablesRel(missionID, piece string) string {
 	return ".crew/missions/" + missionID + "/deliverables/" + piece
+}
+
+// escalatedText is the comment for an escalation: a scoped orchestrator's
+// question about a piece under it is passed up to the orchestrator above,
+// any other goes to the principal.
+func escalatedText(ev Event) string {
+	if scope, ok := strings.CutPrefix(ev.By, scopedBy("")); ok && Under(ev.Piece, scope) {
+		return "Passed up by " + ev.By + ": " + ev.Msg
+	}
+	return "Escalated to you: " + ev.Msg
 }
 
 // TrackerComment is the comment an event puts on an issue. piece "" means the epic.
@@ -69,7 +87,7 @@ func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 	case EvDecision:
 		text = "Decision (" + ev.By + "): " + ev.Msg
 	case EvEscalated:
-		text = "Escalated to you: " + ev.Msg
+		text = escalatedText(ev)
 	case EvWaitingOnPrincipal:
 		text = "Waiting on you: " + ev.Msg
 	case EvRebrief:

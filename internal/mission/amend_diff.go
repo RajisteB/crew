@@ -52,6 +52,8 @@ func changesFor(m Mission, s State, p Piece) ([]pieceChange, error) {
 	switch {
 	case !inMission && inState:
 		return nil, fmt.Errorf("piece %s was used before in this mission", p.ID)
+	case !inMission && ParentID(p.ID) != "":
+		return nil, fmt.Errorf("piece %s can't be added by an amendment: crew names sub-pieces when it plans a delegated piece; add a top-level piece instead", p.ID)
 	case !inMission:
 		return []pieceChange{{Kind: chAdd, Piece: p.ID}}, nil
 	}

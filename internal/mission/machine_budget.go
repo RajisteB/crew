@@ -69,7 +69,7 @@ func (d *decider) applyBudget() {
 	kept := d.actions[:0:0]
 	for _, a := range d.actions {
 		switch a.(type) {
-		case StartPiece, SendBack, AskOrchestrator, DriveRun, ResolveConflict:
+		case StartPiece, SendBack, AskOrchestrator, DriveRun, ResolveConflict, PlanPieces:
 		default:
 			kept = append(kept, a)
 		}

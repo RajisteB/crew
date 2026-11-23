@@ -107,7 +107,7 @@ func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 		last = i
 	}
 	tail := body[strings.LastIndex(body, "\n\n"):]
-	for _, want := range []string{"JSON", "stuck piece", "no commands"} {
+	for _, want := range []string{"JSON", "stuck piece", "split a piece into pieces", "no commands"} {
 		if !strings.Contains(tail, want) {
 			t.Errorf("last paragraph lacks %q:\n%s", want, tail)
 		}
@@ -128,15 +128,16 @@ func TestOrchestratorBody_ExamplePlanParsesAndChecks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("example does not parse: %v\n%s", err, m[1])
 	}
-	if len(mis.Pieces) != 2 || !slices.Equal(mis.Pieces[1].WaitsFor, []string{mis.Pieces[0].ID}) {
-		t.Fatalf("want two pieces, the second waiting for the first: %+v", mis.Pieces)
+	if len(mis.Pieces) != 3 || !slices.Equal(mis.Pieces[1].WaitsFor, []string{mis.Pieces[0].ID}) {
+		t.Fatalf("want three pieces, the second waiting for the first: %+v", mis.Pieces)
 	}
 	station := source.Station{Agent: "a"}
 	in := CheckInput{
-		Domains:   []source.Domain{{Name: mis.Pieces[0].Domain, Factories: []string{mis.Pieces[0].Factory}}},
-		Factories: []source.Factory{{Name: mis.Pieces[0].Factory, Start: "build", Harness: "h", Stations: map[string]source.Station{"build": station}}},
-		Registry:  &config.Registry{Harnesses: map[string]config.Harness{"h": okHarness()}},
-		Limits:    Limits{Pieces: source.Limit{Set: true, N: 10}},
+		Domains:             []source.Domain{{Name: mis.Pieces[0].Domain, Factories: []string{mis.Pieces[0].Factory}}},
+		Factories:           []source.Factory{{Name: mis.Pieces[0].Factory, Start: "build", Harness: "h", Stations: map[string]source.Station{"build": station}}},
+		Registry:            &config.Registry{Harnesses: map[string]config.Harness{"h": okHarness()}},
+		Limits:              Limits{Pieces: source.Limit{Set: true, N: 10}, Depth: source.Limit{Set: true, N: 2}},
+		OrchestratorHarness: "h",
 	}
 	if errs := Check(mis, in); len(errs) > 0 {
 		t.Fatalf("example fails Check: %v", errs)
@@ -234,5 +235,28 @@ func TestOrchestratorBody_MentionsPathsAndBudgets(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("orchestrator body does not mention %q", want)
 		}
+	}
+}
+
+func TestOrchestratorBody_MentionsDelegation(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{
+		"`delegate: true`", "P3.1", "`plan` wait", "`retry`", "`cancel`",
+		"Never write an id with a `.`", "crew mission amend",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q", want)
+		}
+	}
+	m := exampleBlock.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("no example")
+	}
+	mis, err := Parse([]byte(m[1] + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mis.Pieces) != 3 || !mis.Pieces[2].Delegate || mis.Pieces[2].Factory != "" {
+		t.Fatalf("the example's third piece must be delegated, with no factory: %+v", mis.Pieces)
 	}
 }

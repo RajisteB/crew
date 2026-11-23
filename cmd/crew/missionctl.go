@@ -104,11 +104,15 @@ func missionAmend(env missionEnv, id string, args []string) error {
 		return err
 	}
 	a := mission.Amendment{Plan: plan, Words: w}
-	if _, _, _, _, err := mission.Amend(m, st, a, chk.in, time.Now()); err != nil {
+	lines, err := mission.AmendPreview(m, st, a, chk.in, time.Now())
+	if err != nil {
 		return err
 	}
 	if err := store.Drop("amend", a); err != nil {
 		return err
+	}
+	for _, l := range lines {
+		fmt.Fprintln(env.out, l)
 	}
 	fmt.Fprintln(env.out, queuedMessage(store))
 	return nil

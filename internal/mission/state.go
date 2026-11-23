@@ -32,6 +32,8 @@ const (
 	// PieceDelivered: the run is done and any pull request is merged; its
 	// deliverable waits to be accepted.
 	PieceDelivered PieceStatus = "delivered"
+	// PieceDelegated: the piece has been planned; the pieces under it carry its work.
+	PieceDelegated PieceStatus = "delegated"
 )
 
 // Wait kinds: what a waiting piece is waiting for.
@@ -43,6 +45,9 @@ const (
 	WaitPRClosed    = "pr-closed"
 	WaitDeliverable = "deliverable"
 	WaitPaths       = "paths"
+	// WaitPlan: a delegated piece that could not be planned, or whose
+	// orchestrator asked a question first.
+	WaitPlan = "plan"
 )
 
 // Wait is something a piece is blocked on.
@@ -122,6 +127,7 @@ type PieceState struct {
 	OutsideMore int      `json:"outside_more,omitempty"` // how many more there are
 	Allowed     []string `json:"allowed,omitempty"`      // files outside its paths that the principal accepted
 	Steps       int      `json:"steps,omitempty"`        // station steps its run has taken, as last seen
+	Up          int      `json:"up,omitempty"`           // how many orchestrators above the nearest the piece's current stop has been raised
 }
 
 // State is state.json. It holds ids, counts and short messages only: never

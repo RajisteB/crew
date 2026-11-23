@@ -16,14 +16,19 @@ var labelEscaper = strings.NewReplacer(
 )
 
 // Mermaid draws the plan as a flowchart: one node per piece, and an arrow
-// from each piece to every piece that waits for it. It is safe on a plan that
+// from each piece to every piece that waits for it, and a dotted arrow from a
+// delegated piece to each piece directly under it. It is safe on a plan that
 // has not been checked.
 func Mermaid(m Mission) string {
 	keys, first := nodeKeys(m.Pieces)
 	var b strings.Builder
 	b.WriteString("flowchart TD\n")
 	for i, p := range m.Pieces {
-		fmt.Fprintf(&b, "    %s[\"%s\"]\n", keys[i], labelEscaper.Replace(p.ID+" · "+p.Domain))
+		label := p.ID + " · " + p.Domain
+		if p.Delegate {
+			label += " · delegated"
+		}
+		fmt.Fprintf(&b, "    %s[\"%s\"]\n", keys[i], labelEscaper.Replace(label))
 	}
 	for i, p := range m.Pieces {
 		for _, w := range p.WaitsFor {
@@ -32,16 +37,21 @@ func Mermaid(m Mission) string {
 			}
 		}
 	}
+	for i, p := range m.Pieces {
+		if j, ok := first[ParentID(p.ID)]; ok && ParentID(p.ID) != "" && m.Pieces[j].Delegate {
+			fmt.Fprintf(&b, "    %s -.-> %s\n", keys[j], keys[i])
+		}
+	}
 	return b.String()
 }
 
-// nodeKeys picks a diagram key per piece: its id when that is safe and not
-// taken, otherwise a generated one. first maps an id to its first piece.
+// nodeKeys picks a diagram key per piece: its id when that is safe (a sub-piece's
+// id has a ".", which Mermaid reads as syntax) and not taken, otherwise a generated one. first maps an id to its first piece.
 func nodeKeys(pieces []Piece) (keys []string, first map[string]int) {
 	used := map[string]bool{}
 	first = map[string]int{}
 	for _, p := range pieces {
-		if idPattern.MatchString(p.ID) {
+		if idPattern.MatchString(p.ID) && !strings.Contains(p.ID, ".") {
 			used[strings.ToLower(p.ID)] = true
 		}
 	}
@@ -51,7 +61,7 @@ func nodeKeys(pieces []Piece) (keys []string, first map[string]int) {
 			first[p.ID] = i
 		}
 		k := p.ID
-		if !idPattern.MatchString(k) || mermaidReserved[strings.ToLower(k)] || taken[k] {
+		if !idPattern.MatchString(k) || strings.Contains(k, ".") || mermaidReserved[strings.ToLower(k)] || taken[k] {
 			k = fmt.Sprintf("node%d", i)
 			for used[strings.ToLower(k)] || taken[k] {
 				k += "x"

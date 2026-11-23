@@ -26,7 +26,7 @@ func unaccepted(p PieceState) bool { return p.Deliverable != nil && !p.Deliverab
 // its worktree. It reports whether the piece completed.
 func (d *decider) finished(id string) bool {
 	if p := d.ps(id); unaccepted(*p) {
-		p.Status, p.Wait = PieceDelivered, nil
+		p.Status, p.Wait, p.Up = PieceDelivered, nil, 0
 		return false
 	}
 	d.complete(id)

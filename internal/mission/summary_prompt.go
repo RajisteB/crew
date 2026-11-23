@@ -49,14 +49,14 @@ func (s Summary) Prompt() string {
 // taskText is part one: the situation, the actions and the reply format.
 func (s Summary) taskText() string {
 	var b strings.Builder
-	b.WriteString(taskIntro)
+	b.WriteString(s.introText())
 	for _, a := range s.Allowed {
-		if meaning, ok := actionMeaning[a]; ok {
+		if meaning, ok := s.meaningOf(a); ok {
 			fmt.Fprintf(&b, "- %s: %s\n", a, meaning)
 		}
 	}
-	b.WriteString("\n" + repeatRule + "\n\n")
-	b.WriteString(replyRule + "\n" + actionHelp + "\n")
+	b.WriteString("\n" + s.repeatText() + "\n\n")
+	b.WriteString(replyRule + "\n" + s.helpText() + "\n")
 	return b.String()
 }
 
@@ -69,6 +69,7 @@ func (s Summary) dataText() string {
 		section(&b, principalChangesTitle, bulletList(s.Changes))
 	}
 	section(&b, "Piece", pieceText(s.Piece))
+	s.scopeSections(&b)
 	section(&b, "What happened", failureText(s))
 	if len(s.Outside) > 0 {
 		section(&b, "Files changed outside the piece's paths:", outsideText(s))

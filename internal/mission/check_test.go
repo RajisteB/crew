@@ -109,11 +109,9 @@ func TestCheck_FactoryNotInDomain(t *testing.T) {
 	wantError(t, Check(m, baseInput()), "piece P1", "visuals", "product")
 }
 
-func TestCheck_DelegateRefused(t *testing.T) {
+func TestCheck_DelegateRouteChoice(t *testing.T) {
 	m := acme()
 	m.Pieces[0] = Piece{ID: "P3", Domain: "design", Delegate: true, Brief: "b"}
-	errs := Check(m, baseInput())
-	wantError(t, errs, "piece P3: delegation isn't available yet")
 	m.Pieces[0].Factory = "visuals"
 	wantError(t, Check(m, baseInput()), "piece P3", "not both")
 	m.Pieces[0] = Piece{ID: "P3", Domain: "design", Brief: "b"}

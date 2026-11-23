@@ -24,7 +24,7 @@ Running together is safe only when pieces don't change the same files, so crew c
 
 Each piece produces one pull request. With auto-merge off, which is the default, you merge it yourself on GitHub. With auto-merge on for the piece's domain, crew merges it when the rules in "Auto-merge" are met. Either way, crew sees the merge, cleans up the piece's worktree and starts the next piece that was waiting.
 
-Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. Still missing: a piece handing work on to a piece of its own (delegation, so `delegate: true` on a piece is refused, and `limits.delegation_depth` is read but does nothing), and releases (`crew release approve` doesn't exist yet).
+Crew merges a pull request only when you have switched auto-merge on for its domain (see "Auto-merge"). It can show a mission on your Jira board and take files a piece leaves as a deliverable (see "Jira" and "Deliverables"); it does so only when you have set Jira up, and it never reads anything from Jira except the one thing named there. A piece can hand its work on to pieces of its own: delegation (see "Delegation"). Still missing: releases (`crew release approve` doesn't exist yet) and the cutover.
 
 ## Setting up
 
@@ -170,7 +170,7 @@ A mission can run for days, so the engine checks again before every push. If the
 - `merge_method` is how crew merges a pull request when auto-merge is on: `squash` (the default), `merge` or `rebase`. Pick the one your repo allows; see "Auto-merge".
 - `orchestrator_harness` is the harness the engine uses for its own headless calls when a piece fails and needs a decision.
 - `remind_after: 30m` is when crew first reminds you of an item that is still waiting, measured from when the item started waiting. Later reminders come at twice, four times and so on that long after it started: with 30 minutes, at 30 minutes, 1 hour and 2 hours.
-- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. Every limit must be present: a `missions.yaml` without `steps`, for example, is refused when crew reads it. A running engine reads `missions.yaml` once, when it starts, and again only while its mission is on hold for its step budget (see "Budgets"); any other change reaches a running mission when its engine next starts. `steps` is enforced (see "Budgets"); `delegation_depth` is read but not yet enforced.
+- `limits` caps what a mission may do: pieces, steps, orchestrator calls per piece, and so on. A number or `"*"` for no limit. A `repos:` section overrides them for one repo. Every limit must be present: a `missions.yaml` without `steps`, for example, is refused when crew reads it. A running engine reads `missions.yaml` once, when it starts, and again only while its mission is on hold for its step budget (see "Budgets"); any other change reaches a running mission when its engine next starts. `steps` and `delegation_depth` are enforced (see "Budgets"). `delegation_depth` is how many levels a piece may be handed down, and `0` switches delegation off; `pieces` counts sub-pieces too.
 
 ## Launching the orchestrator
 
@@ -196,7 +196,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 | `crew mission start <id>` | Runs the start checks. With approval on, stops at "awaiting go". |
 | `crew mission go <id>` | Your go. Re-runs the checks, then starts the engine. |
 | `crew mission status [<id>] [--since N]` | Lists missions, or shows one in detail. |
-| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. `accept` is for a `deliverable` wait and for a `paths` wait. |
+| `crew mission answer <id> <wait> --do CHOICE --words TEXT` | Answers something that is waiting on you. The choices are `retry`, `goto`, `cancel`, `approve` and `accept`. `accept` is for a `deliverable` wait and for a `paths` wait. A `plan` wait takes `retry` or `cancel`. |
 | `crew mission amend <id> [-\|@FILE] --words TEXT` | Changes the plan after the mission has started. |
 | `crew mission stop <id>` | Stops a running mission. |
 | `crew mission resume <id>` | Continues a stopped mission. |
@@ -267,7 +267,7 @@ The orchestrator runs `go` only when you have told it to, in the conversation, a
 m-20261121-162953-e991  running  2 pieces, 1 waiting on you
 ```
 
-With an id it shows the mission in detail. When the mission has an epic on your Jira board, a second line names it. Items waiting on you come first, then the open pull requests, the deliverables, what is running, what is queued, what has finished, and the recent events:
+With an id it shows the mission in detail. When the mission has an epic on your Jira board, a second line names it. Items waiting on you come first, then the open pull requests, the deliverables, what is running, what is delegated, what is queued, what has finished, and the recent events:
 
 ```
 mission m-20261121-162953-e991  running  live, pid 4242  (acme/app, base main)
@@ -279,7 +279,7 @@ Queued:
   P2  waits for P1
 
 Events:
-  1  11:29:53  mission-start
+  1  11:29:53  mission-start  crew
   2  11:29:54  resumed
   3  11:29:54  piece-start  P1  crew/m-20261121-162953-e991/P1
   4  11:41:12  pr-opened  P1  PR #7
@@ -289,7 +289,7 @@ Events:
 cursor 6
 ```
 
-The engine writes `resumed` every time it starts, the first time included.
+The engine writes `resumed` every time it starts, the first time included. After the piece, an event names who acted when it wasn't the engine: `crew` for something a `crew mission` command did (the go, a stop), `principal` for an answer or an amendment, `orchestrator` or `scoped orchestrator P2` for a decision (see "Delegation").
 
 The Jira line gives the epic and its address. When the board is behind, it also says how many writes haven't been sent yet. `crew mission status` makes no call to Jira and needs no credentials:
 
@@ -321,6 +321,15 @@ Waiting on you:
 A piece that changed more than 200 files lists the first 200 and ends with `and <n> more (too many to accept: send the piece back or cancel it)`.
 
 A queued piece that crew keeps apart says why in the "Queued" section: `P3  starts after P1 (paths overlap)`, or, for a piece kept behind another mission's piece, `P3  starts after P1 of mission m-20261121-101500-ab12 (paths overlap)` (with `, which is not running` after the mission id when that mission is stopped or its engine has ended).
+
+A delegated piece has its own section, after "Running", with one line for each piece directly under it and the number of them in each status (a status with none is left out):
+
+```
+Delegated:
+  P3  3 pieces: 1 complete, 1 running, 1 queued
+```
+
+The pieces under it are listed in the other sections under their own ids (`P3.1`, `P3.2`). A delegated piece that has not been split yet is queued, and reads `to be planned` when nothing it waits for is open (`on hold` while the mission is on hold). It never reads `waiting for a free run`, because it takes no run slot. A `plan` wait appears under "Waiting on you" like the others, with its kind: `w3  P3  plan  P3 could not be planned in 3 orchestrator calls: …  waiting 4m`.
 
 A queued piece that nothing in the plan keeps back reads `ready to start`, unless something else does: `on hold` while the mission is on hold for its step budget, or `waiting for a free run: 3 of 3 in use across this repo's missions` when one more run would pass `runs_at_once`. Only missions that are running with a live engine count toward that number.
 
@@ -379,6 +388,94 @@ The notes are of two kinds: a piece that has no paths, and a piece whose own `pa
 
 When one piece already waits for the other through `waits_for`, directly or through other pieces, there is nothing to separate, and crew adds nothing: a piece whose dependency is cancelled is parked on a question, so that order holds. An order made only of `apart_from` links doesn't count, because a link stops counting when the piece it names is cancelled. So with three pieces on the same paths, P3 gets `apart_from: [P2, P1]`, not just `[P2]`, and cancelling P2 doesn't let P3 start beside a running P1. Each such entry goes in the direction the existing order already gives, so no loop can form.
 
+## Delegation
+
+A piece with `delegate: true` is a part of the job that is itself several pieces of one domain, where how to split it is better decided once earlier work has landed. You give it a brief that says what the whole part must achieve and the `paths` it may touch, and no factory. When it is ready, crew asks that domain's orchestrator to split it into pieces of its own. Use it when you can't yet say what the pieces are, for example "move every settings page to the new layout" before the layout exists. When you can name the pieces now, write them in the plan: it is simpler.
+
+```markdown
+---
+pieces:
+  - id: P1
+    domain: web
+    factory: ship-change
+    brief: Build the new settings layout.
+    paths: [web/layout/**]
+  - id: P2
+    domain: web
+    delegate: true
+    brief: Move every settings page to the new layout, one piece for each page that needs more than a rename.
+    paths: [web/settings/**]
+    waits_for: [P1]
+---
+Move the settings pages to the new layout.
+<!-- crew:changes -->
+## Changes
+```
+
+`crew mission plan` shows `(delegated)` in the `FACTORY` column of the table, and under it says what the piece's pieces will be held to:
+
+```
+P2 is delegated: the web orchestrator splits it once it is ready. Its pieces stay in web, use web's factories and keep to web/settings/**.
+```
+
+A piece with no paths of its own and none from its domain ends the line with `and are not held to any paths.` instead. The diagram labels the piece as delegated:
+
+```
+flowchart TD
+    P1["P1 · web"]
+    P2["P2 · web · delegated"]
+    P1 --> P2
+```
+
+**When it is planned, and by whom.** The first time the piece is ready, which is when everything it waits for is complete and nothing keeps it apart from another piece, the engine asks the orchestrator of the piece's domain to split it. This is a headless session like the one crew uses when a piece fails: it reads the repo and the domain's briefing, can read and search and nothing else, and what it replies is checked, never run. A mission that is on hold for its step budget plans nothing until the hold lifts. There is no approval step for the split. The sub-pieces start on the engine's next tick, and you get a notification that the piece was planned as so many pieces, with their ids. `crew mission plan` and `start` refuse a delegated piece when `orchestrator_harness` names a harness that can't apply deny rules (see "What the safeguards do and don't cover"), because the orchestrator would then not be allowed to run.
+
+**The four rules a sub-plan must keep.** Authority only narrows going down. Each piece of the split:
+
+1. is in the delegated piece's domain;
+2. uses a factory that domain lists;
+3. has paths that lie inside the delegated piece's paths (a piece that gives none gets its parent's); and
+4. waits only for other pieces of the same split.
+
+The split as a whole must also pass the checks a plan passes: the `pieces` limit counts the sub-pieces, a piece can't wait for itself through others, and a piece that is itself delegated must be within `delegation_depth`. When crew can't tell whether one path pattern lies inside another, it says no. A split that breaks a rule is refused whole: nothing of it is stored, the piece stays queued, and the refusal is recorded on the piece and as a `decision` event (`plan refused: …`). The reason is given back to the orchestrator on its next try. Each try, usable or not, counts as one of the piece's `orchestrator_calls_per_piece` (3 by default). A try that fails to run, or whose reply can't be read, is refused the same way. A reply that holds a question instead of pieces opens the `plan` wait at once with that question.
+
+**Names.** crew names the sub-pieces `P2.1`, `P2.2` and so on, in the order of the reply, and rewrites the `waits_for` between them to match. A plan names no sub-piece: `crew mission plan` refuses an id with a `.`. Once crew has named them, they are in `mission.md` like any piece, and an amendment keeps them there under those ids; it can't add a new one (see "What an amendment can and can't do"). A sub-piece that is itself delegated has sub-pieces named `P2.1.1`, `P2.1.2`.
+
+**What the sub-pieces are.** Ordinary pieces. They run through their factory in their own worktree, open a pull request, and are merged and accepted like any piece, so the auto-merge switch of the domain covers them: with it on, crew merges their pull requests; with it off, each waits for you in a `merge` wait. They count toward `runs_at_once` and `steps`, show in `crew mission status` under their own ids, and are kept apart from pieces whose paths overlap theirs. A sub-piece starts only when what its parent waited for is complete, and receives the deliverables of those pieces (see "Deliverables"); a piece that waits for a delegated piece receives the deliverables of the completed pieces under it, and nothing from one that was cancelled.
+
+**When the delegated piece is finished.** It is `delegated` from the moment it is planned. It is complete when every piece directly under it is complete or cancelled and at least one is complete; a piece that waits for it starts then, which is when everything under it is finished. When all of them were cancelled, the delegated piece is cancelled too, and a piece that waited for it gets the question described under "What 'waiting on you' means". A delegated piece holds no run slot, has no worktree, branch or pull request, and holds no paths against other missions; its sub-pieces do, as any piece does.
+
+**When a sub-piece is stuck.** A sub-piece that fails is put to the orchestrators in this order, nearest first: the one of the delegated piece directly above it (`scoped orchestrator P2`), the one of the piece above that, and so on up the tree, then the main orchestrator, and last you. A scoped orchestrator can retry the stuck piece, send it back to a station, cancel it, rewrite the brief of a piece under its own delegated piece that hasn't started, add a piece under it (crew names it, the add counts toward `orchestrator_additions`, and it can't be a delegated piece), or escalate. When one escalates, or gives a decision that can't be used, the question goes to the next one up. A call that fails to run (a harness timeout, say) is passed up the same way. Each ask counts toward the stuck piece's `orchestrator_calls_per_piece`, so one stop of a piece n levels down can use up to n+1 calls. When they are used up you get a `limit` wait with no further call, and the wait carries the question that was being passed up: `P2.1 hit the orchestrator call limit after a failed failure. scoped orchestrator P2 asked: Which layout does the billing page use?`. With the default of 3, a full climb from `P2.1` uses 2 calls, so its next stop gets one more ask, of `scoped orchestrator P2`, before it comes to you; a full climb from `P2.3.1` uses all 3, and every later stop of that piece comes straight to you. The events show who decided and who passed the question up:
+
+```
+  8  10:04:31  decision  P2.1  scoped orchestrator P2  escalate : the brief doesn't say which layout
+  9  10:04:31  escalated  P2.1  scoped orchestrator P2  Which layout does the billing page use?
+  10  10:04:58  exception  P2.1  failed
+  11  10:04:58  decision  P2.1  orchestrator  escalate : the request doesn't say either
+  12  10:04:58  escalated  P2.1  orchestrator  Which layout does the billing page use?
+```
+
+**The `plan` wait.** When the calls for planning are used up, status shows a `plan` wait on the delegated piece, with the last reason, or with the orchestrator's question. The piece waits (it is not queued while the wait is open) and the mission goes on with anything else it can. You can answer:
+
+- `retry`: the piece goes back to the queue and crew tries again with a fresh set of calls, on the next tick. When the orchestrator asked a question, put your answer in `--note`: the next planning call is told its question (`you asked: …`) and your answer (`the principal answered: …`). Without a note, your `--words` are passed as the answer.
+- `cancel`: the delegated piece is cancelled. A piece that waited for it gets a `question` as for any cancelled piece.
+
+Or change the piece with `crew mission amend`: a new brief, or a `waits_for` naming a piece it needs first. An amendment clears the wait, gives the piece a fresh set of calls and puts it back in the queue.
+
+**What an amendment can and can't do.** Write an amendment from the current `mission.md`, which holds the sub-pieces crew added: keep each one as it is, with its `P2.n` id, and never add an id with a `.`, since crew names every sub-piece. It can re-brief or change a sub-piece that hasn't started. Leaving out a sub-piece that isn't complete while naming others under the same delegated piece cancels it, whether or not it is running (its run is stopped). A plan that keeps a planned delegated piece and names no piece under it at all (one written from the plan as it was before the split, say) keeps all of them as they stand: crew logs `kept P2.1, P2.2 under P2: the amendment named no piece under it`. `crew mission amend` prints what the amendment will do as the mission stands now, one line per change, and then that it is queued. It doesn't ask first: read the lines, and send another amendment if one of them isn't what you meant. If the mission changes before the engine applies the amendment (a delegated piece is planned in between, say), the change log has what was done.
+
+```
+will re-brief P4
+will change P4: waits_for changed
+will add P5
+will cancel P3.2 (running)
+keeps P2.1, P2.2 under P2: the plan named no piece under it
+queued; applied on the next tick
+```
+
+A planned delegated piece can't be edited or re-briefed. To drop a delegated piece before it is planned, remove it like any piece. Once it is planned, remove it and every piece under it; this works only while none of them is complete. Once one is complete, keep the delegated piece and what is finished, and remove the rest: the delegated piece then completes with what was done. Removing only the delegated piece is refused.
+
+**`delegation_depth`** counts hops. A top-level delegated piece is depth 1, so `delegation_depth: 1` lets `P2` be delegated and its sub-pieces not. With `delegation_depth: 2`, one of `P2`'s sub-pieces may also be delegated: say `P2.3` has `delegate: true` in the split. Its own orchestrator then splits it when it is ready into `P2.3.1`, `P2.3.2`, kept inside `P2.3`'s paths. `0` switches delegation off: `plan` refuses `delegate: true`. A sub-plan that holds a delegated piece deeper than the limit is refused like any other rule breaker.
+
 ## Two missions in one repo
 
 `runs_at_once` is shared: every mission in the repo draws on the same limit, counting only missions that are running with a live engine. Overlap is checked across missions too. A piece doesn't start while a piece of another mission with overlapping paths has started and is not complete or cancelled. A piece that has started is never held back, so two missions can't block each other for good.
@@ -430,11 +527,11 @@ A piece with no paths isn't checked.
 | Limit | What it caps | When reached |
 | --- | --- | --- |
 | `runs_at_once` | Pieces running together across the repo's missions. | Queued pieces wait until one stops counting. |
-| `pieces` | Pieces in a plan. | `plan` and `amend` refuse a plan with more. |
+| `pieces` | Pieces in a plan, sub-pieces included. | `plan` and `amend` refuse a plan with more, and a sub-plan that would pass it is refused. |
 | `steps` | Station steps a mission has taken, over all its pieces. | The mission goes on hold (below). |
-| `orchestrator_calls_per_piece` | Decisions the orchestrator makes for one piece. | The next failure of that piece becomes a `limit` wait for you (a `paths` wait for a piece stopped for files outside its paths), with no further call. The event `budget-hit` is recorded. |
-| `orchestrator_additions` | Pieces the orchestrator adds on its own. | An `add` is refused. |
-| `delegation_depth` | How deep a piece may delegate. | Not enforced: crew reads it, and delegation doesn't exist yet. |
+| `orchestrator_calls_per_piece` | Decisions the orchestrators make for one piece, and each try at planning a delegated piece. | The next failure of that piece becomes a `limit` wait for you (a `paths` wait for a piece stopped for files outside its paths), with no further call. A delegated piece that can't be planned gets a `plan` wait instead. The event `budget-hit` is recorded. |
+| `orchestrator_additions` | Pieces the orchestrator adds on its own, whichever orchestrator adds them. An added piece can't be delegated. | An `add` is refused. |
+| `delegation_depth` | How many levels a piece may be handed down, counted in hops (see "Delegation"). `0` switches delegation off. | `plan` and `amend` refuse a delegated piece that is deeper, and a sub-plan that holds one is refused. |
 
 **On hold.** A station step is one station of a factory running. When a mission has taken as many steps as `limits.steps` allows, crew puts it on hold: it records a `budget-hit` event, tells you once, and `crew mission status` shows `On hold: 60 of 60 station steps used. Raise limits.steps above 60 in missions.yaml; the engine reads it again within a minute.`
 
@@ -448,7 +545,7 @@ The engine does not guess at anything that needs a person. When it reaches such 
 
 crew also notifies you, once, when the same failure has kept repeating for the `remind_after` interval (for five ticks in a row if `remind_after` isn't set): GitHub logged out, a push refused by permissions or a hook, a mission file crew can't read. The notification names the mission, the piece if there is one, and the error. A failure that clears and comes back is told again. A changed repo visibility stops the mission until you confirm again (see "Confirming the repo").
 
-There are seven kinds:
+There are eight kinds:
 
 | Kind | What it means | What you can answer |
 | --- | --- | --- |
@@ -459,6 +556,7 @@ There are seven kinds:
 | `pr-closed` | The pull request was closed without being merged. | `retry` (after you reopen it, crew goes back to watching it) or `cancel`. |
 | `paths` | A piece changed files outside its paths and crew stopped it before opening a pull request (see "Files outside a piece's paths"). | `accept`, `goto` (with `--station`) or `cancel`. |
 | `deliverable` | A piece posted a deliverable and nobody has accepted it (see "Deliverables"). | `accept`, `goto` (with `--station`) or `cancel`. A piece that also has a pull request takes only `accept` or `cancel`. Moving its issue to Done on the Jira board also accepts it. |
+| `plan` | A delegated piece could not be planned in its orchestrator calls, or its orchestrator asked a question first (see "Delegation"). | `retry` or `cancel`. On `retry`, `--note` carries your answer to the orchestrator's question (your `--words` when there is no note). Changing the piece with `amend` also clears it. |
 
 A `question` about a piece that hasn't started yet takes only `cancel`. This happens when a queued piece waits for a piece that was cancelled: the piece can never start, so either cancel it too or change the mission with `amend` (see below), for example by dropping the dependency. Amending the piece clears the question and puts it back in the queue.
 
@@ -552,6 +650,8 @@ A run can end badly in three ways, and crew handles them in this order.
 
 Each piece may use `orchestrator_calls_per_piece` such calls (3 by default). When they are used up, the next failure becomes a `limit` wait for you without another call.
 
+For a sub-piece (see "Delegation") the decision goes first to the orchestrator of the delegated piece above it, then to the one above that, and so on up the tree, then to the main orchestrator, and only then to you. Every one of those asks counts toward the sub-piece's calls. An orchestrator that escalates, or gives a decision that can't be used, passes the question one level up.
+
 A git or GitHub command that doesn't answer is cut off (git after 30 seconds, or 2 minutes when it reaches the network; gh after 60 seconds, and git never asks for a password) and is tried again on the next tick.
 
 A worktree that holds uncommitted work is left in place when its piece is cancelled, so you can look at it. crew says so in a note and keeps trying to remove it each time the engine starts; remove it by hand when you are done. A piece that completes has its worktree removed, because its work is merged or empty.
@@ -603,7 +703,7 @@ crew checks the new plan against the old one first and refuses it, changing noth
 - A new piece reuses an id that was used before in this mission, even one that was cancelled.
 - The new plan fails the same checks `plan` runs.
 
-What an amendment may do: add pieces, change a queued piece (its brief, its domain, its factory, its paths, what it waits for), and remove any piece that isn't complete, which cancels it. Every change goes in the mission's change log with your words.
+What an amendment may do: add pieces (not sub-pieces: crew names those, and an amendment keeps the ones in the current plan; see "Delegation"), change a queued piece (its brief, its domain, its factory, its paths, what it waits for), and remove any piece that isn't complete, which cancels it. `crew mission amend` prints what the amendment will cancel, re-brief, change and add as the mission stands now, and queues it. Every change goes in the mission's change log with your words.
 
 ## Stop and resume
 
@@ -622,10 +722,10 @@ If your team plans on a Jira board, crew can show a mission there. It is off unt
 crew writes to Jira. The orchestrator and the stations don't: no agent is asked to touch it, and the orchestrator is told never to run `crew jira setup`.
 
 - **An epic** for the mission. Its summary is the first line of your request, and its description holds the whole request. It sits in To Do until the mission starts, in In Progress while the mission runs or is stopped, and in Done when the mission is done.
-- **An issue for each piece**, with the piece's id and the first line of its brief as the summary and the whole brief in the description. The issue is a child of the epic. It carries a label such as `crew-<mission-id>-P1`, and it is assigned to the account in `assignee`, or to the account your token belongs to.
-- **Four lanes.** A piece waiting in the queue is in To Do. A piece that is running, or stopped at a question or an approval, is in In Progress. A piece whose pull request is open, or whose deliverable is posted, is in In Review. A piece that is complete or cancelled is in Done. crew moves the issue by the board's own transitions, so a workflow that doesn't allow a move shows up as a note.
+- **An issue for each piece**, with the piece's id and the first line of its brief as the summary and the whole brief in the description. The issue is a child of the epic. A sub-piece is an issue under the epic too, not under its parent's issue: its id (`P3.1`) and a `Part of: P3` line in the description say where it belongs, and crew creates it when the delegated piece is planned. It carries a label such as `crew-<mission-id>-P1`, and it is assigned to the account in `assignee`, or to the account your token belongs to.
+- **Four lanes.** A piece waiting in the queue is in To Do. A piece that is running, or stopped at a question or an approval, is in In Progress, and so is a delegated piece once it has been planned, until it is complete or cancelled. A piece whose pull request is open, or whose deliverable is posted, is in In Review. A piece that is complete or cancelled is in Done. crew moves the issue by the board's own transitions, so a workflow that doesn't allow a move shows up as a note.
 - **A flag** on the issue while the piece is waiting on you. It comes off when the wait ends.
-- **Comments** on the issue for the things that matter, in plain words: the pull request was opened (with its link), a decision was made and by whom, the piece was escalated to you, it is waiting on you, its brief was changed, it was cancelled, a deliverable was posted or accepted. A change you make to the plan with `amend` is a comment on the epic.
+- **Comments** on the issue for the things that matter, in plain words: the pull request was opened (with its link), a decision was made and by whom, the piece was escalated to you (or, for a question a scoped orchestrator passes up to the one above, `Passed up by scoped orchestrator P2: …`), it is waiting on you, its brief was changed, it was cancelled, a deliverable was posted or accepted. A change you make to the plan with `amend` is a comment on the epic.
 - **Attachments**: the files of a deliverable (see "Deliverables").
 
 That is all crew sends to Jira: your request and the briefs (in the epic and the issues), the comments above, which carry text written by others by design (a station's summary when it asks for your approval, the orchestrator's reasons for a decision, the words you passed with an answer or an amendment), and the deliverable files. It sends no other file of the repo, no run logs and no credentials. A description longer than 30,000 characters is cut, with a line that says the full text is in the mission folder.
@@ -729,7 +829,7 @@ crew keeps its own files (missions, runs, worktrees) in `.crew` in your project.
 
 ### How later pieces get them
 
-A piece that lists the deliverable's piece in `waits_for` gets the files in its own worktree, in `.crew/inputs/<piece>/`, and its first station's prompt lists them. Name the piece in `waits_for` when a piece needs another one's brief; otherwise it never sees the files.
+A piece that lists the deliverable's piece in `waits_for` gets the files in its own worktree, in `.crew/inputs/<piece>/`, and its first station's prompt lists them. Only a complete piece's files are handed on: a piece that waits for a delegated piece gets the files of the completed pieces under it, and nothing from a cancelled one. Name the piece in `waits_for` when a piece needs another one's brief; otherwise it never sees the files.
 
 ### Accepting one
 

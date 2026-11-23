@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/crewfile-dev/crew/internal/config"
@@ -23,8 +22,6 @@ type noDenyError struct{ msg string }
 func (e noDenyError) Error() string { return e.msg }
 func (e noDenyError) Unwrap() error { return ErrNoDeny }
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
-
 // reservedID can't be a piece id: the epic's Jira label ends in it
 // (TrackerLabel), so a piece with that id would share the epic's label.
 const reservedID = "epic"
@@ -35,6 +32,8 @@ type CheckInput struct {
 	Factories []source.Factory
 	Registry  *config.Registry
 	Limits    Limits
+	// OrchestratorHarness is the harness headless orchestrator calls run on.
+	OrchestratorHarness string
 }
 
 // Check returns every problem with the plan, pieces in file order.
@@ -52,6 +51,7 @@ func Check(m Mission, in CheckInput) []error {
 		errs = append(errs, checkID(i, p, seen)...)
 		errs = append(errs, checkPiece(p, in)...)
 		errs = append(errs, checkWaits(p, index)...)
+		errs = append(errs, checkSubPiece(p, m.Pieces, index, in)...)
 	}
 	for _, ring := range waitCircles(m.Pieces, index) {
 		errs = append(errs, fmt.Errorf("%s wait on each other", joinIDs(ring)))
@@ -115,7 +115,7 @@ func checkRoute(p Piece, dom source.Domain, domOK bool, in CheckInput) []error {
 	case p.Delegate && p.Factory != "":
 		return []error{fmt.Errorf("%s: set either factory or delegate, not both", label(p))}
 	case p.Delegate:
-		return []error{fmt.Errorf("%s: delegation isn't available yet", label(p))}
+		return checkDelegation(p, in)
 	case p.Factory == "":
 		return []error{fmt.Errorf("%s: set a factory or delegate: true", label(p))}
 	}
