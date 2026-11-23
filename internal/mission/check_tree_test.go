@@ -82,7 +82,7 @@ func TestCheck_SubPieceRules(t *testing.T) {
 		want string
 	}{
 		{"parent missing", func(m *Mission) { m.Pieces = append(m.Pieces[:5], m.Pieces[6:]...) },
-			"piece P3.1: its parent P3 is not in the plan (to drop P3, remove the pieces under it too)"},
+			"piece P3.1: its parent P3 is not in the plan (to drop P3, remove every piece under it too; if one is complete, keep P3 and what is finished and remove the rest)"},
 		{"parent not delegated", func(m *Mission) { m.Pieces[5].Delegate, m.Pieces[5].Factory = false, "visuals" },
 			"piece P3.1: its parent P3 is not delegated"},
 		{"domain", func(m *Mission) { m.Pieces[6].Domain = "product"; m.Pieces[6].Factory = "feature" },

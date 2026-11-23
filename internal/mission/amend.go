@@ -3,6 +3,7 @@ package mission
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -25,42 +26,53 @@ type Amendment struct {
 // never modified; on an error they are returned as they came, with no
 // actions and no run steps.
 func Amend(m Mission, s State, a Amendment, in CheckInput, now time.Time) (Mission, State, []Action, []RunStep, error) {
-	next, changes, err := planAmendment(m, s, a, in, now)
+	plan, err := planAmendment(m, s, a, in, now)
 	if err != nil {
 		return m, s, nil, nil, err
 	}
+	next := plan.m
 	d := &decider{m: next, s: s.Clone(), o: Obs{Now: now}}
-	steps := d.applyChanges(changes, a.Words)
-	d.m.Changes = append(append([]Change(nil), m.Changes...), changeLog(changes, a.Words, now)...)
+	steps := d.applyChanges(plan.changes, a.Words)
+	d.m.Changes = append(append([]Change(nil), m.Changes...), changeLog(plan.changes, a.Words, now)...)
 	d.m.Changes = append(d.m.Changes, next.Changes[len(m.Changes):]...) // crew's own entries
 	return d.m, d.s, d.actions, steps, nil
 }
 
+// amendPlan is a checked amendment: the new mission, its changes, and the
+// sub-pieces crew carried over.
+type amendPlan struct {
+	m       Mission
+	changes []pieceChange
+	kept    []carried
+}
+
 // planAmendment parses and validates the new plan and lists its changes.
-func planAmendment(m Mission, s State, a Amendment, in CheckInput, now time.Time) (Mission, []pieceChange, error) {
+func planAmendment(m Mission, s State, a Amendment, in CheckInput, now time.Time) (amendPlan, error) {
 	if s.Status == StatusDone {
-		return Mission{}, nil, errors.New("the mission is done and can't be amended")
+		return amendPlan{}, errors.New("the mission is done and can't be amended")
 	}
-	next, err := Parse(a.Plan)
+	parsed, err := Parse(a.Plan)
 	if err != nil {
-		return Mission{}, nil, fmt.Errorf("the new plan can't be read: %w", err)
+		return amendPlan{}, fmt.Errorf("the new plan can't be read: %w", err)
 	}
-	if strings.TrimRight(next.Request, whitespace) != strings.TrimRight(m.Request, whitespace) {
-		return Mission{}, nil, errors.New(errAmendRequest)
+	if strings.TrimRight(parsed.Request, whitespace) != strings.TrimRight(m.Request, whitespace) {
+		return amendPlan{}, errors.New(errAmendRequest)
 	}
+	next, kept := carryOver(m, s, parsed)
 	changes, err := diffPieces(m, s, next)
 	switch {
 	case err != nil:
-		return Mission{}, nil, err
+		return amendPlan{}, err
 	case len(changes) == 0:
-		return Mission{}, nil, errors.New(errAmendSame)
+		return amendPlan{}, errors.New(errAmendSame)
 	}
-	result := Mission{Pieces: next.Pieces, Request: m.Request, Changes: m.Changes}
+	logged := append(slices.Clone(m.Changes), carryLog(kept, now)...)
+	result := Mission{Pieces: next.Pieces, Request: m.Request, Changes: logged}
 	if errs := Check(result, in); len(errs) > 0 {
-		return Mission{}, nil, fmt.Errorf("the new plan fails its checks: %w", errors.Join(errs...))
+		return amendPlan{}, fmt.Errorf("the new plan fails its checks: %w", errors.Join(errs...))
 	}
 	result, _, _ = SeparatedWithLog(m, result, in.Domains, StartedPieces(s), now)
-	return result, changes, nil
+	return amendPlan{m: result, changes: changes, kept: kept}, nil
 }
 
 const whitespace = " \t\r\n"

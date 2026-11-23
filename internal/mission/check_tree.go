@@ -51,7 +51,7 @@ func checkSubPiece(p Piece, pieces []Piece, index map[string]int, in CheckInput)
 	}
 	i, ok := index[parentID]
 	if !ok {
-		return []error{fmt.Errorf("%s: its parent %s is not in the plan (to drop %s, remove the pieces under it too)", label(p), parentID, parentID)}
+		return []error{fmt.Errorf("%s: its parent %s is not in the plan (to drop %[2]s, remove every piece under it too; if one is complete, keep %[2]s and what is finished and remove the rest)", label(p), parentID)}
 	}
 	parent := pieces[i]
 	if !parent.Delegate {
