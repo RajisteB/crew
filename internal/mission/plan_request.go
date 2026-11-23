@@ -131,7 +131,14 @@ func (r PlanRequest) factoriesText() string {
 func (r PlanRequest) earlierText() string {
 	lines := make([]string, len(r.Earlier))
 	for i, d := range r.Earlier {
-		lines[i] = fmt.Sprintf("refused: %s", d.Reason)
+		switch {
+		case d.By == principalBy:
+			lines[i] = "the principal answered: " + d.Note
+		case d.Action == "escalate":
+			lines[i] = "you asked: " + d.Note
+		default:
+			lines[i] = "refused: " + d.Reason
+		}
 	}
 	return strings.Join(lines, "\n")
 }

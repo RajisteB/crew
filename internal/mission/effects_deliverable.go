@@ -83,7 +83,8 @@ func swapInto(dest, from string, files []string) error {
 }
 
 // prepareScratch makes the worktree's deliverables folder and copies in the
-// deliverables of the pieces this one receives (see InputsFor). It returns them for the input.
+// deliverables of the complete pieces this one receives (see InputsFor). It
+// returns them for the input, so the prompt names only what was copied.
 func (t *tick) prepareScratch(p Piece, worktree string) ([]Earlier, error) {
 	if _, err := plainDir(worktree, run.CrewDir); err != nil {
 		return nil, err // before EnsureCrewDir, which would write through a link
@@ -103,8 +104,8 @@ func (t *tick) prepareScratch(p Piece, worktree string) ([]Earlier, error) {
 	var earlier []Earlier
 	for _, dep := range InputsFor(t.m, p.ID) {
 		ds, ok := t.s.Piece(dep)
-		if !ok || ds.Deliverable == nil {
-			continue
+		if !ok || ds.Status != PieceComplete || ds.Deliverable == nil {
+			continue // a cancelled piece's deliverable is never handed on
 		}
 		into := scratchPath(worktree, scratchIn, dep)
 		if err := os.RemoveAll(into); err != nil {

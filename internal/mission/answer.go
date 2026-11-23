@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -44,9 +45,21 @@ func ApplyAnswer(m Mission, s State, a Answer, in CheckInput, now time.Time) (Mi
 	if w.Back != "" {
 		p.Status = w.Back
 	}
-	p.Decisions = append(p.Decisions, Decision{Time: now, By: principalBy, Action: a.Do, Station: a.Station, Note: a.Note})
+	p.Decisions = append(p.Decisions, answerDecision(w, a, now))
 	d.add(Record{Event: Event{Time: now, Kind: EvAnswered, Piece: id, By: principalBy, Msg: cutRunes(a.Words, maxAnswerRunes)}})
 	return m, d.s, d.actions, answerStep(d, id, w, a), nil
+}
+
+// answerDecision records the answer on the piece. The answer to a plan wait
+// is a plan decision, so the next planning call is told it: the note, or the
+// principal's words when there is none.
+func answerDecision(w Wait, a Answer, now time.Time) Decision {
+	d := Decision{Time: now, By: principalBy, Action: a.Do, Station: a.Station, Note: a.Note}
+	if w.Kind == WaitPlan {
+		d.Failure = failurePlan
+		d.Note = cutText(cmp.Or(strings.TrimSpace(a.Note), strings.TrimSpace(a.Words)), maxReasonRunes)
+	}
+	return d
 }
 
 // answerStep applies what the principal chose and returns the run step.

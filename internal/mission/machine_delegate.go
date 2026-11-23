@@ -28,10 +28,11 @@ func (d *decider) plan(id string) {
 	d.wait(id, WaitPlan, q, PieceQueued)
 }
 
-// lastPlanReason is the reason of the piece's last planning try, or "".
+// lastPlanReason is the reason of the piece's last planning try, or "": the
+// last refusal or question, never the principal's answer.
 func lastPlanReason(p PieceState) string {
 	for i := len(p.Decisions) - 1; i >= 0; i-- {
-		if p.Decisions[i].Failure == failurePlan {
+		if p.Decisions[i].Failure == failurePlan && p.Decisions[i].By != principalBy {
 			return p.Decisions[i].Reason
 		}
 	}
