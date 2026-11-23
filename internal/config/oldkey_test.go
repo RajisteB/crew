@@ -65,3 +65,20 @@ func TestDecodeRegistry_NewKeyDoesNotSetUsesOldKey(t *testing.T) {
 		t.Errorf("h = %+v", h)
 	}
 }
+
+func TestDecodeRegistry_AskUnderTheOldKeyIsRefused(t *testing.T) {
+	_, err := DecodeRegistry("harnesses.yaml", registryWith("    foreman: {orchestrator_launch: x, ask: [B]}\n"))
+	if err == nil || !strings.Contains(err.Error(), "unknown key") {
+		t.Errorf("err = %v, want an unknown-key error", err)
+	}
+}
+
+func TestDecodeRegistry_AFoldedOldBlockHasNoAskRules(t *testing.T) {
+	r, err := DecodeRegistry("harnesses.yaml", registryWith("    foreman: {orchestrator_launch: x, orchestrator_allow: [A]}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Harnesses["h"].Orchestrator.Ask; got != nil {
+		t.Errorf("Ask = %v, want none", got)
+	}
+}

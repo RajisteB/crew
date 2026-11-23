@@ -62,6 +62,7 @@ type OrchestratorSpec struct {
 	Static map[string]any `yaml:"static"` // keys that override agents.static for it (e.g. mode: primary)
 	Launch string         `yaml:"launch"` // how the principal starts it; {name} and {settings}
 	Allow  []string       `yaml:"allow"`  // native allow rules for its session
+	Ask    []string       `yaml:"ask"`    // native rules the session must always ask about, whatever else allows them
 }
 
 // DenySpec lists native deny-rule strings for a harness.

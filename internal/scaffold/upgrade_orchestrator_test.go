@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func TestBackupName_AllNineTakenIsAnError(t *testing.T) {
 	dir := t.TempDir()
 	names := []string{"harnesses.yaml.before-missions"}
 	for i := 2; i <= 9; i++ {
-		names = append(names, "harnesses.yaml.before-missions."+string(rune('0'+i)))
+		names = append(names, "harnesses.yaml.before-missions."+strconv.Itoa(i))
 	}
 	for _, n := range names {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/crewfile-dev/crew/internal/config"
@@ -109,15 +110,20 @@ func orchestratorOutputs(p *verify.Project, hn, crewDir, dir string, link bool, 
 		File{Path: dest, Root: dir, Link: built, Kind: "agent", Name: a.Name, Harnesses: []string{hn}}), nil
 }
 
-// orchestratorSettings is {"permissions": {"allow": [...], "deny": [...]}}.
-// The deny list is never empty: an orchestrator without one isn't written.
+// orchestratorSettings is {"permissions": {"allow": [...], "ask": [...], "deny": [...]}}.
+// "ask" is there only when the harness has ask rules. The deny list is never
+// empty: an orchestrator without one isn't written.
 func orchestratorSettings(p *verify.Project, hn, crewDir string) ([]byte, error) {
 	deny := run.DenyRules(p.Registry, hn, crewDir, false)
 	if len(deny) == 0 {
 		return nil, fmt.Errorf("[%s] orchestrator: harness can apply deny rules but defines none, so the orchestrator isn't built", hn)
 	}
-	allow := append([]string{}, p.Registry.Harnesses[hn].Orchestrator.Allow...)
-	b, err := json.MarshalIndent(map[string]any{"permissions": map[string]any{"allow": allow, "deny": deny}}, "", "  ")
+	o := p.Registry.Harnesses[hn].Orchestrator
+	perms := map[string]any{"allow": append([]string{}, o.Allow...), "deny": deny}
+	if len(o.Ask) > 0 {
+		perms["ask"] = slices.Clone(o.Ask)
+	}
+	b, err := json.MarshalIndent(map[string]any{"permissions": perms}, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("[%s] orchestrator settings: %w", hn, err)
 	}

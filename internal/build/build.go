@@ -121,7 +121,7 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 		}
 
 		if h.UsesOldKey {
-			notes = append(notes, Note{hn, fmt.Sprintf("harnesses.yaml still says foreman: for %s; crew mission setup renames it to orchestrator:", h.Display)})
+			notes = append(notes, Note{hn, fmt.Sprintf("harnesses.yaml still says foreman: for %s; crew mission setup renames it to orchestrator: and adds the rules for plain runs", h.Display)})
 		}
 		if len(p.Factories) > 0 {
 			if !canHostMainSession(h) {

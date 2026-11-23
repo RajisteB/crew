@@ -74,6 +74,7 @@ harnesses:
     orchestrator:                 # the orchestrator runs as the main session
       launch: "claude --agent {name} --settings {settings}"
       allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
+      ask: ["Bash(crew run approve:*)", "Bash(crew run goto:*)"]
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory
       all:
         - "Bash(gh pr merge:*)"

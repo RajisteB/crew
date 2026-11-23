@@ -60,6 +60,24 @@ func UpgradeHarnesses(dir string) (HarnessUpgrade, error) {
 	if both := harnessesWithBothKeys(have); len(both) > 0 {
 		return HarnessUpgrade{Skipped: both}, nil
 	}
+	res := upgradeEach(have, want)
+	if len(res.Added) == 0 {
+		return HarnessUpgrade{Skipped: res.Skipped}, nil
+	}
+	out, err := renderUpgrade(&doc, tmplBytes)
+	if err != nil {
+		return HarnessUpgrade{}, err
+	}
+	res.Backup, err = writeWithBackup(dir, orig, out)
+	if err != nil {
+		return HarnessUpgrade{}, err
+	}
+	return res, nil
+}
+
+// upgradeEach upgrades every harness of have against the template's of the
+// same name, and reports one line for each it changed or left alone.
+func upgradeEach(have, want *yaml.Node) HarnessUpgrade {
 	var res HarnessUpgrade
 	for i := 0; i+1 < len(have.Content); i += 2 {
 		name := have.Content[i].Value
@@ -73,18 +91,7 @@ func UpgradeHarnesses(dir string) (HarnessUpgrade, error) {
 			res.Added = append(res.Added, name+": "+added)
 		}
 	}
-	if len(res.Added) == 0 {
-		return HarnessUpgrade{Skipped: res.Skipped}, nil
-	}
-	out, err := renderUpgrade(&doc, tmplBytes)
-	if err != nil {
-		return HarnessUpgrade{}, err
-	}
-	res.Backup, err = writeWithBackup(dir, orig, out)
-	if err != nil {
-		return HarnessUpgrade{}, err
-	}
-	return res, nil
+	return res
 }
 
 // renderUpgrade encodes the upgraded tree after checking it passes the strict
@@ -225,14 +232,20 @@ func upgradeHarness(h, tn *yaml.Node) (added, skip string) {
 		return "", "headless.command was changed by hand; add --settings {settings} to it, then run crew mission setup again"
 	}
 	var parts []string
-	if renameForeman(h, tn) {
+	// Every file from before the cutover says foreman:, so only a block renamed
+	// now gets the plain-run allow rules; a current file's list is the owner's.
+	renamed := renameForeman(h, tn)
+	if renamed {
 		parts = append(parts, "foreman: renamed to orchestrator:")
 	}
 	if what := addOrchestrator(h, tn); what != "" {
 		parts = append(parts, what)
 	}
-	if addCutoverAllow(h, tn) {
+	if renamed && addCutoverAllow(h, tn) {
 		parts = append(parts, "allow rules for plain runs")
+	}
+	if addAsk(h, tn) {
+		parts = append(parts, "ask rules for approve and goto")
 	}
 	if needDeny {
 		k, v := mapEntry(tn, "deny")

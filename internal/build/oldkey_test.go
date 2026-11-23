@@ -47,8 +47,12 @@ func orchestratorBytes(t *testing.T, dir, out string) (agent, settings string) {
 	return agent, settings
 }
 
+// The old foreman: spelling has no ask rules, so the new-key file it is
+// compared with has its ask line removed and the old file gets the ten-rule
+// allow list: the two then say the same thing in two spellings.
 func TestOrchestratorOutputs_SameFromOldAndNewKey(t *testing.T) {
 	newDir, newOut := setup(t)
+	edit(t, filepath.Join(newDir, "harnesses.yaml"), askLine, "")
 	wantAgent, wantSettings := orchestratorBytes(t, newDir, newOut)
 
 	oldDir, oldOut := oldKeyProject(t)
@@ -63,7 +67,7 @@ func TestOrchestratorOutputs_SameFromOldAndNewKey(t *testing.T) {
 }
 
 func TestPlan_NotesTheOldForemanKey(t *testing.T) {
-	const note = "harnesses.yaml still says foreman: for Claude Code; crew mission setup renames it to orchestrator:"
+	const note = "harnesses.yaml still says foreman: for Claude Code; crew mission setup renames it to orchestrator: and adds the rules for plain runs"
 	oldDir, oldOut := oldKeyProject(t)
 	_, notes := planFiles(t, oldDir, build.Opts{Out: oldOut})
 	if !hasNote(notes, "claude-code", note) {

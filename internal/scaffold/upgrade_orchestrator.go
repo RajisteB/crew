@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,9 +22,10 @@ const (
 	orchestratorKey = "orchestrator"
 )
 
-// renameForeman turns h's foreman: block into orchestrator:, taking the key's
-// line comment from tn when tn has the block and a comment there. It reports whether h changed. A
-// harness that has both keys is left alone.
+// renameForeman turns h's foreman: block into orchestrator:. It reports
+// whether h changed. A harness that has both keys is left alone. The key's
+// line comment becomes tn's when tn has one there and h's is empty or about
+// foremen; any other comment the owner wrote there is kept.
 func renameForeman(h, tn *yaml.Node) bool {
 	fk, fv := mapEntry(h, foremanKey)
 	if fv == nil || mapGet(h, orchestratorKey) != nil {
@@ -50,7 +52,7 @@ func renameForeman(h, tn *yaml.Node) bool {
 		return true
 	}
 	fk.Value = orchestratorKey
-	if tk != nil && tk.LineComment != "" {
+	if tk != nil && tk.LineComment != "" && (fk.LineComment == "" || strings.Contains(strings.ToLower(fk.LineComment), "forem")) {
 		fk.LineComment = tk.LineComment // the owner's head and foot comments stay
 	}
 	if len(kept) == 0 {
@@ -92,6 +94,27 @@ func addCutoverAllow(h, tn *yaml.Node) bool {
 		}
 	}
 	return changed
+}
+
+// addAsk adds tn's orchestrator ask rules to h's orchestrator block, right
+// after its allow list, when h's block has no ask key at all. A key that is
+// there, even "ask: []", is the owner's choice and stays. It reports whether
+// h changed.
+func addAsk(h, tn *yaml.Node) bool {
+	ho := mapGet(h, orchestratorKey)
+	tk, tv := mapEntry(mapGet(tn, orchestratorKey), "ask")
+	if ho == nil || tv == nil || mapGet(ho, "ask") != nil {
+		return false
+	}
+	at := len(ho.Content)
+	for i := 0; i+1 < len(ho.Content); i += 2 {
+		if ho.Content[i].Value == "allow" {
+			at = i + 2
+		}
+	}
+	k := *tk
+	ho.Content = slices.Insert(ho.Content, at, &k, tv)
+	return true
 }
 
 // addOrchestrator adds the template's launch and allow to h's orchestrator

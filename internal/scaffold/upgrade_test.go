@@ -144,6 +144,9 @@ func TestUpgradeHarnesses_CustomCommandLeftAlone(t *testing.T) {
 	if got := cc.Orchestrator.Allow; len(got) != 0 {
 		t.Errorf("claude-code allow list was extended: %q", got)
 	}
+	if cc.Orchestrator.Launch != "" {
+		t.Errorf("claude-code got an orchestrator launch line: %q", cc.Orchestrator.Launch)
+	}
 	if oc.UsesOldKey || oc.Orchestrator == nil {
 		t.Errorf("opencode not renamed: %+v", oc)
 	}
