@@ -87,7 +87,7 @@ func missionStatus(env missionEnv, id string) error {
 	printOpenPRs(env, m, st)
 	printDeliverables(out, st)
 	printRunning(out, env.repoRoot, st)
-	printDelegatedPieces(out, m, st)
+	printDelegatedPieces(out, st)
 	printQueued(out, m, st, readyText(env, st))
 	printEnded(out, "Complete", st, mission.PieceComplete)
 	printEnded(out, "Cancelled", st, mission.PieceCancelled)

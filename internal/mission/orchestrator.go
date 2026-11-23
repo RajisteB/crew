@@ -80,5 +80,5 @@ Add a health check endpoint and make our deploy script use it.
 CREW_PLAN
 ` + "```" + `
 
-If a message asks you to decide what to do about a stuck piece and tells you to reply with JSON, reply with only that JSON and run no commands.
+If a message asks you to decide what to do about a stuck piece, or to split a piece into pieces, and tells you how to reply with JSON, reply only as it says and run no commands.
 `

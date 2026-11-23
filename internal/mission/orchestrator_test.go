@@ -107,7 +107,7 @@ func TestOrchestratorBody_OrderAndHeadlessParagraph(t *testing.T) {
 		last = i
 	}
 	tail := body[strings.LastIndex(body, "\n\n"):]
-	for _, want := range []string{"JSON", "stuck piece", "no commands"} {
+	for _, want := range []string{"JSON", "stuck piece", "split a piece into pieces", "no commands"} {
 		if !strings.Contains(tail, want) {
 			t.Errorf("last paragraph lacks %q:\n%s", want, tail)
 		}

@@ -16,7 +16,7 @@ const toBePlanned = "to be planned"
 // ready (see readyText), except that a delegated piece is waiting to be
 // planned and only a hold changes that.
 func readyTextFor(m mission.Mission, id, ready string) string {
-	if p, ok := m.Piece(id); ok && p.Delegate && ready != "on hold" {
+	if p, ok := m.Piece(id); ok && p.Delegate && ready != onHoldText {
 		return toBePlanned
 	}
 	return ready
@@ -30,23 +30,25 @@ var summaryOrder = []mission.PieceStatus{
 
 // printDelegatedPieces lists each delegated piece with the status of the
 // pieces directly under it.
-func printDelegatedPieces(out io.Writer, m mission.Mission, st mission.State) {
+func printDelegatedPieces(out io.Writer, st mission.State) {
 	var lines []string
 	for _, p := range st.Pieces {
 		if p.Status == mission.PieceDelegated {
-			lines = append(lines, p.ID+"  "+childCounts(m, st, p.ID))
+			lines = append(lines, p.ID+"  "+childCounts(st, p.ID))
 		}
 	}
 	section(out, "Delegated", lines)
 }
 
-// childCounts reads like "3 pieces: 1 complete, 1 running, 1 queued".
-func childCounts(m mission.Mission, st mission.State, id string) string {
+// childCounts reads like "3 pieces: 1 complete, 1 running, 1 queued". It
+// counts the pieces directly under id in the state, as the engine does.
+func childCounts(st mission.State, id string) string {
 	counts := map[mission.PieceStatus]int{}
-	kids := m.Children(id)
-	for _, c := range kids {
-		if cs, ok := st.Piece(c.ID); ok {
-			counts[cs.Status]++
+	var kids []mission.PieceState
+	for _, c := range st.Pieces {
+		if mission.ParentID(c.ID) == id {
+			kids = append(kids, c)
+			counts[c.Status]++
 		}
 	}
 	var parts []string

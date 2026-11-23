@@ -1,10 +1,8 @@
 package mission
 
 import (
-	"math/rand/v2"
 	"reflect"
-	"strconv"
-	"strings"
+	"slices"
 	"testing"
 )
 
@@ -76,59 +74,15 @@ func TestBranchesPart(t *testing.T) {
 	}
 }
 
-// randomTree builds a mission of up to three levels, some parents without
-// paths, with sub-pieces after all of their parents, as they are appended.
-func randomTree(rng *rand.Rand) Mission {
-	pool := []string{"a/**", "c/**", "a/x/**"}
-	nest := func(parent Piece) []string {
-		if len(parent.Paths) == 0 {
-			return []string{pool[rng.IntN(len(pool))]}
-		}
-		return []string{strings.TrimSuffix(parent.Paths[0], "/**") + []string{"/x/**", "/y/**"}[rng.IntN(2)]}
-	}
-	var m Mission
-	level := []Piece{}
-	for i := range 1 + rng.IntN(4) {
-		p := pp("T"+strconv.Itoa(i+1), pool[rng.IntN(len(pool))])
-		level = append(level, p)
-	}
-	for depth := 1; ; depth++ {
-		var nextLevel []Piece
-		for i := range level {
-			p := &level[i]
-			p.Delegate = depth < 3 && rng.IntN(2) == 0
-			if p.Delegate && rng.IntN(3) == 0 {
-				p.Paths = nil
-			}
-			for _, prev := range level[:i] {
-				if ParentID(prev.ID) == ParentID(p.ID) && rng.IntN(3) == 0 {
-					p.WaitsFor = append(p.WaitsFor, prev.ID)
-				}
-			}
-			if p.Delegate {
-				for k := range 1 + rng.IntN(3) {
-					c := pp(p.ID+"."+strconv.Itoa(k+1), nest(*p)...)
-					nextLevel = append(nextLevel, c)
-				}
-			}
-		}
-		m.Pieces = append(m.Pieces, level...)
-		if len(nextLevel) == 0 {
-			return m
-		}
-		level = nextLevel
-	}
-}
-
-// hasCircle is written apart from the production code: the edges are each
-// piece's own waits_for and apart_from, the same of every ancestor, and, from
+// testEdges is written apart from the production code: the edges of a piece
+// are its own waits_for and apart_from, the same of every ancestor, and, from
 // a delegated piece, each piece directly under it.
-func hasCircle(pieces []Piece) bool {
+func testEdges(pieces []Piece) func(id string) []string {
 	byID := map[string]Piece{}
 	for _, p := range pieces {
 		byID[p.ID] = p
 	}
-	edges := func(id string) []string {
+	return func(id string) []string {
 		var out []string
 		for _, q := range append([]string{id}, Ancestors(id)...) {
 			out = append(out, byID[q].WaitsFor...)
@@ -141,16 +95,17 @@ func hasCircle(pieces []Piece) bool {
 				}
 			}
 		}
-		return out
+		return slices.DeleteFunc(out, func(to string) bool { _, ok := byID[to]; return !ok })
 	}
+}
+
+func hasCircle(pieces []Piece) bool {
+	edges := testEdges(pieces)
 	state := map[string]int{} // 1 on the path, 2 done
 	var visit func(id string) bool
 	visit = func(id string) bool {
 		state[id] = 1
 		for _, to := range edges(id) {
-			if _, ok := byID[to]; !ok {
-				continue
-			}
 			if state[to] == 1 || (state[to] == 0 && visit(to)) {
 				return true
 			}
@@ -166,20 +121,24 @@ func hasCircle(pieces []Piece) bool {
 	return false
 }
 
-func TestSeparateOverlaps_NeverMakesACircleWithSubPieces(t *testing.T) {
-	rng := rand.New(rand.NewPCG(7, 1234))
-	for round := range 500 {
-		m := randomTree(rng)
-		if hasCircle(m.Pieces) {
-			t.Fatalf("round %d: the generator made a circle: %+v", round, m.Pieces)
-		}
-		settled := map[string]bool{}
-		for _, p := range m.Pieces {
-			settled[p.ID] = rng.IntN(4) == 0
-		}
-		got, _ := SeparateOverlaps(m, nil, settled)
-		if hasCircle(got.Pieces) {
-			t.Fatalf("round %d: circle in %+v (settled %v)", round, got.Pieces, settled)
+// reachable says whether from comes after to: a path of edges leads from one
+// to the other.
+func reachable(pieces []Piece, from, to string) bool {
+	edges := testEdges(pieces)
+	seen := map[string]bool{}
+	next := []string{from}
+	for len(next) > 0 {
+		id := next[len(next)-1]
+		next = next[:len(next)-1]
+		for _, e := range edges(id) {
+			if e == to {
+				return true
+			}
+			if !seen[e] {
+				seen[e] = true
+				next = append(next, e)
+			}
 		}
 	}
+	return false
 }

@@ -75,33 +75,46 @@ func delegatedRigWith(t *testing.T, orch *delegateOrch, withP2 bool, script stri
 	return r
 }
 
+// p2Held is ok, after checking that P2 is still queued while P1 is not
+// complete: tickUntil runs it at each tick.
+func p2Held(t *testing.T, ok func(mission.State) bool) func(mission.State) bool {
+	return func(s mission.State) bool {
+		if piece(t, s, "P1").Status != mission.PieceComplete && piece(t, s, "P2").Status != mission.PieceQueued {
+			t.Fatalf("P2 is %s while P1 is %s", piece(t, s, "P2").Status, piece(t, s, "P1").Status)
+		}
+		return ok(s)
+	}
+}
+
 func TestMission_EndToEnd_DelegatedPiece(t *testing.T) {
 	orch := &delegateOrch{}
 	orch.set(twoSubPieces, escalateAll)
 	r := delegatedRig(t, orch, true)
+	held := func(ok func(mission.State) bool) func(mission.State) bool { return p2Held(t, ok) }
+	tick := func() mission.State { st := r.tick(); held(func(mission.State) bool { return true })(st); return st }
 
-	st := r.tick()
+	st := tick()
 	if got := piece(t, st, "P1").Status; got != mission.PieceDelegated {
 		t.Fatalf("P1 is %s after the first tick, want delegated", got)
 	}
-	st = r.tickUntil("P1.1 running", func(s mission.State) bool { p, ok := s.Piece("P1.1"); return ok && p.Status == mission.PieceRunning })
+	st = r.tickUntil("P1.1 running", held(func(s mission.State) bool { p, ok := s.Piece("P1.1"); return ok && p.Status == mission.PieceRunning }))
 	if got := piece(t, st, "P1").Status; got != mission.PieceDelegated {
 		t.Fatalf("P1 is %s while P1.1 runs, want delegated", got)
 	}
 	if out := r.cmd("", "status", r.id); !strings.Contains(out, "\nDelegated:\n  P1  2 pieces: 1 running, 1 queued\n") {
 		t.Fatalf("status has no Delegated section:\n%s", out)
 	}
-	r.tickUntil("P1.1's pull request", hasPR(t, "P1.1"))
-	if got := piece(t, r.tick(), "P1.2").Status; got != mission.PieceQueued {
+	r.tickUntil("P1.1's pull request", held(hasPR(t, "P1.1")))
+	if got := piece(t, tick(), "P1.2").Status; got != mission.PieceQueued {
 		t.Fatalf("P1.2 is %s before P1.1 is merged, want queued", got)
 	}
 	r.mergePR()
-	r.tickUntil("P1.2 started", func(s mission.State) bool {
+	r.tickUntil("P1.2 started", held(func(s mission.State) bool {
 		return piece(t, s, "P1.1").Status == mission.PieceComplete && piece(t, s, "P1.2").Status != mission.PieceQueued
-	})
-	r.tickUntil("P1.2's pull request", hasPR(t, "P1.2"))
+	}))
+	r.tickUntil("P1.2's pull request", held(hasPR(t, "P1.2")))
 	r.mergePR()
-	st = r.tickUntil("P1 complete", func(s mission.State) bool { return piece(t, s, "P1").Status == mission.PieceComplete })
+	st = r.tickUntil("P1 complete", held(func(s mission.State) bool { return piece(t, s, "P1").Status == mission.PieceComplete }))
 	if got := piece(t, st, "P1.2").Status; got != mission.PieceComplete {
 		t.Fatalf("P1 is complete but P1.2 is %s", got)
 	}

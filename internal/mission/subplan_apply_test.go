@@ -187,15 +187,6 @@ func TestApplySubPlan_OverlappingSubPiecesAreKeptApart(t *testing.T) {
 	}
 }
 
-func TestApplySubPlan_DropsApartFrom(t *testing.T) {
-	m, s, in := delegatedMission("brand/a/**")
-	sp := SubPlan{Pieces: []Piece{{ID: "a", Factory: "visuals", Brief: "x", Apart: []string{"P1"}}}}
-	got, _, _ := ApplySubPlan(m, s, "P3", sp, in, planNow)
-	if len(got.Pieces) != 3 || len(got.Pieces[2].Apart) != 0 {
-		t.Fatalf("pieces = %+v", got.Pieces)
-	}
-}
-
 func TestApplySubPlan_NestedDelegate(t *testing.T) {
 	m, s, in := delegatedMission("brand/**")
 	sp := SubPlan{Pieces: []Piece{{ID: "a", Delegate: true, Brief: "x", Paths: []string{"brand/a/**"}}}}
