@@ -8,7 +8,7 @@ import "github.com/crewfile-dev/crew/internal/source"
 func OrchestratorAgent() source.Agent {
 	return source.Agent{
 		Name:         OrchestratorName,
-		Description:  "Plans missions and reports on them for the principal: splits a job into pieces, shows the plan, starts the mission and relays what is waiting. Launch it as the main session.",
+		Description:  "Plans missions, starts and watches plain runs, and reports on both for the principal: splits a job into pieces, shows the plan, starts the mission and relays what is waiting. Launch it as the main session.",
 		Model:        source.ModelInherit,
 		Capabilities: []string{"read", "search", "shell"},
 		Body:         OrchestratorBody(),
@@ -18,11 +18,11 @@ func OrchestratorAgent() source.Agent {
 // OrchestratorBody is the orchestrator's system prompt.
 func OrchestratorBody() string { return orchestratorBody }
 
-const orchestratorBody = `You plan missions and report on them. You talk with the principal, the owner of this project, and everything you do goes through ` + "`crew`" + ` commands.
+const orchestratorBody = `You plan missions, start and watch plain runs, and report on both. You talk with the principal, the owner of this project, and everything you do goes through ` + "`crew`" + ` commands.
 
 A mission is a job split into pieces. Each piece belongs to a domain (an area of the project) and runs through a factory (a fixed line of stations) in its own git worktree. Once the principal says go, the crew engine does the work. You never do it yourself.
 
-You never edit files, run a station's work, merge or approve anything. You have no need to: the engine does the work, and the principal makes the calls that matter. Keep to the commands below.
+You never edit files, run a station's work or merge anything, and you never decide an approval: you pass on the principal's decision. You have no need to do more: the engine does the work, and the principal makes the calls that matter. Keep to the commands below.
 
 1. At the start of a session, run ` + "`crew mission status`" + ` and tell the principal what is running and what is waiting on them. When status shows ` + "`engine not running`" + ` for a mission, tell the principal and offer ` + "`crew mission resume <id>`" + `; run it when they say so.
 
@@ -79,6 +79,8 @@ Add a health check endpoint and make our deploy script use it.
 ## Changes
 CREW_PLAN
 ` + "```" + `
+
+` + orchestratorRuns + `
 
 If a message asks you to decide what to do about a stuck piece, or to split a piece into pieces, and tells you how to reply with JSON, reply only as it says and run no commands.
 `

@@ -1,0 +1,279 @@
+# harnesses.yaml — FACTS about each harness. Nothing here is a preference.
+#
+# Your choices (which harnesses are on, which agents go where) live in
+# crew.yaml. The list of every model and effort each harness can run lives
+# in models.yaml, generated from `catalog` below by `crew models sync`.
+# Agents and skills stay harness-agnostic; everything harness-specific (paths,
+# field names, tool names, how a model id is spelled) is mapped here.
+#
+# `crew verify` fails once `verified` is older than stale_after_days.
+# That's on purpose: these tools change their formats every few months.
+# Re-check the docs links, fix what moved, bump the date.
+
+version: 1
+verified: 2026-11-18
+stale_after_days: 60
+
+# Agnostic vocabulary used in agents/*.md frontmatter.
+# Every harness that supports agents must map every entry (use [] when the
+# harness has no per-agent control for it).
+capabilities: [read, search, edit, write, shell, web, delegate, skill, structured-output]
+
+# Where `crew models sync` gets the model list, effort levels and prices.
+# models.dev is the catalog OpenCode itself uses.
+catalog_source: https://models.dev/api.json
+
+# ---------------------------------------------------------------------------
+# Harnesses
+# ---------------------------------------------------------------------------
+harnesses:
+
+  claude-code:
+    catalog:
+      providers: [anthropic]
+      id_style: model             # model: claude-opus-5-5
+    display: Claude Code
+    docs:
+      - https://code.claude.com/docs/en/sub-agents
+      - https://code.claude.com/docs/en/skills
+    skills:
+      user_dir: ~/.claude/skills
+      project_dir: .claude/skills
+      layout: dir
+    agents:
+      supported: true
+      user_dir: ~/.claude/agents
+      project_dir: .claude/agents
+      format: markdown
+      ext: .md
+      fields:
+        name: name
+        description: description
+        model: model
+        effort: effort        # parsed by Claude Code, though missing from the docs table
+        skills: skills        # preloads full skill content into the subagent
+        tools: {key: tools, style: csv}
+    capabilities:
+      read: [Read]
+      search: [Grep, Glob]
+      edit: [Edit]
+      write: [Write]
+      shell: [Bash]
+      web: [WebFetch, WebSearch]
+      delegate: [Agent]
+      skill: [Skill]
+      structured-output: [StructuredOutput]
+    headless:                     # how `crew run` runs one station non-interactively
+      # dontAsk denies anything not pre-approved; --allowedTools pre-approves
+      # exactly the agent's capabilities. Never a bypass mode.
+      command: [claude, -p, --agent, "{agent}", --allowedTools, "{allowed}", --settings, "{settings}", --permission-mode, dontAsk, --output-format, json]
+      prompt_via: stdin
+      allow_via: flag
+      deny_via: settings-file     # deny rules go in a temp settings file at {settings}
+      output: claude-json         # reply = .result; refused tool calls (.permission_denials) become run notes
+    foreman:                      # factories' foremen run as the main session
+      launch: "claude --agent {name}"
+      orchestrator_launch: "claude --agent {name} --settings {settings}"
+      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"]
+    deny:                         # refused in every session crew starts; {crew_dir} = this config directory
+      all:
+        - "Bash(gh pr merge:*)"
+        - "Bash(gh pr close:*)"
+        - "Bash(git push --force:*)"
+        - "Bash(git push -f:*)"
+        - "Bash(git push origin main:*)"
+        - "Bash(git push origin HEAD:main:*)"
+        - "Bash(crew automerge:*)"
+        - "Bash(crew jira setup:*)"
+        - "Bash(crew repo confirm:*)"
+        - "Bash(crew release approve:*)"
+        # Two leading slashes mean an absolute path in Claude Code rules (one
+        # means relative to the settings file); {crew_dir} is already absolute.
+        - "Edit(/{crew_dir}/**)"
+        - "Write(/{crew_dir}/**)"
+      stations:                   # extra, for stations and headless orchestrator calls
+        - "Bash(crew run:*)"
+        - "Bash(crew mission:*)"
+    rules:
+      name_max: 64
+      name_forbidden: [claude, anthropic]
+      description_max: 1024
+
+  codex:
+    catalog:
+      providers: [openai]
+      id_style: model             # model: gpt-6.1-sol
+    display: Codex CLI
+    docs:
+      - https://developers.openai.com/codex/subagents
+      - https://developers.openai.com/codex/skills
+    skills:
+      # Codex reads $HOME/.agents/skills (the open Agent Skills location);
+      # ~/.codex/skills is deprecated.
+      user_dir: ~/.agents/skills
+      project_dir: .agents/skills
+      layout: dir
+    agents:
+      supported: true
+      user_dir: ~/.codex/agents
+      project_dir: .codex/agents
+      format: toml
+      ext: .toml
+      fields:
+        name: name
+        description: description
+        model: model
+        effort: model_reasoning_effort
+        body: developer_instructions
+      derived:
+        # Codex has no per-agent tool list, only a sandbox. Reports from mid-2026
+        # say an agent-level read-only sandbox may not block writes; don't rely
+        # on it as a hard guard.
+        - key: sandbox_mode
+          if_any: [edit, write, shell]
+          then: workspace-write
+          else: read-only
+    capabilities:
+      read: []
+      search: []
+      edit: []
+      write: []
+      shell: []
+      web: []
+      delegate: []
+      skill: []
+      structured-output: []
+    rules:
+      name_max: 64
+      description_max: 1024
+
+  opencode:
+    catalog:
+      # Your OpenCode Go plan. Add anthropic / openai here if you also want
+      # OpenCode agents on those logins (billed by those providers, not Go).
+      providers: [opencode-go]
+      id_style: provider/model    # model: opencode-go/kimi-k3
+    display: OpenCode
+    docs:
+      - https://opencode.ai/docs/agents
+      - https://opencode.ai/docs/skills
+    skills:
+      user_dir: ~/.config/opencode/skills
+      project_dir: .opencode/skills
+      layout: dir
+      # OpenCode also loads ~/.claude/skills and ~/.agents/skills, so writing
+      # its own copy would create duplicates.
+      shares_with: [claude-code, codex]
+    agents:
+      supported: true
+      user_dir: ~/.config/opencode/agents
+      project_dir: .opencode/agents
+      format: markdown
+      ext: .md
+      fields:
+        description: description   # the agent id comes from the filename
+        model: model
+        effort_suffix: "#"         # effort is a model variant: opencode-go/kimi-k3#max
+        tools: {key: tools, style: map}
+      static:
+        mode: subagent
+    capabilities:
+      read: [read, list]
+      search: [grep, glob]
+      edit: [edit, patch]
+      write: [write]
+      shell: [bash]
+      web: [webfetch]
+      delegate: [task]
+      skill: [skill]
+      structured-output: []
+    headless:
+      # The compiled agent's tools map disables every tool outside its
+      # capabilities. No --auto: it would also approve whatever opencode asks
+      # about (edits outside the project, your own "ask" rules). Not yet
+      # smoke-tested as a station harness.
+      command: [opencode, run, --agent, "{agent}", "{prompt}"]
+      prompt_via: arg
+      allow_via: agent-file
+    foreman:
+      static: {mode: primary}     # a primary agent (picked with Tab in the TUI), not a subagent
+      launch: "opencode, then press Tab until {name} is selected"
+    rules:
+      name_max: 64
+
+  gemini-cli:
+    catalog:
+      providers: [google]
+      id_style: model             # model: gemini-3.8-flash
+    display: Gemini CLI
+    docs:
+      - https://geminicli.com/docs/core/subagents/
+    skills:
+      user_dir: ~/.gemini/skills
+      project_dir: .gemini/skills
+      layout: dir
+    agents:
+      supported: true
+      user_dir: ~/.gemini/agents
+      project_dir: .gemini/agents
+      format: markdown
+      ext: .md
+      fields:
+        name: name
+        description: description
+        model: model
+        tools: {key: tools, style: list}
+      static:
+        kind: local
+    capabilities:
+      read: [read_file, read_many_files, list_directory]
+      search: [glob, grep_search]
+      edit: [replace]
+      write: [write_file]
+      shell: [run_shell_command]
+      web: [web_fetch, google_web_search]
+      delegate: []
+      skill: []
+      structured-output: []
+    rules:
+      name_max: 64
+    notes: Gemini CLI has no per-agent effort setting; effort is ignored there.
+
+  cursor:
+    # No catalog: Cursor bills by plan, so agents follow the session model.
+    # Agents need per_harness.cursor.model: inherit (or model: inherit).
+    display: Cursor
+    docs:
+      - https://cursor.com/docs/context/subagents
+      - https://cursor.com/docs/context/skills
+    skills:
+      user_dir: ~/.cursor/skills
+      project_dir: .cursor/skills
+      layout: dir
+    agents:
+      supported: true
+      user_dir: ~/.cursor/agents
+      project_dir: .cursor/agents
+      format: markdown
+      ext: .md
+      fields:
+        name: name
+        description: description
+        model: model
+      derived:
+        - key: readonly
+          if_any: [edit, write, shell]
+          then: false
+          else: true
+    capabilities:
+      read: []
+      search: []
+      edit: []
+      write: []
+      shell: []
+      web: []
+      delegate: []
+      skill: []
+      structured-output: []
+    rules:
+      name_max: 64

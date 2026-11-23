@@ -120,10 +120,17 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 			}
 		}
 
-		if len(p.Factories) > 0 && !canHostForeman(h) {
-			notes = append(notes, Note{hn, fmt.Sprintf("no foreman: %s can't host a main-session agent with shell (crew run still works)", h.Display)})
+		if h.UsesOldKey {
+			notes = append(notes, Note{hn, fmt.Sprintf("harnesses.yaml still says foreman: for %s; crew mission setup renames it to orchestrator: and adds the rules for plain runs", h.Display)})
 		}
-		if canHostForeman(h) && hasOrchestratorLaunch(h) && !run.CanDeny(h) {
+		if len(p.Factories) > 0 {
+			if !canHostMainSession(h) {
+				notes = append(notes, Note{hn, fmt.Sprintf("no orchestrator: %s can't host a main-session agent with shell (crew run and crew mission still work in a terminal)", h.Display)})
+			} else if !hasOrchestratorLaunch(h) {
+				notes = append(notes, Note{hn, fmt.Sprintf("no orchestrator: harnesses.yaml has no orchestrator launch line for %s (crew run and crew mission still work in a terminal)", h.Display)})
+			}
+		}
+		if canHostMainSession(h) && hasOrchestratorLaunch(h) && !run.CanDeny(h) {
 			notes = append(notes, Note{hn, fmt.Sprintf("%s can't apply deny rules, so the orchestrator isn't built for it", h.Display)})
 		}
 		if !h.Agents.Supported {
@@ -132,15 +139,6 @@ func Plan(p *verify.Project, o Opts) ([]File, []Note, error) {
 		dir, err := resolve(h.Agents.UserDir, h.Agents.ProjectDir, o)
 		if err != nil {
 			return nil, nil, err
-		}
-		if len(p.Factories) > 0 && canHostForeman(h) {
-			fs, err := foremanOutputs(p, hn, crewDir, dir, link, o)
-			if err != nil {
-				return nil, nil, err
-			}
-			for _, f := range fs {
-				put(f)
-			}
 		}
 		if canHostOrchestrator(h) {
 			fs, err := orchestratorOutputs(p, hn, crewDir, dir, link, o)

@@ -7,59 +7,6 @@ import (
 	"github.com/crewfile-dev/crew/internal/run"
 )
 
-// runStatus lists runs, or prints one run's state and the events after
-// --since, ending with "cursor N" for the foreman's next poll.
-func runStatus(pos []string, f runFlags, out io.Writer) error {
-	if len(pos) == 0 {
-		runs, err := run.ListRuns(f.project)
-		if err != nil {
-			return err
-		}
-		if len(runs) == 0 {
-			fmt.Fprintf(out, "no runs in %s\n", f.project)
-		}
-		for _, st := range runs {
-			fmt.Fprintf(out, "%-44s %-18s %-10s step %d\n", st.RunID, st.Status, st.Current, st.Step)
-		}
-		return nil
-	}
-	store, err := run.OpenRun(f.project, pos[0])
-	if err != nil {
-		return err
-	}
-	st, err := store.LoadState()
-	if err != nil {
-		return err
-	}
-	live := ""
-	if pid, ok := store.LockedBy(); ok {
-		live = fmt.Sprintf("  (live, pid %d)", pid)
-	}
-	fmt.Fprintf(out, "run %s  factory %s  status %s  current %s  step %d%s\n", st.RunID, st.Factory, st.Status, st.Current, st.Step, live)
-	if st.Reason != "" {
-		fmt.Fprintf(out, "reason: %s\n", st.Reason)
-	}
-	if st.Status == run.StatusFailed && st.Retryable {
-		fmt.Fprintf(out, "retryable: fix the cause, then crew run resume %s\n", st.RunID)
-	} else if st.Status == run.StatusInterrupted {
-		fmt.Fprintf(out, "resumable: crew run resume %s\n", st.RunID)
-	}
-	if p := st.Pending; p != nil {
-		fmt.Fprintf(out, "waiting for approval: %s chose %s — %s (output: %s)\n", p.Station, p.Route, p.Verdict.Summary, lastOutput(store))
-	}
-	evs, err := store.EventsSince(f.since)
-	if err != nil {
-		return err
-	}
-	cursor := f.since
-	for _, ev := range evs {
-		fmt.Fprintln(out, run.FormatEvent(ev))
-		cursor = ev.Seq
-	}
-	fmt.Fprintf(out, "cursor %d\n", cursor)
-	return nil
-}
-
 func lastOutput(store run.Store) string {
 	steps, err := store.Steps()
 	if err != nil || len(steps) == 0 {
@@ -73,7 +20,7 @@ func runSay(id, msg string, f runFlags, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	text, err := textArg(msg)
+	text, err := textArg("say", msg, f.stdin)
 	if err != nil {
 		return err
 	}
@@ -135,7 +82,7 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 		return err
 	}
 	if f.note != "" {
-		note, err := textArg(f.note)
+		note, err := textArg("--note", f.note, f.stdin)
 		if err != nil {
 			return err
 		}

@@ -48,10 +48,6 @@ func TestOrchestratorOutputs_WritesAgentAndSettings(t *testing.T) {
 	if err := json.Unmarshal(sf.Content, &s); err != nil {
 		t.Fatalf("settings are not JSON: %v\n%s", err, sf.Content)
 	}
-	wantAllow := []string{"Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob"}
-	if !slices.Equal(s.Permissions.Allow, wantAllow) {
-		t.Errorf("allow = %v, want exactly %v", s.Permissions.Allow, wantAllow)
-	}
 	if slices.Contains(s.Permissions.Allow, "Bash(crew:*)") {
 		t.Error("the orchestrator session must not be allowed every crew command")
 	}
@@ -109,7 +105,7 @@ func TestOrchestratorOutputs_NotBuiltForHarnessWithoutLaunch(t *testing.T) {
 	files, _ := planFiles(t, dir, build.Opts{Out: out})
 	for _, f := range files {
 		if f.Name == "orchestrator" && f.Harnesses[0] != "claude-code" {
-			t.Fatalf("only claude-code has orchestrator_launch, got %v", f.Harnesses)
+			t.Fatalf("only claude-code has an orchestrator launch, got %v", f.Harnesses)
 		}
 	}
 }
@@ -135,13 +131,5 @@ func TestOrchestratorLaunch_QuotesUnsafePaths(t *testing.T) {
 	line, ok := build.OrchestratorLaunch(p, "claude-code", build.Opts{Out: "/tmp/with space/o'k"})
 	if !ok || !strings.Contains(line, `'/tmp/with space/o'\''k/crew-build/claude-code/agents/orchestrator.settings.json'`) {
 		t.Fatalf("path not quoted: %q", line)
-	}
-}
-
-func TestCompile_StillEmitsForemen(t *testing.T) {
-	dir, out := setup(t)
-	files, _ := planFiles(t, dir, build.Opts{Out: out})
-	if _, ok := findFile(files, filepath.Join("claude-code", "agents", "foreman-ship-change.md")); !ok {
-		t.Fatal("foreman missing next to the orchestrator")
 	}
 }

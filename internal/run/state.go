@@ -1,6 +1,6 @@
 // Package run is the factory engine: a pure state machine (machine.go), the
 // run folder it persists to (store.go), and the pieces that run one station
-// (prompt, verdict, snapshot, runner). Both `crew run` and the foreman drive
+// (prompt, verdict, snapshot, runner). Both `crew run` and the mission engine drive
 // factories through it, so routing, limits, guards and approvals live here
 // and nowhere else.
 package run
@@ -45,6 +45,7 @@ type State struct {
 	Retryable     bool              `json:"retryable,omitempty"`
 	LimitRoute    string            `json:"limit_route,omitempty"` // "station.route" whose limit ended the run
 	InStation     bool              `json:"in_station,omitempty"`  // a station was running when this was saved
+	Owner         string            `json:"owner,omitempty"`       // who drives this run instead of `crew run`: "mission <id> piece <id>"; "" for a plain run
 }
 
 // Terminal reports whether nothing more will run without a resume.

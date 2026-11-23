@@ -21,11 +21,12 @@ import (
 )
 
 const runUsage = `usage:
-  crew run <factory> --input TEXT|@FILE [--project P] [--detach]   start a run
-  crew run status [<id>] [--since N]       list runs, or show one run and its events after N
-  crew run say <id> <message…|@FILE>       pass a message to the next station
+  crew run <factory> --input TEXT|@FILE|- [--project P] [--detach]   start a run
+  crew run status [<id>] [--since N] [--wait D]   list runs, or show one run and its events after N
+                                           (--wait D: return early on news, or after D, up to 10m)
+  crew run say <id> <message…|@FILE|->     pass a message to the next station
   crew run goto <id> <station>             send the work to a station
-  crew run approve <id> [--goto S] [--note TEXT|@FILE] [--detach]   continue a run waiting for approval
+  crew run approve <id> [--goto S] [--note TEXT|@FILE|-] [--detach]   continue a run waiting for approval
   crew run resume <id> [--detach]          continue a stopped, failed or interrupted run
 common flags: --dir D (crew directory), --project P (default: current directory)`
 
@@ -37,22 +38,15 @@ func (u usageError) Error() string { return u.msg }
 type runFlags struct {
 	dir, project, input, gotoStation, note string
 	since                                  int
+	wait                                   time.Duration
 	detach                                 bool
+	stdin                                  io.Reader
+	set                                    []string // the flags given, by name
 }
 
 // runCmd handles `crew run …` and returns the process exit code.
-func runCmd(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	var f runFlags
-	fs.StringVar(&f.dir, "dir", "", "crew directory")
-	fs.StringVar(&f.project, "project", "", "project directory")
-	fs.StringVar(&f.input, "input", "", "run input: text, or @file")
-	fs.StringVar(&f.gotoStation, "goto", "", "approve: continue at this station instead")
-	fs.StringVar(&f.note, "note", "", "approve: a message for the next station (text, or @file)")
-	fs.IntVar(&f.since, "since", 0, "status: only events after this cursor")
-	fs.BoolVar(&f.detach, "detach", false, "keep running in the background")
-	pos, err := parseInterleaved(fs, args)
+func runCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	pos, f, err := parseRunArgs(args)
 	if errors.Is(err, flag.ErrHelp) {
 		fmt.Fprintln(stdout, runUsage)
 		return 0
@@ -61,6 +55,10 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 		err = usageError{runUsage}
 	}
 	if err == nil {
+		err = checkVerbFlags(pos, f.set)
+	}
+	if err == nil {
+		f.stdin = stdin
 		err = dispatchRun(pos, f, stdout)
 	}
 	var ue usageError
@@ -77,6 +75,28 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 	return 1
 }
 
+// parseRunArgs parses the flags of `crew run …` and returns the positional
+// arguments. f.set names the flags that were given.
+func parseRunArgs(args []string) ([]string, runFlags, error) {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var f runFlags
+	fs.StringVar(&f.dir, "dir", "", "crew directory")
+	fs.StringVar(&f.project, "project", "", "project directory")
+	fs.StringVar(&f.input, "input", "", "run input: text, @file, or - for stdin")
+	fs.StringVar(&f.gotoStation, "goto", "", "approve: continue at this station instead")
+	fs.StringVar(&f.note, "note", "", "approve: a message for the next station (text, @file, or - for stdin)")
+	fs.DurationVar(&f.wait, "wait", 0, "status: wait up to this long for news")
+	fs.IntVar(&f.since, "since", 0, "status: only events after this cursor")
+	fs.BoolVar(&f.detach, "detach", false, "keep running in the background")
+	pos, err := parseInterleaved(fs, args)
+	if err != nil {
+		return nil, runFlags{}, err
+	}
+	fs.Visit(func(fl *flag.Flag) { f.set = append(f.set, fl.Name) })
+	return pos, f, nil
+}
+
 // errRunStopped: the run ended failed or interrupted; events already said why.
 var errRunStopped = errors.New("run stopped")
 
@@ -86,34 +106,20 @@ func dispatchRun(pos []string, f runFlags, out io.Writer) error {
 		return err
 	}
 	f.project = project
-	need := func(n int) error {
-		if len(pos) < n {
-			return usageError{runUsage}
-		}
-		return nil
+	// guardOwned also checks that say, goto, approve and resume have their arguments.
+	if err := guardOwned(pos, f); err != nil {
+		return err
 	}
 	switch pos[0] {
 	case "status":
 		return runStatus(pos[1:], f, out)
 	case "say":
-		if err := need(3); err != nil {
-			return err
-		}
 		return runSay(pos[1], strings.Join(pos[2:], " "), f, out)
 	case "goto":
-		if err := need(3); err != nil {
-			return err
-		}
 		return runGoto(pos[1], pos[2], f, out)
 	case "approve":
-		if err := need(2); err != nil {
-			return err
-		}
 		return runApprove(pos[1], f, out)
 	case "resume":
-		if err := need(2); err != nil {
-			return err
-		}
 		return continueRun(pos[1], f, out)
 	}
 	if len(pos) != 1 {
@@ -130,7 +136,7 @@ func projectDir(p string) (string, error) {
 }
 
 func startRun(name string, f runFlags, out io.Writer) error {
-	input, err := readInput(f.input)
+	input, err := readInput(f.input, f.stdin)
 	if err != nil {
 		return err
 	}
@@ -173,27 +179,61 @@ func checkWatchRoots(fac source.Factory, project string) error {
 	return nil
 }
 
-// textArg reads "@file" or returns the text itself.
-func textArg(v string) (string, error) {
-	if strings.HasPrefix(v, "@") {
+// maxStdinText is the most text "-" reads from stdin.
+const maxStdinText = 1 << 20
+
+// textArg reads "@file", all of stdin for "-" (when there is a stdin), or
+// returns the text itself. what names the argument in the usage error for
+// empty or all-whitespace stdin ("say", "--note").
+func textArg(what, v string, stdin io.Reader) (string, error) {
+	switch {
+	case v == "-" && stdin != nil:
+		text, err := readStdin(stdin)
+		if err == nil && strings.TrimSpace(text) == "" {
+			return "", usageError{what + ": nothing on stdin"}
+		}
+		return text, err
+	case strings.HasPrefix(v, "@"):
 		b, err := os.ReadFile(expand(v[1:]))
 		return string(b), err
 	}
 	return v, nil
 }
 
-func readInput(in string) (string, error) {
-	if strings.TrimSpace(in) == "" {
-		return "", usageError{"--input is required (text, or @file)"}
+// readStdin reads all of stdin, up to maxStdinText bytes; more is a usage error.
+func readStdin(stdin io.Reader) (string, error) {
+	if stdin == nil {
+		return "", nil
 	}
-	if strings.HasPrefix(in, "@") {
+	b, err := io.ReadAll(io.LimitReader(stdin, maxStdinText+1))
+	if err != nil {
+		return "", fmt.Errorf("reading stdin: %w", err)
+	}
+	if len(b) > maxStdinText {
+		return "", usageError{"stdin: more than 1 MB of text"}
+	}
+	return string(b), nil
+}
+
+func readInput(in string, stdin io.Reader) (string, error) {
+	text := in
+	switch {
+	case in == "-":
+		var err error
+		if text, err = readStdin(stdin); err != nil {
+			return "", err
+		}
+	case strings.HasPrefix(in, "@"):
 		b, err := os.ReadFile(expand(in[1:]))
 		if err != nil {
 			return "", fmt.Errorf("--input: %w", err)
 		}
 		return string(b), nil
 	}
-	return in, nil
+	if strings.TrimSpace(text) == "" {
+		return "", usageError{"--input is required (text, @file, or - for stdin)"}
+	}
+	return text, nil
 }
 
 // verifiedProject runs verify and refuses to start a run on any error or

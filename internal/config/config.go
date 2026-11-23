@@ -50,18 +50,19 @@ type Harness struct {
 	Capabilities map[string][]string `yaml:"capabilities"` // capability → native tool names
 	Rules        Rules               `yaml:"rules"`
 	Notes        string              `yaml:"notes"`
-	Deny         DenySpec            `yaml:"deny"`     // rules every session crew starts must carry; needs headless.deny_via
-	Headless     *HeadlessSpec       `yaml:"headless"` // how crew run starts one agent non-interactively; nil = can't run stations
-	Foreman      *ForemanSpec        `yaml:"foreman"`  // can host a factory's foreman as the main session; nil = no foremen
+	Deny         DenySpec            `yaml:"deny"`         // rules every session crew starts must carry; needs headless.deny_via
+	Headless     *HeadlessSpec       `yaml:"headless"`     // how crew run starts one agent non-interactively; nil = can't run stations
+	Orchestrator *OrchestratorSpec   `yaml:"orchestrator"` // can host the orchestrator as the main session; nil = it can't
+	OldForeman   *oldForemanSpec     `yaml:"foreman"`      // the block's name before the cutover; folded into Orchestrator on load, then nil
+	UsesOldKey   bool                `yaml:"-"`            // the file still says foreman:
 }
 
-// ForemanSpec says how a harness hosts a foreman agent as its main session.
-type ForemanSpec struct {
-	Static map[string]any `yaml:"static"` // keys that override agents.static for foremen (e.g. mode: primary)
-	Launch string         `yaml:"launch"` // how the user starts it; {name} is the foreman's name
-
-	OrchestratorLaunch string   `yaml:"orchestrator_launch"` // how the user starts the orchestrator; {name} and {settings}
-	Allow              []string `yaml:"orchestrator_allow"`  // native allow rules for the orchestrator's session
+// OrchestratorSpec says how a harness hosts the orchestrator as its main session.
+type OrchestratorSpec struct {
+	Static map[string]any `yaml:"static"` // keys that override agents.static for it (e.g. mode: primary)
+	Launch string         `yaml:"launch"` // how the principal starts it; {name} and {settings}
+	Allow  []string       `yaml:"allow"`  // native allow rules for its session
+	Ask    []string       `yaml:"ask"`    // native rules the session must always ask about, whatever else allows them
 }
 
 // DenySpec lists native deny-rule strings for a harness.
@@ -158,11 +159,12 @@ func (t Target) IsEnabled() bool { return t.Enabled != nil && *t.Enabled }
 // ---------- loading ----------
 
 func LoadRegistry(dir string) (*Registry, error) {
-	var r Registry
-	if err := decodeStrict(filepath.Join(dir, RegistryFile), &r); err != nil {
+	path := filepath.Join(dir, RegistryFile)
+	b, err := os.ReadFile(path)
+	if err != nil {
 		return nil, err
 	}
-	return &r, nil
+	return DecodeRegistry(filepath.Base(path), b)
 }
 
 func LoadCrew(dir string) (*Crew, error) {
@@ -198,7 +200,11 @@ func DecodeRegistry(name string, b []byte) (*Registry, error) {
 	if err := decodeStrictBytes(name, b, &r); err != nil {
 		return nil, err
 	}
-	return &r, nil
+	folded, err := foldOldKeys(name, r)
+	if err != nil {
+		return nil, err
+	}
+	return &folded, nil
 }
 
 func decodeStrictBytes(name string, b []byte, out any) error {

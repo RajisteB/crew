@@ -60,7 +60,7 @@ crew compile --out /tmp/crew-preview
 
 ## Factories
 
-A factory chains agents into a production line. Each **station** runs one agent; the agent's result picks a **route**, which sends the work forward or back to *any* earlier station. `crew run` drives it; a **foreman** agent lets you talk to a run while it works.
+A factory chains agents into a production line. Each **station** runs one agent; the agent's result picks a **route**, which sends the work forward or back to *any* earlier station. `crew run` drives it; the `orchestrator` agent lets you talk to a run while it works.
 
 ```markdown
 ---
@@ -128,21 +128,27 @@ crew run ship-change --input "Add a /health endpoint"     # foreground; Ctrl-C i
 crew run ship-change --input @request.md --detach         # background; logs to .crew/runs/<id>/run.log
 crew run status                                          # list runs in this project
 crew run status <id> --since 0                           # state + events (ends with "cursor N")
+crew run status <id> --since 0 --wait 90s                # like status, but returns early on news
 crew run say <id> "use port 8081"                        # delivered to the next station
+crew run say <id> - < note.txt                           # the message comes from stdin
 crew run goto <id> plan                                  # send the work to a station (live or stopped run)
 crew run approve <id> [--goto build]                     # continue past an approval stop
 crew run resume <id>                                     # continue an interrupted or retryable run
 ```
 
+For `crew run`, a `-` reads stdin wherever text or `@file` is taken (`--input -`, `say <id> -`, `--note -`). Nothing on stdin, or more than 1 MB, is refused, and so is a flag the command doesn't take.
+
 Each run lives in `<project>/.crew/runs/<id>/` (crew writes `.crew/.gitignore` so it never reaches git): `input.md`, a frozen `factory.md`, `state.json`, `events.jsonl`, and `steps/<n>-<station>/{prompt,output,verdict}`. Every station's prompt points at earlier outputs by path. Only one process drives a run at a time.
 
-### The foreman
+### Talking to a run
 
-`crew compile` also writes a `foreman-<factory>` agent for every harness that can host one as the main session. Start it with `claude --agent foreman-ship-change` (in OpenCode, press Tab to pick it). It starts the run with `--detach`, polls `crew run status`, tells you what matters, passes what you say to the stations, and asks you at approval stops. It never runs a station, edits files or chooses routes: the engine does all of that, so a factory behaves the same with or without a foreman.
+`crew compile` prints an `orchestrator:` line for each harness that can host one as the main session. Start the orchestrator with that line, then tell it which factory to run and what to produce. It starts the run, watches it, tells you what matters, passes what you say to the stations, and asks you at approval stops. In its session `crew run status`, `say` and `resume` are pre-approved. `crew run approve` and `crew run goto` ask you first even when another setting allows them: crew writes `ask` rules for them into the session's settings, and Claude Code checks `ask` rules before `allow` rules (a session started with permission checks bypassed asks about nothing). Starting a run has no `ask` rule, so it asks only when no other setting allows it and the session is in a mode that asks; answer it with a one-time yes, not "don't ask again". If you used foremen, open `/permissions` in the repo and remove rules that allow `crew run` as a whole, `crew run approve` or `crew run goto`. A `harnesses.yaml` that still says `foreman:` gets the `ask` rules only after `crew mission setup`. It never runs a station, edits files or chooses routes: the engine does all of that, so a factory behaves the same with or without the orchestrator.
+
+An older `foreman-<factory>` agent is removed by the next `crew compile`; one in a project's dot-dirs is removed by the next compile of that project, and one you edited by hand stops the compile with a message naming it.
 
 ## Missions
 
-A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub (or crew merges, if you switch auto-merge on for its domain); crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands.
+A mission is a job split into pieces. Each piece runs through a factory in its own git worktree and ends as one pull request, which you merge on GitHub (or crew merges, if you switch auto-merge on for its domain); crew then starts the next piece. You plan and steer a mission through the `orchestrator` agent, or with `crew mission` commands. The same agent also starts and watches a single factory run when that is all you need.
 
 ```sh
 crew mission setup                    # once, for an older crew directory: missions.yaml and domains/

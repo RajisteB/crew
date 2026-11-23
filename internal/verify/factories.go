@@ -31,12 +31,6 @@ func checkFactories(p *Project, rep *Report) {
 		for _, n := range f.StationNames() {
 			checkStationAgent(p, rep, f, n, agents)
 		}
-		fa := factory.ForemanAgent(f)
-		for _, hn := range p.Enabled {
-			if h := p.Registry.Harnesses[hn]; h.Foreman != nil {
-				checkRules(rep, f.Path, hn, h.Rules, fa.Name, fa.Description)
-			}
-		}
 	}
 }
 
@@ -48,9 +42,6 @@ func checkFactoryName(rep *Report, f source.Factory, agents map[string]source.Ag
 	}
 	if _, ok := agents[f.Name]; ok || skills[f.Name] {
 		rep.errf(f.Path, "name %q is also used by an agent or skill; keep names unique", f.Name)
-	}
-	if a, ok := agents[factory.ForemanPrefix+f.Name]; ok {
-		rep.errf(a.Path, "agent %q clashes with the foreman crew generates for factory %s; rename the agent", a.Name, f.Name)
 	}
 }
 

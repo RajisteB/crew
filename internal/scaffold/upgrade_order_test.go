@@ -20,9 +20,10 @@ func TestUpgradeHarnesses_KeysAddedInFixedOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := string(b)
-		l, a := strings.Index(s, "orchestrator_launch"), strings.Index(s, "orchestrator_allow")
+		_, block, _ := strings.Cut(s, "    orchestrator:")
+		l, a := strings.Index(block, "      launch:"), strings.Index(block, "      allow:")
 		if l < 0 || a < 0 || l > a {
-			t.Fatalf("run %d: orchestrator_launch at %d, orchestrator_allow at %d", i, l, a)
+			t.Fatalf("run %d: launch at %d, allow at %d", i, l, a)
 		}
 		if first == nil {
 			first = b

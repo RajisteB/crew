@@ -108,7 +108,7 @@ func newLocal(t *testing.T, replies ...string) localEnv {
 	}
 	runner := &scriptRunner{replies: replies}
 	out := &bytes.Buffer{}
-	l := &LocalRuns{RepoRoot: repo, CrewDir: crewDir, Project: p, Runner: runner, Out: &syncBuf{buf: out}}
+	l := &LocalRuns{MissionID: "m-1", RepoRoot: repo, CrewDir: crewDir, Project: p, Runner: runner, Out: &syncBuf{buf: out}}
 	t.Cleanup(func() { l.stopAll() })
 	return localEnv{l: l, repo: repo, worktree: worktree, runner: runner, out: out}
 }

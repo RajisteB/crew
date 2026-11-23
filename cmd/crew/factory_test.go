@@ -47,11 +47,11 @@ func TestFactoryCmd_List(t *testing.T) {
 	}
 }
 
-func TestPrintMatrix_ListsForemen(t *testing.T) {
+func TestPrintMatrix_ListsNoForemen(t *testing.T) {
 	p, _ := verify.Run(scaffoldDir(t))
 	var out bytes.Buffer
 	printMatrix(&out, p, build.Opts{Out: "/o"})
-	if !strings.Contains(out.String(), "foremen: foreman-ship-change (launch: claude --agent foreman-ship-change)") {
+	if strings.Contains(out.String(), "foremen:") || !strings.Contains(out.String(), "  orchestrator: claude --agent orchestrator") {
 		t.Fatalf("matrix:\n%s", out.String())
 	}
 }

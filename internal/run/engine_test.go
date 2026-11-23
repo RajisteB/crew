@@ -343,7 +343,7 @@ func TestEngine_DriveErrorIsRecorded(t *testing.T) {
 	}
 	st, _ := e.Store.LoadState()
 	if st.Status != run.StatusFailed || !st.Retryable || !strings.Contains(st.Reason, "git exploded") {
-		t.Fatalf("a driving error must be saved so status (and the foreman) can see it: %+v", st)
+		t.Fatalf("a driving error must be saved so status can see it: %+v", st)
 	}
 	evs, _ := e.Store.EventsSince(0)
 	if last := evs[len(evs)-1]; last.Kind != run.EvFailed {
