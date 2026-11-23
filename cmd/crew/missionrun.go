@@ -75,7 +75,7 @@ func newMissionEngine(store mission.Store, crewDir, repoRoot string, out io.Writ
 	chk := newChecks(p, settings, st.Repo)
 	domains := domainMap(p.Domains)
 	runner := newRunner(p.Registry)
-	runs := &mission.LocalRuns{RepoRoot: repoRoot, CrewDir: crewDir, Project: p, Runner: runner, Out: out}
+	runs := &mission.LocalRuns{MissionID: st.MissionID, RepoRoot: repoRoot, CrewDir: crewDir, Project: p, Runner: runner, Out: out}
 	e := &mission.Engine{
 		Store: store, RepoRoot: repoRoot, Settings: settings, Checks: chk.in, Domains: domains,
 		Git: gitx.Repo{Dir: repoRoot}, GH: ghClient(repoRoot), Runs: runs,

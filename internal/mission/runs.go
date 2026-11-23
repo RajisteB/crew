@@ -30,6 +30,7 @@ const stopWait = 15 * time.Second
 // LocalRuns drives factory runs in this process, one goroutine per run. The
 // run folder lives under RepoRoot; stations work in the piece's worktree.
 type LocalRuns struct {
+	MissionID         string // the mission these runs belong to
 	RepoRoot, CrewDir string
 	Project           *verify.Project
 	Runner            run.Runner
@@ -46,9 +47,17 @@ type drive struct {
 	done   chan struct{}
 }
 
+// RunOwner is the Owner of a run started for a piece: "mission <missionID> piece <pieceID>".
+func RunOwner(missionID, pieceID string) string {
+	return "mission " + missionID + " piece " + pieceID
+}
+
 // Start creates the run folder in the main repo from the piece's factory. It
 // does not drive the run.
 func (l *LocalRuns) Start(p Piece, input, worktree string) (string, error) {
+	if l.MissionID == "" {
+		return "", errors.New("mission runs need a mission id")
+	}
 	f, ok := l.factory(p.Factory)
 	if !ok {
 		return "", fmt.Errorf("piece %s: no factory %q", p.ID, p.Factory)
@@ -61,8 +70,12 @@ func (l *LocalRuns) Start(p Piece, input, worktree string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("piece %s: %w", p.ID, err)
 	}
-	store, _, err := run.NewRun(l.RepoRoot, f, src, input, time.Now())
+	store, st, err := run.NewRun(l.RepoRoot, f, src, input, time.Now())
 	if err != nil {
+		return "", err
+	}
+	st.Owner = RunOwner(l.MissionID, p.ID)
+	if err := store.SaveState(st); err != nil {
 		return "", err
 	}
 	return filepath.Base(store.Dir), nil

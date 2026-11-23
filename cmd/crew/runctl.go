@@ -19,7 +19,11 @@ func runStatus(pos []string, f runFlags, out io.Writer) error {
 			fmt.Fprintf(out, "no runs in %s\n", f.project)
 		}
 		for _, st := range runs {
-			fmt.Fprintf(out, "%-44s %-18s %-10s step %d\n", st.RunID, st.Status, st.Current, st.Step)
+			owner := ""
+			if st.Owner != "" {
+				owner = "  " + st.Owner
+			}
+			fmt.Fprintf(out, "%-44s %-18s %-10s step %d%s\n", st.RunID, st.Status, st.Current, st.Step, owner)
 		}
 		return nil
 	}
@@ -36,6 +40,9 @@ func runStatus(pos []string, f runFlags, out io.Writer) error {
 		live = fmt.Sprintf("  (live, pid %d)", pid)
 	}
 	fmt.Fprintf(out, "run %s  factory %s  status %s  current %s  step %d%s\n", st.RunID, st.Factory, st.Status, st.Current, st.Step, live)
+	if st.Owner != "" {
+		fmt.Fprintf(out, "owner: %s\n", st.Owner)
+	}
 	if st.Reason != "" {
 		fmt.Fprintf(out, "reason: %s\n", st.Reason)
 	}

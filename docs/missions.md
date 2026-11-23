@@ -874,6 +874,8 @@ Everything a mission writes goes in the repo it works on, under `.crew/`. crew w
 
 A mission id looks like `m-20261121-162953-e991`. A piece's branch is `crew/<mission-id>/<piece-id>`, created from the base branch on `origin`.
 
+A piece's run belongs to its mission. You can read it with `crew run status`, which shows an `owner:` line, but `crew run say`, `goto`, `approve` and `resume` refuse it: `run <id> belongs to mission <mission-id> piece <piece-id>: crew run <verb> is refused for it; use crew mission status, answer, amend, stop or resume`.
+
 The engine is the only writer of `state.json` and `mission.md` while it runs. The other commands leave you a file in `inbox/`, or change the state only when no engine is running.
 
 When a piece's pull request is merged, crew removes the piece's worktree. When a piece finishes with nothing to commit, it is complete at once and no pull request is opened. Nothing is ever deleted on GitHub: crew does not delete remote branches or close pull requests. It merges a pull request only when auto-merge is on for the piece's domain. The local piece branches stay where they are.

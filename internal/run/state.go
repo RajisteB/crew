@@ -45,6 +45,7 @@ type State struct {
 	Retryable     bool              `json:"retryable,omitempty"`
 	LimitRoute    string            `json:"limit_route,omitempty"` // "station.route" whose limit ended the run
 	InStation     bool              `json:"in_station,omitempty"`  // a station was running when this was saved
+	Owner         string            `json:"owner,omitempty"`       // who drives this run instead of `crew run`: "mission <id> piece <id>"; "" for a plain run
 }
 
 // Terminal reports whether nothing more will run without a resume.

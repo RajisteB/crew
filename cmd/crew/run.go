@@ -92,6 +92,18 @@ func dispatchRun(pos []string, f runFlags, out io.Writer) error {
 		}
 		return nil
 	}
+	if min, ok := ownedVerbs[pos[0]]; ok {
+		if err := need(min); err != nil {
+			return err
+		}
+		store, err := run.OpenRun(f.project, pos[1])
+		if err != nil {
+			return err
+		}
+		if err := refuseOwned(store, pos[0]); err != nil {
+			return err
+		}
+	}
 	switch pos[0] {
 	case "status":
 		return runStatus(pos[1:], f, out)
