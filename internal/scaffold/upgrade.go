@@ -57,6 +57,9 @@ func UpgradeHarnesses(dir string) (HarnessUpgrade, error) {
 	if have == nil || want == nil {
 		return HarnessUpgrade{}, fmt.Errorf("%s: no harnesses mapping", harnessesFile)
 	}
+	if both := harnessesWithBothKeys(have); len(both) > 0 {
+		return HarnessUpgrade{Skipped: both}, nil
+	}
 	var res HarnessUpgrade
 	for i := 0; i+1 < len(have.Content); i += 2 {
 		name := have.Content[i].Value
@@ -207,9 +210,6 @@ func mapEntry(m *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
 // renames its foreman: block when tn is nil. It returns a description of what
 // it did, or a reason for leaving the harness alone.
 func upgradeHarness(h, tn *yaml.Node) (added, skip string) {
-	if mapGet(h, foremanKey) != nil && mapGet(h, orchestratorKey) != nil {
-		return "", "has both foreman: and orchestrator:; remove foreman:"
-	}
 	if tn == nil {
 		if renameForeman(h, nil) {
 			return "foreman: renamed to orchestrator:", ""

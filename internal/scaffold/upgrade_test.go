@@ -127,8 +127,9 @@ func TestUpgradeHarnesses_CustomCommandLeftAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The skipped harness is left as it is, old key included. Only opencode,
-	// which is not skipped, has its foreman: block renamed.
+	// The skipped harness keeps its content, old key included (re-encoding the
+	// file can change whitespace and comment alignment). Only opencode, which is
+	// not skipped, has its foreman: block renamed.
 	reg, err := config.LoadRegistry(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +137,12 @@ func TestUpgradeHarnesses_CustomCommandLeftAlone(t *testing.T) {
 	cc, oc := reg.Harnesses["claude-code"], reg.Harnesses["opencode"]
 	if !cc.UsesOldKey || cc.Headless.DenyVia != "" || strings.Contains(strings.Join(cc.Headless.Command, " "), "{settings}") || !slices.Contains(cc.Headless.Command, "--verbose") {
 		t.Errorf("claude-code changed: %+v", cc)
+	}
+	if len(cc.Deny.All) != 0 || len(cc.Deny.Stations) != 0 {
+		t.Errorf("claude-code got deny rules: %+v", cc.Deny)
+	}
+	if got := cc.Orchestrator.Allow; len(got) != 0 {
+		t.Errorf("claude-code allow list was extended: %q", got)
 	}
 	if oc.UsesOldKey || oc.Orchestrator == nil {
 		t.Errorf("opencode not renamed: %+v", oc)

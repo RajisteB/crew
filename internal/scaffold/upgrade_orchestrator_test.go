@@ -186,3 +186,41 @@ func TestUpgradeHarnesses_SecondRunAfterTheCutoverChangesNothing(t *testing.T) {
 		t.Error("a second backup was written")
 	}
 }
+
+func TestUpgradeHarnesses_KeepsACommentAboveTheForemanKey(t *testing.T) {
+	// The owner's extra rule keeps the result from equalling the template, which
+	// would be written as the template's own bytes.
+	s := strings.Replace(string(readCutoverFixture(t)), "    foreman:", "    # MY OWN NOTE\n    foreman:", 1)
+	s = strings.Replace(s, sixRuleAllow, strings.Replace(sixRuleAllow, `"Glob"]`, `"Glob", "Bash(ls:*)"]`, 1), 1)
+	dir := writeHarnesses(t, []byte(s))
+	if _, err := UpgradeHarnesses(dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "harnesses.yaml"))
+	if !strings.Contains(string(b), "# MY OWN NOTE") {
+		t.Errorf("comment lost:\n%s", b)
+	}
+	if _, err := config.LoadRegistry(dir); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpgradeHarnesses_BothKeysStopsTheWholeRun(t *testing.T) {
+	// claude-code has both keys; opencode would otherwise be renamed.
+	s := strings.Replace(string(readCutoverFixture(t)), "    foreman:", "    orchestrator: {launch: z}\n    foreman:", 1)
+	dir := writeHarnesses(t, []byte(s))
+	res, err := UpgradeHarnesses(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "claude-code: has both foreman: and orchestrator:; remove foreman:"
+	if len(res.Skipped) != 1 || res.Skipped[0] != want {
+		t.Errorf("Skipped = %q", res.Skipped)
+	}
+	if len(res.Added) != 0 || res.Backup != "" {
+		t.Errorf("res = %+v", res)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "harnesses.yaml")); string(got) != s {
+		t.Error("the file must not change")
+	}
+}

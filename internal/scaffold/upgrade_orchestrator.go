@@ -22,7 +22,7 @@ const (
 )
 
 // renameForeman turns h's foreman: block into orchestrator:, taking the key's
-// comments from tn when tn has the block. It reports whether h changed. A
+// line comment from tn when tn has the block and a comment there. It reports whether h changed. A
 // harness that has both keys is left alone.
 func renameForeman(h, tn *yaml.Node) bool {
 	fk, fv := mapEntry(h, foremanKey)
@@ -50,8 +50,8 @@ func renameForeman(h, tn *yaml.Node) bool {
 		return true
 	}
 	fk.Value = orchestratorKey
-	if tk != nil {
-		fk.HeadComment, fk.LineComment, fk.FootComment = tk.HeadComment, tk.LineComment, tk.FootComment
+	if tk != nil && tk.LineComment != "" {
+		fk.LineComment = tk.LineComment // the owner's head and foot comments stay
 	}
 	if len(kept) == 0 {
 		fv.Style = 0
@@ -145,4 +145,17 @@ func backupName(dir string) (string, error) {
 		name = fmt.Sprintf("%s.%d", backupFile, n)
 	}
 	return "", fmt.Errorf("%s already exists; move it aside, then run crew mission setup again", name)
+}
+
+// harnessesWithBothKeys has a Skipped line for each harness that has both
+// foreman: and orchestrator:. Such a file can't load, so nothing is upgraded.
+func harnessesWithBothKeys(have *yaml.Node) []string {
+	var out []string
+	for i := 0; i+1 < len(have.Content); i += 2 {
+		h := have.Content[i+1]
+		if mapGet(h, foremanKey) != nil && mapGet(h, orchestratorKey) != nil {
+			out = append(out, have.Content[i].Value+": has both foreman: and orchestrator:; remove foreman:")
+		}
+	}
+	return out
 }
