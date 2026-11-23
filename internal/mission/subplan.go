@@ -31,14 +31,20 @@ func ParseSubPlan(reply string) (SubPlan, error) {
 	if !ok {
 		return SubPlan{}, errors.New("the reply has no fenced block tagged `plan`")
 	}
+	return decodeOne[SubPlan](body, planTag)
+}
+
+// decodeOne decodes body as exactly one JSON object of type T: no unknown
+// fields, nothing after it. what names the block in the error texts.
+func decodeOne[T any](body, what string) (T, error) {
+	var v, zero T
 	dec := json.NewDecoder(strings.NewReader(body))
 	dec.DisallowUnknownFields()
-	var sp SubPlan
-	if err := dec.Decode(&sp); err != nil {
-		return SubPlan{}, fmt.Errorf("the plan block is not one valid JSON object: %w", err)
+	if err := dec.Decode(&v); err != nil {
+		return zero, fmt.Errorf("the %s block is not one valid JSON object: %w", what, err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return SubPlan{}, errors.New("the plan block has content after the JSON object")
+		return zero, fmt.Errorf("the %s block has content after the JSON object", what)
 	}
-	return sp, nil
+	return v, nil
 }

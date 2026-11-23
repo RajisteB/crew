@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 var planNow = time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)
@@ -224,5 +225,50 @@ func TestPlanRefused(t *testing.T) {
 	}
 	if _, a := PlanRefused(s, "P9", "x", planNow); a != nil {
 		t.Error("unknown piece acted")
+	}
+}
+
+func TestApplySubPlan_ParentCountsAsStartedWhenSeparating(t *testing.T) {
+	m, s, in := delegatedMission("brand/**")
+	// P1 comes first in file order and overlaps P3: with P3 settled, P1 is the
+	// one kept apart, so the sub-pieces under P3 don't inherit an entry.
+	m.Pieces = []Piece{
+		{ID: "P1", Domain: "design", Factory: "visuals", Brief: "assets", Paths: []string{"brand/logo/**"}},
+		m.Pieces[0],
+	}
+	s.Pieces = []PieceState{{ID: "P1", Status: PieceQueued}, {ID: "P3", Status: PieceQueued}}
+	sp := SubPlan{Pieces: []Piece{{ID: "a", Factory: "visuals", Brief: "x", Paths: []string{"brand/icons/**"}}}}
+	got, _, _ := ApplySubPlan(m, s, "P3", sp, in, planNow)
+	p1, _ := got.Piece("P1")
+	p3, _ := got.Piece("P3")
+	if !slices.Equal(p1.Apart, []string{"P3"}) || len(p3.Apart) != 0 {
+		t.Errorf("P1.Apart = %v, P3.Apart = %v", p1.Apart, p3.Apart)
+	}
+}
+
+func TestApplySubPlan_CutsReplyText(t *testing.T) {
+	long := strings.Repeat("é", maxReasonRunes+50)
+	m, s, in := delegatedMission("brand/**")
+	_, gs, acts := ApplySubPlan(m, s, "P3", SubPlan{Question: long, Reason: long}, in, planNow)
+	st, _ := gs.Piece("P3")
+	d := st.Decisions[0]
+	for name, v := range map[string]string{"wait": st.Wait.Question, "note": d.Note, "reason": d.Reason} {
+		if n := utf8.RuneCountInString(v); n != maxReasonRunes {
+			t.Errorf("%s has %d runes", name, n)
+		}
+	}
+	for _, a := range acts {
+		if n, ok := a.(Notify); ok && utf8.RuneCountInString(n.Body) > maxReasonRunes+10 {
+			t.Errorf("notification has %d runes", utf8.RuneCountInString(n.Body))
+		}
+	}
+	m, s, in = delegatedMission("brand/**")
+	_, gs, _ = ApplySubPlan(m, s, "P3", SubPlan{Reason: long, Pieces: []Piece{{ID: "a", Factory: "visuals", Brief: "x", WaitsFor: []string{long}}}}, in, planNow)
+	if r := decisionsOf(gs, "P3")[0].Reason; utf8.RuneCountInString(r) != maxReasonRunes {
+		t.Errorf("refusal has %d runes", utf8.RuneCountInString(r))
+	}
+	got, _, _ := ApplySubPlan(m, s, "P3", SubPlan{Reason: long, Pieces: []Piece{{ID: "a", Factory: "visuals", Brief: "x"}}}, in, planNow)
+	if n := utf8.RuneCountInString(got.Changes[0].Why); n != maxReasonRunes {
+		t.Errorf("change Why has %d runes", n)
 	}
 }

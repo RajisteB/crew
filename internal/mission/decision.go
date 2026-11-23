@@ -1,10 +1,8 @@
 package mission
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -71,16 +69,7 @@ func ParseDecision(reply string) (OrchDecision, error) {
 	if !ok {
 		return OrchDecision{}, errors.New("the reply has no fenced block tagged `decision`")
 	}
-	dec := json.NewDecoder(strings.NewReader(body))
-	dec.DisallowUnknownFields()
-	var d OrchDecision
-	if err := dec.Decode(&d); err != nil {
-		return OrchDecision{}, fmt.Errorf("the decision block is not one valid JSON object: %w", err)
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return OrchDecision{}, errors.New("the decision block has content after the JSON object")
-	}
-	return d, nil
+	return decodeOne[OrchDecision](body, decisionTag)
 }
 
 // lastTaggedBlock returns the body of the last closed fenced block whose info
