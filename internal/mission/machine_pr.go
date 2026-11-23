@@ -46,6 +46,7 @@ func (d *decider) prOpen(id string) {
 		d.failedChecks(id, pr.Checks)
 		return
 	}
+	p.Up = 0 // no stop: one that was being passed up ended with no decision
 	since := d.o.Now.Sub(p.PRSince)
 	switch {
 	case mode != principal.AutoOn && mode != principal.AutoWithoutChecks:

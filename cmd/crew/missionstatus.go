@@ -233,10 +233,18 @@ func printEvents(out io.Writer, store mission.Store, since int) error {
 	return nil
 }
 
+// engineBy is the By of the events crew's engine writes; eventLine leaves it out.
+const engineBy = "engine"
+
+// eventLine is one event: seq, time, kind, piece, who acted when it was not
+// the engine, and the message.
 func eventLine(e mission.Event) string {
 	parts := []string{fmt.Sprint(e.Seq), e.Time.Format("15:04:05"), oneLine(e.Kind)}
 	if e.Piece != "" {
 		parts = append(parts, oneLine(e.Piece))
+	}
+	if e.By != "" && e.By != engineBy {
+		parts = append(parts, oneLine(e.By))
 	}
 	if e.Msg != "" {
 		parts = append(parts, oneLine(e.Msg))

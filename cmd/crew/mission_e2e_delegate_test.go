@@ -164,6 +164,15 @@ func TestMission_EndToEnd_StuckSubPieceReachesThePrincipal(t *testing.T) {
 	if n := strings.Count(out, "  question  "); n != 1 {
 		t.Fatalf("status shows %d question waits, want 1:\n%s", n, out)
 	}
+	var climb []string
+	for _, l := range strings.Split(out, "\n") {
+		if _, rest, ok := strings.Cut(l, "  escalated  P1.1  "); ok {
+			climb = append(climb, rest)
+		}
+	}
+	if want := []string{"scoped orchestrator P1  What now?", "orchestrator  What now?"}; !slices.Equal(climb, want) {
+		t.Fatalf("status shows the climb as %q, want %q:\n%s", climb, want, out)
+	}
 	var by []string
 	evs, err := r.store.EventsSince(0)
 	if err != nil {

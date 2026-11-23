@@ -254,24 +254,7 @@ func (d *decider) failed(id string, rs run.State) {
 
 // ask hands a failure to the orchestrator, or to the principal when the
 // piece has used up its orchestrator calls.
-func (d *decider) ask(id, failure string) {
-	p := d.ps(id)
-	if !Allows(d.lim.OrchestratorCalls, p.Calls+1) {
-		d.callBudgetHit(id, p.Calls)
-		if failure == reasonOutOfPaths {
-			d.wait(id, WaitPaths, pathsQuestion(*p), PieceRunning)
-			return
-		}
-		q := fmt.Sprintf("%s hit the orchestrator call limit after a %s failure", id, failure)
-		back := PieceRunning
-		if p.Status == PiecePROpen {
-			back = "" // the piece stays pr-open and its pull request is still watched
-		}
-		d.wait(id, WaitLimit, q, back)
-		return
-	}
-	d.add(AskOrchestrator{Piece: id, Failure: failure})
-}
+func (d *decider) ask(id, failure string) { d.askPassing(id, failure, "") }
 
 func (d *decider) done(id string) {
 	g, ok := d.o.Git[id]

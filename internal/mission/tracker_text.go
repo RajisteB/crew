@@ -67,6 +67,16 @@ func DeliverablesRel(missionID, piece string) string {
 	return ".crew/missions/" + missionID + "/deliverables/" + piece
 }
 
+// escalatedText is the comment for an escalation: a scoped orchestrator's
+// question about a piece under it is passed up to the orchestrator above,
+// any other goes to the principal.
+func escalatedText(ev Event) string {
+	if scope, ok := strings.CutPrefix(ev.By, scopedBy("")); ok && Under(ev.Piece, scope) {
+		return "Passed up by " + ev.By + ": " + ev.Msg
+	}
+	return "Escalated to you: " + ev.Msg
+}
+
 // TrackerComment is the comment an event puts on an issue. piece "" means the epic.
 func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 	piece = ev.Piece
@@ -77,7 +87,7 @@ func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 	case EvDecision:
 		text = "Decision (" + ev.By + "): " + ev.Msg
 	case EvEscalated:
-		text = "Escalated to you: " + ev.Msg
+		text = escalatedText(ev)
 	case EvWaitingOnPrincipal:
 		text = "Waiting on you: " + ev.Msg
 	case EvRebrief:

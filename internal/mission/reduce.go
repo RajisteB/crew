@@ -57,7 +57,7 @@ func SentBackDone(s State, piece, reason, problem string) State {
 			p.SentBack = map[string]int{}
 		}
 		p.SentBack[reason]++
-		p.Status, p.Wait = PieceRunning, nil
+		p.Status, p.Wait, p.Up = PieceRunning, nil, 0 // the stop ended with no decision
 		p.GreenSince = time.Time{}
 		p.Problem = string([]rune(problem)[:min(len([]rune(problem)), maxProblemRunes)])
 	})
@@ -77,7 +77,7 @@ func PROpened(s State, piece string, pr gh.PR, head string, now time.Time) State
 // BranchUpdated records a new head crew pushed to the piece's pull request.
 func BranchUpdated(s State, piece, head string, now time.Time) State {
 	return update(s, piece, func(p *PieceState) {
-		p.Head, p.PRSince = head, now
+		p.Head, p.PRSince, p.Up = head, now, 0 // the stop ended with no decision
 		p.GreenSince = time.Time{}
 	})
 }

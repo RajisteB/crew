@@ -41,11 +41,12 @@ func (a *applier) pass(question string) {
 
 // raise records the question and puts the piece to the next orchestrator with
 // the decider's ask: a call when one is left, else the usual wait on the
-// principal. The engine counted the call just made before applying.
+// principal, which then carries the question. The engine counted the call
+// just made before applying.
 func (a *applier) raise(question string) {
 	a.ps(a.piece).Up++
 	a.add(Record{Event: Event{Time: a.o.Now, Kind: EvEscalated, Piece: a.piece, By: a.by, Msg: question}})
-	a.ask(a.piece, a.failure)
+	a.askPassing(a.piece, a.failure, a.by+" asked: "+question)
 }
 
 // scopedAdd makes an add by a scoped orchestrator one that crew names: the id

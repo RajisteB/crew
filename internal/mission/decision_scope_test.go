@@ -151,6 +151,14 @@ func TestApplyScopedDecision_ClimbStopsAtTheCallLimit(t *testing.T) {
 	if p.Wait == nil || p.Wait.Kind != WaitLimit || hasAsk(as, "P3.1") || !hasNotify(as) {
 		t.Fatalf("piece %+v, actions %v", p, as)
 	}
+	if want := "P3.1 hit the orchestrator call limit after a limit-hit failure. scoped orchestrator P3 asked: q"; p.Wait.Question != want {
+		t.Fatalf("question = %q, want %q", p.Wait.Question, want)
+	}
+	edit(&s, "P3.1", func(p *PieceState) { p.Calls = 2 }) // one call left
+	_, s2, as, _ = ApplyScopedDecision(m, s, "P3.1", "limit-hit", OrchDecision{Action: "escalate", Note: "q"}, "P3", in, t0)
+	if p := pieceOf(s2, "P3.1"); p.Wait != nil || !hasAsk(as, "P3.1") {
+		t.Fatalf("with a call left: piece %+v, actions %v", p, as)
+	}
 }
 
 func TestApplyScopedDecision_RebriefStaysInTheSubtree(t *testing.T) {

@@ -148,6 +148,9 @@ func TestTrackerComment(t *testing.T) {
 		{Event{Kind: EvPROpened, Piece: "P1"}, "P1", "Pull request opened: https://example.com/pr/1"},
 		{Event{Kind: EvDecision, Piece: "P1", By: "engine", Msg: "m"}, "P1", "Decision (engine): m"},
 		{Event{Kind: EvEscalated, Piece: "P1", Msg: "m"}, "P1", "Escalated to you: m"},
+		{Event{Kind: EvEscalated, Piece: "P3.1", By: "scoped orchestrator P3", Msg: "q"}, "P3.1", "Passed up by scoped orchestrator P3: q"},
+		{Event{Kind: EvEscalated, Piece: "P3", By: "scoped orchestrator P3", Msg: "q"}, "P3", "Escalated to you: q"}, // a planning question
+		{Event{Kind: EvEscalated, Piece: "P3.1", By: "orchestrator", Msg: "q"}, "P3.1", "Escalated to you: q"},
 		{Event{Kind: EvWaitingOnPrincipal, Piece: "P1", Msg: "m"}, "P1", "Waiting on you: m"},
 		{Event{Kind: EvRebrief, Piece: "P1", By: "principal"}, "P1", "Brief changed by principal."},
 		{Event{Kind: EvPieceCancelled, Piece: "P1", Msg: "m"}, "P1", "Cancelled: m"},
