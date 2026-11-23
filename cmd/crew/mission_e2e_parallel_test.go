@@ -149,6 +149,10 @@ func (escalateOrch) Decide(context.Context, string, mission.Summary) (mission.Or
 	return mission.OrchDecision{Action: "escalate", Note: "What now?", Reason: "test"}, nil
 }
 
+func (escalateOrch) Plan(context.Context, string, mission.PlanRequest) (mission.SubPlan, error) {
+	return mission.SubPlan{Question: "What now?", Reason: "test"}, nil
+}
+
 func TestMission_EndToEnd_FilesOutsidePaths(t *testing.T) {
 	r := newPathsRig(t, "2", "")
 	r.launchPieces(touching("P1", ".", []string{"docs/**"}))

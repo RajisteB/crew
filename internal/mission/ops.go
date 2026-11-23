@@ -74,6 +74,8 @@ type RunOps interface {
 // Orchestrator is the headless agent that decides what happens to a stuck piece.
 type Orchestrator interface {
 	Decide(ctx context.Context, repoRoot string, s Summary) (OrchDecision, error)
+	// Plan splits a delegated piece into the pieces that do its work.
+	Plan(ctx context.Context, repoRoot string, r PlanRequest) (SubPlan, error)
 }
 
 // PieceInput is the input a piece's run starts with: the piece's brief, the

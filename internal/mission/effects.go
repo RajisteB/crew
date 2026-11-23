@@ -27,7 +27,8 @@ func (t *tick) perform(actions []Action) error {
 		}
 		var err error
 		switch a := a.(type) {
-		case PlanPieces: // Task 6 carries this out
+		case PlanPieces:
+			err = t.planPieces(a)
 		case StartPiece:
 			err = t.startPiece(a)
 		case DriveRun:

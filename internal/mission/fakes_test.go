@@ -230,6 +230,9 @@ type fakeOrch struct {
 	err       error
 	prompts   []string
 	sums      []Summary
+	plans     []SubPlan     // replies to Plan, in order
+	planErr   error         // when set, every Plan call fails with it
+	planReqs  []PlanRequest // what each Plan call was asked
 }
 
 func (o *fakeOrch) Decide(_ context.Context, _ string, s Summary) (OrchDecision, error) {
