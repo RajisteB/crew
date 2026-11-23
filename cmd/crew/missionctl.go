@@ -21,7 +21,7 @@ var (
 
 // words reads a TEXT|@FILE flag value.
 func words(name, v string) (string, error) {
-	t, err := textArg(v, nil)
+	t, err := textArg("", v, nil)
 	if err != nil {
 		return "", fmt.Errorf("--%s: %w", name, err)
 	}
