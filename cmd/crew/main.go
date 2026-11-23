@@ -48,7 +48,7 @@ func main() {
 		return
 	}
 	if cmd == "run" {
-		os.Exit(runCmd(os.Args[2:], os.Stdout, os.Stderr))
+		os.Exit(runCmd(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
 	if cmd == "factory" {
 		if err := factoryCmd(os.Args[2:], os.Stdout); err != nil {

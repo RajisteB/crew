@@ -11,6 +11,9 @@ import (
 // --since, ending with "cursor N" for the foreman's next poll.
 func runStatus(pos []string, f runFlags, out io.Writer) error {
 	if len(pos) == 0 {
+		if f.wait != 0 {
+			return usageError{"--wait needs a run id"}
+		}
 		runs, err := run.ListRuns(f.project)
 		if err != nil {
 			return err
@@ -27,8 +30,14 @@ func runStatus(pos []string, f runFlags, out io.Writer) error {
 		}
 		return nil
 	}
+	if f.wait < 0 || f.wait > maxStatusWait {
+		return usageError{"--wait takes a time up to 10m, like 90s"}
+	}
 	store, err := run.OpenRun(f.project, pos[0])
 	if err != nil {
+		return err
+	}
+	if err := waitForNews(store, f.since, f.wait); err != nil {
 		return err
 	}
 	st, err := store.LoadState()
@@ -80,7 +89,7 @@ func runSay(id, msg string, f runFlags, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	text, err := textArg(msg)
+	text, err := textArg(msg, f.stdin)
 	if err != nil {
 		return err
 	}
@@ -142,7 +151,7 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 		return err
 	}
 	if f.note != "" {
-		note, err := textArg(f.note)
+		note, err := textArg(f.note, f.stdin)
 		if err != nil {
 			return err
 		}

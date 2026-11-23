@@ -128,11 +128,15 @@ crew run ship-change --input "Add a /health endpoint"     # foreground; Ctrl-C i
 crew run ship-change --input @request.md --detach         # background; logs to .crew/runs/<id>/run.log
 crew run status                                          # list runs in this project
 crew run status <id> --since 0                           # state + events (ends with "cursor N")
+crew run status <id> --since 0 --wait 90s                # like status, but returns early on news
 crew run say <id> "use port 8081"                        # delivered to the next station
+crew run say <id> - < note.txt                           # the message comes from stdin
 crew run goto <id> plan                                  # send the work to a station (live or stopped run)
 crew run approve <id> [--goto build]                     # continue past an approval stop
 crew run resume <id>                                     # continue an interrupted or retryable run
 ```
+
+A `-` reads stdin wherever text or `@file` is taken (`--input -`, `say <id> -`, `--note -`).
 
 Each run lives in `<project>/.crew/runs/<id>/` (crew writes `.crew/.gitignore` so it never reaches git): `input.md`, a frozen `factory.md`, `state.json`, `events.jsonl`, and `steps/<n>-<station>/{prompt,output,verdict}`. Every station's prompt points at earlier outputs by path. Only one process drives a run at a time.
 
