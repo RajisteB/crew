@@ -127,6 +127,7 @@ type PieceState struct {
 	OutsideMore int      `json:"outside_more,omitempty"` // how many more there are
 	Allowed     []string `json:"allowed,omitempty"`      // files outside its paths that the principal accepted
 	Steps       int      `json:"steps,omitempty"`        // station steps its run has taken, as last seen
+	Up          int      `json:"up,omitempty"`           // how many orchestrators above the nearest the piece's current stop has been raised
 }
 
 // State is state.json. It holds ids, counts and short messages only: never

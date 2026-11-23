@@ -40,7 +40,7 @@ func ApplyAnswer(m Mission, s State, a Answer, in CheckInput, now time.Time) (Mi
 	}
 	d := &decider{m: m, s: s.Clone(), o: Obs{Now: now}}
 	p := d.ps(id)
-	p.Wait = nil
+	p.Wait, p.Up = nil, 0
 	if w.Back != "" {
 		p.Status = w.Back
 	}

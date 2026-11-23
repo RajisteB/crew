@@ -243,6 +243,8 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 	if a.Failure == reasonOutOfPaths {
 		sum = sum.ForPaths(ps)
 	}
+	asker := AskerOf(ps)
+	sum = t.scopeSummary(sum, asker)
 	d, err := t.decide(sum)
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again
@@ -252,7 +254,7 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 		d = OrchDecision{Reason: err.Error()}
 	}
 	asked := Asked(t.s, a.Piece)
-	m2, s2, acts, step := ApplyDecision(t.m, asked, a.Piece, a.Failure, d, orchestratorBy, t.in, t.now)
+	m2, s2, acts, step := ApplyScopedDecision(t.m, asked, a.Piece, a.Failure, d, asker, t.in, t.now)
 	if err := t.runStep(step); err != nil {
 		t.note(a.Piece, "can't carry out the orchestrator's decision: %v", err)
 		t.s = asked // the call was made and counts

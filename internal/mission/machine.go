@@ -204,7 +204,7 @@ func waitText(p PieceState) string {
 
 func (d *decider) complete(id string) {
 	p := d.ps(id)
-	p.Status, p.Wait = PieceComplete, nil
+	p.Status, p.Wait, p.Up = PieceComplete, nil, 0
 	d.record(EvPieceComplete, id, "")
 }
 

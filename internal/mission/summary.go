@@ -43,6 +43,7 @@ type Summary struct {
 	StepsDir                 string   // where the full outputs are
 	Outside                  []string // for the orchestrator: the files outside the paths
 	OutsideMore              int
+	Scope                    *Scope // nil for the main orchestrator
 }
 
 // BuildSummary gathers (id is the mission id) what the orchestrator needs to settle a stuck piece.

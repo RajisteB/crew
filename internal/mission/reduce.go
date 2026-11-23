@@ -43,7 +43,7 @@ func DeliverableCollected(s State, piece string, files []string, print string, n
 
 // Resumed records one restart of a run that had failed.
 func Resumed(s State, piece string) State {
-	return update(s, piece, func(p *PieceState) { p.Resumes++ })
+	return update(s, piece, func(p *PieceState) { p.Resumes++; p.Up = 0 })
 }
 
 // maxProblemRunes caps the stored reason a piece was sent back.
@@ -86,7 +86,7 @@ func BranchUpdated(s State, piece, head string, now time.Time) State {
 // complete, or delivered when its deliverable is not yet accepted.
 func Merged(s State, piece string) State {
 	return update(s, piece, func(p *PieceState) {
-		p.Status, p.Wait = PieceComplete, nil
+		p.Status, p.Wait, p.Up = PieceComplete, nil, 0
 		if unaccepted(*p) {
 			p.Status = PieceDelivered
 		}
