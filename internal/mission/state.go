@@ -32,6 +32,8 @@ const (
 	// PieceDelivered: the run is done and any pull request is merged; its
 	// deliverable waits to be accepted.
 	PieceDelivered PieceStatus = "delivered"
+	// PieceDelegated: the piece has been planned; the pieces under it carry its work.
+	PieceDelegated PieceStatus = "delegated"
 )
 
 // Wait kinds: what a waiting piece is waiting for.
@@ -43,6 +45,9 @@ const (
 	WaitPRClosed    = "pr-closed"
 	WaitDeliverable = "deliverable"
 	WaitPaths       = "paths"
+	// WaitPlan: a delegated piece that could not be planned, or whose
+	// orchestrator asked a question first.
+	WaitPlan = "plan"
 )
 
 // Wait is something a piece is blocked on.
