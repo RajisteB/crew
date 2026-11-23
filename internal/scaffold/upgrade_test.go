@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestUpgradeHarnesses_OldTemplateBecomesNewTemplate(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Error("upgraded file differs from the embedded template")
 	}
-	if len(res.Added) != 1 || !strings.HasPrefix(res.Added[0], "claude-code:") {
+	if len(res.Added) != 2 || !strings.HasPrefix(res.Added[0], "claude-code:") || !strings.HasPrefix(res.Added[1], "opencode:") {
 		t.Errorf("Added = %q", res.Added)
 	}
 	if res.Backup != "harnesses.yaml.before-missions" {
@@ -104,7 +105,7 @@ func TestUpgradeHarnesses_KeepsOwnEdits(t *testing.T) {
 	if !strings.Contains(strings.Join(cc.Headless.Command, " "), "{settings}") {
 		t.Error("command lacks {settings}")
 	}
-	if cc.Foreman.OrchestratorLaunch == "" {
+	if cc.Orchestrator.Launch == "" {
 		t.Error("no orchestrator launch")
 	}
 	if _, ok := reg.Harnesses["mine"]; !ok {
@@ -126,11 +127,20 @@ func TestUpgradeHarnesses_CustomCommandLeftAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := os.ReadFile(filepath.Join(dir, "harnesses.yaml"))
-	if string(got) != s {
-		t.Error("file changed")
+	// The skipped harness is left as it is, old key included. Only opencode,
+	// which is not skipped, has its foreman: block renamed.
+	reg, err := config.LoadRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(res.Added) != 0 || res.Backup != "" {
+	cc, oc := reg.Harnesses["claude-code"], reg.Harnesses["opencode"]
+	if !cc.UsesOldKey || cc.Headless.DenyVia != "" || strings.Contains(strings.Join(cc.Headless.Command, " "), "{settings}") || !slices.Contains(cc.Headless.Command, "--verbose") {
+		t.Errorf("claude-code changed: %+v", cc)
+	}
+	if oc.UsesOldKey || oc.Orchestrator == nil {
+		t.Errorf("opencode not renamed: %+v", oc)
+	}
+	if len(res.Added) != 1 || !strings.HasPrefix(res.Added[0], "opencode: foreman: renamed") {
 		t.Errorf("res = %+v", res)
 	}
 	if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0], "claude-code") || !strings.Contains(res.Skipped[0], "{settings}") {

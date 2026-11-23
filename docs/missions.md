@@ -47,6 +47,8 @@ crew mission setup
 
 It writes `missions.yaml` and `domains/` if they are missing, and it upgrades your `harnesses.yaml` itself. For each harness your file shares with the template, it adds the missions parts that are missing: `--settings "{settings}"` in the headless command, `deny_via`, the `deny` block, and the orchestrator launch line and allow list. Your comments and every value you already have stay as they are. The one exception: a `harnesses.yaml` that differs from the default only by comments is replaced by the new default, and your comments are in the backup copy. Before it writes, it copies the old file to `harnesses.yaml.before-missions` (it won't overwrite an existing copy), and it refuses to write anything that wouldn't load. It prints what it changed, then `next: crew compile`, or `already set up` when there was nothing to do.
 
+An older file may still have the block under its old name, `foreman:`. Setup renames it to `orchestrator:`. In the block, it drops the foreman `launch` line (that line started foremen, which no longer exist), turns `orchestrator_launch` into `launch` and `orchestrator_allow` into `allow`, and keeps `static`. It adds the allow rules for plain runs (`crew run status`, `crew run say`, `crew run resume` and `crew factory diagram`) to an allow list that lacks them, after the rules you already have. If `harnesses.yaml.before-missions` already exists, the new copy is called `harnesses.yaml.before-missions.2`, then `.3`, up to `.9`; an earlier copy is never overwritten. A file you haven't upgraded yet keeps working with `foreman:`, and `crew compile` prints a note for each harness that still says it: `harnesses.yaml still says foreman: for <name>; crew mission setup renames it to orchestrator:`. A harness that has both `foreman:` and `orchestrator:` is an error when the file loads; keep `orchestrator:` and remove `foreman:`.
+
 The one case it leaves alone is a `headless.command` you changed by hand. It prints a `skipped` line for that harness; add `--settings "{settings}"` to the command yourself and run `crew mission setup` again.
 
 Until a harness has these parts, `crew mission start` refuses and prints `run crew mission setup to add the missions parts to harnesses.yaml`, and `crew verify -v` prints one note per harness that can't apply deny rules. The note is an info line, so plain `crew verify` leaves it out; `-v` shows it:
@@ -72,18 +74,17 @@ In `headless:`, the command gets `--settings "{settings}"` to the command and th
       output: claude-json
 ```
 
-Under `foreman:`, the two orchestrator lines:
+Under `orchestrator:`, the launch line and the allow list:
 
 ```yaml
-    foreman:
-      launch: "claude --agent {name}"
-      orchestrator_launch: "claude --agent {name} --settings {settings}"
-      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
+    orchestrator:                 # the orchestrator runs as the main session
+      launch: "claude --agent {name} --settings {settings}"
+      allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
 ```
 
-`orchestrator_allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, `crew factory diagram`, `crew run status`, `crew run say` and `crew run resume`, and reading and searching files. Starting a run, `crew run goto` and `crew run approve` are not on the list, so the session asks you first each time. Any other command makes it ask too, as it would in any session.
+`allow` is what the orchestrator session may do without asking you: the `crew mission` commands, `crew domain list`, `crew factory list`, `crew factory diagram`, `crew run status`, `crew run say` and `crew run resume`, and reading and searching files. Starting a run, `crew run goto` and `crew run approve` are not on the list, so the session asks you first each time. Any other command makes it ask too, as it would in any session.
 
-Next to `foreman:`, the `deny:` block:
+Next to `orchestrator:`, the `deny:` block:
 
 ```yaml
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory

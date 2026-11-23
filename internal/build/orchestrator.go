@@ -24,18 +24,18 @@ var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
 // canHostMainSession: the harness runs custom agents as a main session and can
 // give one a shell.
 func canHostMainSession(h config.Harness) bool {
-	return h.Foreman != nil && h.Agents.Supported && len(h.Capabilities["shell"]) > 0
+	return h.Orchestrator != nil && h.Agents.Supported && len(h.Capabilities["shell"]) > 0
 }
 
 // mainSessionHarness is a copy of h whose agents.static is merged with the
 // main-session static keys. h is never modified.
 func mainSessionHarness(h config.Harness) config.Harness {
 	c := h
-	static := make(map[string]any, len(h.Agents.Static)+len(h.Foreman.Static))
+	static := make(map[string]any, len(h.Agents.Static)+len(h.Orchestrator.Static))
 	for k, v := range h.Agents.Static {
 		static[k] = v
 	}
-	for k, v := range h.Foreman.Static {
+	for k, v := range h.Orchestrator.Static {
 		static[k] = v
 	}
 	c.Agents.Static = static
@@ -44,7 +44,7 @@ func mainSessionHarness(h config.Harness) config.Harness {
 
 // hasOrchestratorLaunch: the harness says how to start the orchestrator.
 func hasOrchestratorLaunch(h config.Harness) bool {
-	return h.Foreman != nil && h.Foreman.OrchestratorLaunch != ""
+	return h.Orchestrator != nil && h.Orchestrator.Launch != ""
 }
 
 // canHostOrchestrator: the harness can host it, start it, and apply deny
@@ -72,7 +72,7 @@ func OrchestratorLaunch(p *verify.Project, hn string, o Opts) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	line := strings.ReplaceAll(h.Foreman.OrchestratorLaunch, "{name}", mission.OrchestratorName)
+	line := strings.ReplaceAll(h.Orchestrator.Launch, "{name}", mission.OrchestratorName)
 	return strings.ReplaceAll(line, "{settings}", shellQuote(orchestratorSettingsPath(crewDir, hn, o))), true
 }
 
@@ -116,7 +116,7 @@ func orchestratorSettings(p *verify.Project, hn, crewDir string) ([]byte, error)
 	if len(deny) == 0 {
 		return nil, fmt.Errorf("[%s] orchestrator: harness can apply deny rules but defines none, so the orchestrator isn't built", hn)
 	}
-	allow := append([]string{}, p.Registry.Harnesses[hn].Foreman.Allow...)
+	allow := append([]string{}, p.Registry.Harnesses[hn].Orchestrator.Allow...)
 	b, err := json.MarshalIndent(map[string]any{"permissions": map[string]any{"allow": allow, "deny": deny}}, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("[%s] orchestrator settings: %w", hn, err)

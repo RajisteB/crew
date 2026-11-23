@@ -105,7 +105,7 @@ func TestOrchestratorOutputs_NotBuiltForHarnessWithoutLaunch(t *testing.T) {
 	files, _ := planFiles(t, dir, build.Opts{Out: out})
 	for _, f := range files {
 		if f.Name == "orchestrator" && f.Harnesses[0] != "claude-code" {
-			t.Fatalf("only claude-code has orchestrator_launch, got %v", f.Harnesses)
+			t.Fatalf("only claude-code has an orchestrator launch, got %v", f.Harnesses)
 		}
 	}
 }

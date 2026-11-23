@@ -71,10 +71,9 @@ harnesses:
       allow_via: flag
       deny_via: settings-file     # deny rules go in a temp settings file at {settings}
       output: claude-json         # reply = .result; refused tool calls (.permission_denials) become run notes
-    foreman:                      # factories' foremen run as the main session
-      launch: "claude --agent {name}"
-      orchestrator_launch: "claude --agent {name} --settings {settings}"
-      orchestrator_allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
+    orchestrator:                 # the orchestrator runs as the main session
+      launch: "claude --agent {name} --settings {settings}"
+      allow: ["Bash(crew mission:*)", "Bash(crew domain list:*)", "Bash(crew factory list:*)", "Read", "Grep", "Glob", "Bash(crew run status:*)", "Bash(crew run say:*)", "Bash(crew run resume:*)", "Bash(crew factory diagram:*)"]
     deny:                         # refused in every session crew starts; {crew_dir} = this config directory
       all:
         - "Bash(gh pr merge:*)"
@@ -195,9 +194,8 @@ harnesses:
       command: [opencode, run, --agent, "{agent}", "{prompt}"]
       prompt_via: arg
       allow_via: agent-file
-    foreman:
+    orchestrator:
       static: {mode: primary}     # a primary agent (picked with Tab in the TUI), not a subagent
-      launch: "opencode, then press Tab until {name} is selected"
     rules:
       name_max: 64
 

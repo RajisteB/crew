@@ -60,11 +60,10 @@ func UpgradeHarnesses(dir string) (HarnessUpgrade, error) {
 	var res HarnessUpgrade
 	for i := 0; i+1 < len(have.Content); i += 2 {
 		name := have.Content[i].Value
-		tn := mapGet(want, name)
-		if tn == nil || have.Content[i+1].Kind != yaml.MappingNode {
+		if have.Content[i+1].Kind != yaml.MappingNode {
 			continue
 		}
-		added, skip := upgradeHarness(have.Content[i+1], tn)
+		added, skip := upgradeHarness(have.Content[i+1], mapGet(want, name))
 		if skip != "" {
 			res.Skipped = append(res.Skipped, name+": "+skip)
 		} else if added != "" {
@@ -78,10 +77,10 @@ func UpgradeHarnesses(dir string) (HarnessUpgrade, error) {
 	if err != nil {
 		return HarnessUpgrade{}, err
 	}
-	if err := writeWithBackup(dir, orig, out); err != nil {
+	res.Backup, err = writeWithBackup(dir, orig, out)
+	if err != nil {
 		return HarnessUpgrade{}, err
 	}
-	res.Backup = backupFile
 	return res, nil
 }
 
@@ -107,43 +106,50 @@ func renderUpgrade(doc *yaml.Node, tmplBytes []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeWithBackup(dir string, orig, out []byte) error {
+func writeWithBackup(dir string, orig, out []byte) (string, error) {
 	path := filepath.Join(dir, harnessesFile)
 	fi, err := os.Stat(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	mode := fi.Mode().Perm()
-	bak, err := os.OpenFile(filepath.Join(dir, backupFile), os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	name, err := backupName(dir)
+	if err != nil {
+		return "", err
+	}
+	bak, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("%s already exists; move it aside, then run crew mission setup again", backupFile)
+			return "", fmt.Errorf("%s already exists; move it aside, then run crew mission setup again", name)
 		}
-		return err
+		return "", err
 	}
 	_, werr := bak.Write(orig)
 	if cerr := bak.Close(); werr == nil {
 		werr = cerr
 	}
 	if werr != nil {
-		return werr
+		return "", werr
 	}
 	tmp, err := os.CreateTemp(dir, harnessesFile+".tmp-*")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer os.Remove(tmp.Name())
 	if _, err := tmp.Write(out); err != nil {
 		tmp.Close()
-		return err
+		return "", err
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.Chmod(tmp.Name(), mode); err != nil {
-		return err
+		return "", err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return "", err
+	}
+	return name, nil
 }
 
 func harnessMap(doc *yaml.Node) *yaml.Node {
@@ -197,16 +203,21 @@ func mapEntry(m *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
 	return nil, nil
 }
 
-// upgradeHarness adds the missing missions keys of tn to h. It returns a
-// description of what it added, or a reason for leaving the harness alone.
+// upgradeHarness brings h up to date with tn, the template's harness, or only
+// renames its foreman: block when tn is nil. It returns a description of what
+// it did, or a reason for leaving the harness alone.
 func upgradeHarness(h, tn *yaml.Node) (added, skip string) {
-	needDenyVia := missingIn(h, tn, "headless", "deny_via")
-	needDeny := mapGet(tn, "deny") != nil && mapGet(h, "deny") == nil
-	needLaunch := missingIn(h, tn, "foreman", "orchestrator_launch")
-	needAllow := missingIn(h, tn, "foreman", "orchestrator_allow")
-	if !needDenyVia && !needDeny && !needLaunch && !needAllow {
+	if mapGet(h, foremanKey) != nil && mapGet(h, orchestratorKey) != nil {
+		return "", "has both foreman: and orchestrator:; remove foreman:"
+	}
+	if tn == nil {
+		if renameForeman(h, nil) {
+			return "foreman: renamed to orchestrator:", ""
+		}
 		return "", ""
 	}
+	needDenyVia := missingIn(h, tn, "headless", "deny_via")
+	needDeny := mapGet(tn, "deny") != nil && mapGet(h, "deny") == nil
 	tcmd := mapGet(mapGet(tn, "headless"), "command")
 	cmd := mapGet(mapGet(h, "headless"), "command")
 	lacksSettings := cmd == nil || !slices.Contains(scalars(cmd), settingsToken)
@@ -214,6 +225,15 @@ func upgradeHarness(h, tn *yaml.Node) (added, skip string) {
 		return "", "headless.command was changed by hand; add --settings {settings} to it, then run crew mission setup again"
 	}
 	var parts []string
+	if renameForeman(h, tn) {
+		parts = append(parts, "foreman: renamed to orchestrator:")
+	}
+	if what := addOrchestrator(h, tn); what != "" {
+		parts = append(parts, what)
+	}
+	if addCutoverAllow(h, tn) {
+		parts = append(parts, "allow rules for plain runs")
+	}
 	if needDeny {
 		k, v := mapEntry(tn, "deny")
 		mapAdd(h, "deny", k, v)
@@ -222,9 +242,6 @@ func upgradeHarness(h, tn *yaml.Node) (added, skip string) {
 	if needDenyVia {
 		upgradeHeadless(h, tn, lacksSettings)
 		parts = append(parts, "deny_via and {settings}")
-	}
-	if needLaunch || needAllow {
-		parts = append(parts, upgradeForeman(h, tn, needLaunch, needAllow))
 	}
 	return strings.Join(parts, ", "), ""
 }
@@ -259,30 +276,4 @@ func upgradeHeadless(h, tn *yaml.Node, replaceCommand bool) {
 	}
 	k, v := mapEntry(th, "deny_via")
 	mapAdd(hh, "deny_via", k, v)
-}
-
-func upgradeForeman(h, tn *yaml.Node, launch, allow bool) string {
-	tf := mapGet(tn, "foreman")
-	hf := mapGet(h, "foreman")
-	if hf == nil {
-		hf = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		k, _ := mapEntry(tn, "foreman")
-		mapAdd(h, "foreman", k, hf)
-	}
-	for _, add := range []struct {
-		key  string
-		need bool
-	}{{"orchestrator_launch", launch}, {"orchestrator_allow", allow}} {
-		if add.need {
-			k, v := mapEntry(tf, add.key)
-			mapAdd(hf, add.key, k, v)
-		}
-	}
-	if launch && allow {
-		return "orchestrator launch and allow list"
-	}
-	if launch {
-		return "orchestrator launch"
-	}
-	return "orchestrator allow list"
 }
