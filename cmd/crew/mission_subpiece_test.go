@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/crewfile-dev/crew/internal/mission"
+	"github.com/crewfile-dev/crew/internal/verify"
 )
 
 func TestMissionPlan_RefusesSubPieceIDs(t *testing.T) {
@@ -20,5 +21,12 @@ func TestMissionPlan_RefusesSubPieceIDs(t *testing.T) {
 	}
 	if list, _ := mission.List(r.root()); len(list) != 0 {
 		t.Fatalf("created %d missions", len(list))
+	}
+}
+
+func TestNewChecks_SetsTheOrchestratorHarness(t *testing.T) {
+	chk := newChecks(&verify.Project{}, mission.Settings{Harness: "claude-code"}, "acme/app")
+	if chk.in.OrchestratorHarness != "claude-code" {
+		t.Fatalf("OrchestratorHarness = %q", chk.in.OrchestratorHarness)
 	}
 }

@@ -2,6 +2,7 @@ package mission
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,12 +136,13 @@ func TestCheck_SubPieceIDForm(t *testing.T) {
 }
 
 func TestCheck_CircleThroughADelegatedPiece(t *testing.T) {
+	// the ancestor edge: P3 waits for P5, P5 waits for P3.1, and P3.1 inherits P3's wait for P5
 	m := edited(func(m *Mission) {
 		m.Pieces[5].WaitsFor = []string{"P5"}
 		m.Pieces[3].WaitsFor = []string{"P3.1"}
 	})
 	wantError(t, Check(m, delegatingInput(2)), "wait on each other")
-	// a sub-piece inherits its parent's waits: P3 waits for P5, P5 waits for P3
+	// a direct circle between a delegated piece and an outside piece
 	m = edited(func(m *Mission) {
 		m.Pieces[5].WaitsFor = []string{"P5"}
 		m.Pieces[3].WaitsFor = []string{"P3"}
@@ -148,6 +150,57 @@ func TestCheck_CircleThroughADelegatedPiece(t *testing.T) {
 	wantError(t, Check(m, delegatingInput(2)), "wait on each other")
 	// no circle without the cross waits
 	if errs := Check(treePlan(), delegatingInput(2)); len(errs) != 0 {
+		t.Fatalf("errs = %v", errs)
+	}
+}
+
+// A sub-piece inherits the waits of every ancestor, not only its parent's.
+func TestCheck_CircleThroughAGrandparentsWait(t *testing.T) {
+	in := delegatingInput(3)
+	m := acme()
+	m.Pieces[3].WaitsFor = []string{"P3.1.1"} // P5 waits for the deepest sub-piece
+	m.Pieces = append(m.Pieces,
+		Piece{ID: "P3", Domain: "design", Delegate: true, Brief: "b", Paths: []string{"design/**"}, WaitsFor: []string{"P5"}},
+		Piece{ID: "P3.1", Domain: "design", Delegate: true, Brief: "b", Paths: []string{"design/icons/**"}},
+		Piece{ID: "P3.1.1", Domain: "design", Factory: "visuals", Brief: "b", Paths: []string{"design/icons/a/**"}},
+	)
+	errs := Check(m, in)
+	wantError(t, errs, "P5 and P3.1.1 wait on each other")
+	if len(errs) != 1 {
+		t.Fatalf("errs = %v", errs)
+	}
+}
+
+// A delegated piece finishes after its children, so a child that waits for it
+// is a circle. Check also refuses that wait by the sub-piece rule; the circle
+// is named as well. No plan that passes every other rule makes a circle by
+// the children edge alone (every way out of a sub-piece leads through its
+// ancestors' waits, which the delegated piece already holds), so the edge is
+// also tested directly.
+func TestCheck_ChildrenEdgeMakesACircle(t *testing.T) {
+	m := edited(func(m *Mission) { m.Pieces[6].WaitsFor = []string{"P3"} })
+	errs := Check(m, delegatingInput(2))
+	wantError(t, errs, "P3, P3.1 and P3.2 wait on each other")
+	wantError(t, errs, `piece P3.1: waits_for "P3", which is not under P3`)
+}
+
+func TestTreeEdges_DelegatedPieceWaitsForItsChildren(t *testing.T) {
+	m := treePlan()
+	index := pieceIndex(m.Pieces)
+	if got := treeEdges(m.Pieces, index, index["P3"]); !slices.Equal(got, []int{index["P3.1"], index["P3.2"]}) {
+		t.Fatalf("edges of P3 = %v", got)
+	}
+	if got := treeEdges(m.Pieces, index, index["P3.1"]); len(got) != 0 {
+		t.Fatalf("edges of P3.1 = %v", got)
+	}
+}
+
+func TestCheck_ParentWithNoPathsLeavesSubPiecesFree(t *testing.T) {
+	in := delegatingInput(2)
+	in.Domains[2].Paths = nil
+	m := edited(func(m *Mission) { m.Pieces[5].Paths = nil })
+	// P3.1 has paths of its own, P3.2 has none: both are accepted
+	if errs := Check(m, in); len(errs) != 0 {
 		t.Fatalf("errs = %v", errs)
 	}
 }
