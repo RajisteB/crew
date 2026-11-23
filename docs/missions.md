@@ -289,7 +289,7 @@ Events:
 cursor 6
 ```
 
-The engine writes `resumed` every time it starts, the first time included. After the piece, an event names who acted when it wasn't the engine: `crew` for the go, `principal` for an answer or an amendment, `orchestrator` or `scoped orchestrator P2` for a decision (see "Delegation").
+The engine writes `resumed` every time it starts, the first time included. After the piece, an event names who acted when it wasn't the engine: `crew` for something a `crew mission` command did (the go, a stop), `principal` for an answer or an amendment, `orchestrator` or `scoped orchestrator P2` for a decision (see "Delegation").
 
 The Jira line gives the epic and its address. When the board is behind, it also says how many writes haven't been sent yet. `crew mission status` makes no call to Jira and needs no credentials:
 
@@ -449,9 +449,9 @@ The split as a whole must also pass the checks a plan passes: the `pieces` limit
 ```
   8  10:04:31  decision  P2.1  scoped orchestrator P2  escalate : the brief doesn't say which layout
   9  10:04:31  escalated  P2.1  scoped orchestrator P2  Which layout does the billing page use?
- 10  10:04:58  exception  P2.1  failed
- 11  10:04:58  decision  P2.1  orchestrator  escalate : the request doesn't say either
- 12  10:04:58  escalated  P2.1  orchestrator  Which layout does the billing page use?
+  10  10:04:58  exception  P2.1  failed
+  11  10:04:58  decision  P2.1  orchestrator  escalate : the request doesn't say either
+  12  10:04:58  escalated  P2.1  orchestrator  Which layout does the billing page use?
 ```
 
 **The `plan` wait.** When the calls for planning are used up, status shows a `plan` wait on the delegated piece, with the last reason, or with the orchestrator's question. The piece waits (it is not queued while the wait is open) and the mission goes on with anything else it can. You can answer:
@@ -461,13 +461,13 @@ The split as a whole must also pass the checks a plan passes: the `pieces` limit
 
 Or change the piece with `crew mission amend`: a new brief, or a `waits_for` naming a piece it needs first. An amendment clears the wait, gives the piece a fresh set of calls and puts it back in the queue.
 
-**What an amendment can and can't do.** Write an amendment from the current `mission.md`, which holds the sub-pieces crew added: keep each one as it is, with its `P2.n` id, and never add an id with a `.`, since crew names every sub-piece. It can re-brief or change a sub-piece that hasn't started. Leaving out a sub-piece that isn't complete while naming others under the same delegated piece cancels it, whether or not it is running (its run is stopped). A plan that keeps a planned delegated piece and names no piece under it at all (one written from the plan as it was before the split, say) keeps all of them as they stand: crew logs `kept P2.1, P2.2 under P2: the amendment named no piece under it`. Before it queues, `crew mission amend` prints what the amendment will do, one line per change:
+**What an amendment can and can't do.** Write an amendment from the current `mission.md`, which holds the sub-pieces crew added: keep each one as it is, with its `P2.n` id, and never add an id with a `.`, since crew names every sub-piece. It can re-brief or change a sub-piece that hasn't started. Leaving out a sub-piece that isn't complete while naming others under the same delegated piece cancels it, whether or not it is running (its run is stopped). A plan that keeps a planned delegated piece and names no piece under it at all (one written from the plan as it was before the split, say) keeps all of them as they stand: crew logs `kept P2.1, P2.2 under P2: the amendment named no piece under it`. `crew mission amend` prints what the amendment will do as the mission stands now, one line per change, and then that it is queued. It doesn't ask first: read the lines, and send another amendment if one of them isn't what you meant. If the mission changes before the engine applies the amendment (a delegated piece is planned in between, say), the change log has what was done.
 
 ```
-will cancel P3.2 (running)
 will re-brief P4
 will change P4: waits_for changed
 will add P5
+will cancel P3.2 (running)
 keeps P2.1, P2.2 under P2: the plan named no piece under it
 queued; applied on the next tick
 ```
@@ -703,7 +703,7 @@ crew checks the new plan against the old one first and refuses it, changing noth
 - A new piece reuses an id that was used before in this mission, even one that was cancelled.
 - The new plan fails the same checks `plan` runs.
 
-What an amendment may do: add pieces (not sub-pieces: crew names those, and an amendment keeps the ones in the current plan; see "Delegation"), change a queued piece (its brief, its domain, its factory, its paths, what it waits for), and remove any piece that isn't complete, which cancels it. `crew mission amend` prints what it will cancel, re-brief, change and add before it queues the amendment. Every change goes in the mission's change log with your words.
+What an amendment may do: add pieces (not sub-pieces: crew names those, and an amendment keeps the ones in the current plan; see "Delegation"), change a queued piece (its brief, its domain, its factory, its paths, what it waits for), and remove any piece that isn't complete, which cancels it. `crew mission amend` prints what the amendment will cancel, re-brief, change and add as the mission stands now, and queues it. Every change goes in the mission's change log with your words.
 
 ## Stop and resume
 
