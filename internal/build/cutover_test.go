@@ -29,7 +29,7 @@ func TestPlan_WritesNoForemen(t *testing.T) {
 func TestPlan_NoteWhenAHarnessGetsNoOrchestrator(t *testing.T) {
 	dir, out := setup(t)
 	edit(t, filepath.Join(dir, "crew.yaml"), "  codex:\n    enabled: false", "  codex:\n    enabled: true")
-	for _, a := range []string{"code-explorer", "epic-planner", "spike-researcher", "ticket-worker"} {
+	for _, a := range []string{"change-reviewer", "code-explorer", "epic-planner", "spike-researcher", "ticket-worker"} {
 		edit(t, filepath.Join(dir, "agents", a+".md"), "per_harness:\n", "per_harness:\n  codex: {model: gpt-6-luna, effort: low}\n")
 	}
 	_, notes := planFilesAllowWarnings(t, dir, build.Opts{Out: out})

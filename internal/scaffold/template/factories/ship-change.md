@@ -15,7 +15,7 @@ stations:
       done: review
       replan: {to: plan, max: 2}
   review:
-    agent: code-explorer
+    agent: change-reviewer
     approve: true               # pause after review so you can accept or redirect
     routes:
       pass: done

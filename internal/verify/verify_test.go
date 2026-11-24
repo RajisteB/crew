@@ -150,7 +150,7 @@ func TestModelsFileOptionalWithoutCatalogs(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(dir, "harnesses.yaml"))
 	noCat := regexp.MustCompile(`(?m)^    catalog:\n(?:      .*\n)+`).ReplaceAllString(string(b), "")
 	os.WriteFile(filepath.Join(dir, "harnesses.yaml"), []byte(noCat), 0o644)
-	for _, a := range []string{"code-explorer", "epic-planner", "proposal-writer", "spike-researcher", "ticket-worker"} {
+	for _, a := range []string{"change-reviewer", "code-explorer", "epic-planner", "proposal-writer", "spike-researcher", "ticket-worker"} {
 		path := filepath.Join(dir, "agents", a+".md")
 		ab, _ := os.ReadFile(path)
 		out := regexp.MustCompile(`(?m)^model: .*\neffort: .*\nper_harness:\n  .*\n`).ReplaceAllString(string(ab), "model: inherit\n")

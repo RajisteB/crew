@@ -12,6 +12,7 @@ Write each agent and skill once, as harness-agnostic Markdown: one file per agen
 ├── crew.yaml                 choices: which harnesses are on, which agents each gets
 ├── agents/                   one file per agent
 │   ├── ticket-worker.md
+│   ├── change-reviewer.md
 │   └── code-explorer.md
 ├── skills/                   one folder per skill, linked into every harness
 │   └── pr-description/
@@ -80,7 +81,7 @@ stations:
       done: review
       replan: {to: plan, max: 2}
   review:
-    agent: code-explorer
+    agent: change-reviewer
     approve: true               # pause after review so you can accept or redirect
     routes:
       pass: done
@@ -101,7 +102,7 @@ flowchart LR
   start(( )) --> s_plan
   s_plan("plan<br/><small>epic-planner</small>")
   s_build("build<br/><small>ticket-worker</small>")
-  s_review{{"review<br/><small>code-explorer</small>"}}
+  s_review{{"review<br/><small>change-reviewer</small>"}}
   t_done(["done"])
   s_plan -->|"ready"| s_build
   s_build -->|"done"| s_review
