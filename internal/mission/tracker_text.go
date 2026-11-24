@@ -39,7 +39,7 @@ func TrackerLabel(missionID, piece string) string {
 
 // EpicText is the summary and body of the mission's epic.
 func EpicText(missionID string, m Mission) (summary, body string) {
-	return cut(firstLine(m.Request), maxSummaryRunes), cutBody("Mission " + missionID + "\n\n" + m.Request)
+	return cutWords(firstLine(m.Request), maxSummaryRunes), cutBody("Mission " + missionID + "\n\n" + m.Request)
 }
 
 // IssueText is the summary and body of a piece's issue.
@@ -48,7 +48,7 @@ func IssueText(missionID string, m Mission, p Piece) (summary, body string) {
 	if len(p.WaitsFor) > 0 {
 		waits = strings.Join(p.WaitsFor, ", ")
 	}
-	summary = cut(p.ID+": "+firstLine(p.Brief), maxSummaryRunes)
+	summary = cutWords(p.ID+": "+firstLine(p.Brief), maxSummaryRunes)
 	factory := p.Factory
 	if p.Delegate {
 		factory = "none (delegated: its pieces are planned when it is ready)"
@@ -106,4 +106,29 @@ func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 		return "", "", false
 	}
 	return piece, cut(text, maxCommentRunes), true
+}
+
+// cutWords shortens text to at most n runes. When it cuts, it backs up to the
+// last space (if that is in the second half), drops trailing space and
+// punctuation, and ends with an ellipsis.
+func cutWords(text string, n int) string {
+	r := []rune(text)
+	if len(r) <= n {
+		return text
+	}
+	head := r[:n-1]
+	if i := lastSpace(head); i >= n/2 {
+		head = head[:i]
+	}
+	return strings.TrimRight(string(head), " ,;:") + "…"
+}
+
+// lastSpace is the rune index of the last space in r, or -1.
+func lastSpace(r []rune) int {
+	for i := len(r) - 1; i >= 0; i-- {
+		if r[i] == ' ' {
+			return i
+		}
+	}
+	return -1
 }
