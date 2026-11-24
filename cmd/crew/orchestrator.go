@@ -57,7 +57,7 @@ func planOrchestrator(p *verify.Project, harness string, extra []string, o build
 		}
 	}
 	argv, ok := build.OrchestratorArgv(p, hn, o)
-	if !ok {
+	if !ok || !slices.Contains(p.Enabled, hn) {
 		return orchestratorPlan{}, fmt.Errorf("%s has no orchestrator (see the notes from crew compile)", hn)
 	}
 	if _, err := os.Stat(build.OrchestratorSettingsPath(p, hn, o)); err != nil {

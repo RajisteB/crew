@@ -165,3 +165,15 @@ func TestCLI_OrchestratorPrintAndNotCompiled(t *testing.T) {
 		t.Fatalf("print: code %d\n%s", code, out)
 	}
 }
+
+func TestPlanOrchestrator_HarnessThatIsNotEnabled(t *testing.T) {
+	dir := compiledDir(t)
+	p, _ := verify.Run(dir)
+	off := *p
+	off.Enabled = slices.DeleteFunc(slices.Clone(p.Enabled), func(hn string) bool { return hn == "claude-code" })
+	_, err := planOrchestrator(&off, "claude-code", nil, build.Opts{})
+	want := "claude-code has no orchestrator (see the notes from crew compile)"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
