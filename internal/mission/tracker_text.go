@@ -3,6 +3,7 @@ package mission
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -111,16 +112,24 @@ func TrackerComment(ev Event, s State) (piece, text string, ok bool) {
 // cutWords shortens text to at most n runes. When it cuts, it backs up to the
 // last space (if that is in the second half), drops trailing space and
 // punctuation, and ends with an ellipsis.
-func cutWords(text string, n int) string {
+func cutWords(text string, n int) string { return cutAtWord(text, n, "…") }
+
+// cutTitle is cutWords without the ellipsis, for a pull request title: GitHub
+// uses it as the subject of a squash commit, where a trailing mark would stay.
+func cutTitle(text string, n int) string { return cutAtWord(text, n, "") }
+
+// cutAtWord is the shared cut. The mark counts against the n runes.
+func cutAtWord(text string, n int, mark string) string {
 	r := []rune(text)
 	if len(r) <= n {
 		return text
 	}
-	head := r[:n-1]
+	keep := n - utf8.RuneCountInString(mark)
+	head := r[:keep]
 	if i := lastSpace(head); i >= n/2 {
 		head = head[:i]
 	}
-	return strings.TrimRight(string(head), " ,;:.") + "…"
+	return strings.TrimRight(string(head), " ,;:.") + mark
 }
 
 // lastSpace is the rune index of the last space in r, or -1.
