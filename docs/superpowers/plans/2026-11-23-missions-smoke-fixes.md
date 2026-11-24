@@ -19,10 +19,10 @@
 - The repository is public. Committed files, tests and docs use only made-up names: `acme/app`, `ACME`, `https://example.atlassian.net`. No real person, account, site or email.
 - Nothing is ever deleted on GitHub by crew. No task may add a remote delete, a pull request close or any new write to GitHub.
 - Docs and messages are plain words, short sentences, no em dashes in new prose, straight quotes.
-- One commit per task, conventional format (`fix:`, `feat:`, `docs:`, `test:`), ending with these two trailer lines exactly:
+- One commit per task, conventional format (`fix:`, `feat:`, `docs:`, `test:`), ending with two trailer lines: a `Co-Authored-By` line that names the model that wrote the commit (the one your session's attribution reminder gives), then the session line. For a Sonnet implementer:
 
   ```
-  Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+  Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01L1o92TnCABZyZodEGzW9mc
   ```
 
