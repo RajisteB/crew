@@ -77,13 +77,14 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	pending := st.Pending
 	st, _, err = run.Approve(fac, st, f.gotoStation)
 	if err != nil {
 		return err
 	}
+	note := ""
 	if f.note != "" {
-		note, err := textArg("--note", f.note, f.stdin)
-		if err != nil {
+		if note, err = textArg("--note", f.note, f.stdin); err != nil {
 			return err
 		}
 		if err := store.AppendInbox(note); err != nil {
@@ -93,6 +94,11 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 	if err := store.SaveState(st); err != nil {
 		return err
 	}
+	ev, err := store.Emit(run.ApprovedEvent(*pending, f.gotoStation, note))
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, run.FormatEvent(ev))
 	return continueRun(id, f, out)
 }
 

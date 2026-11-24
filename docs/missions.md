@@ -879,7 +879,7 @@ A plain run works in your main checkout, and crew does not check it against the 
 Three commands need your confirmation:
 
 - Starting a run. There is no `ask` rule for it, since no single prefix names it, so the session asks only when no other Claude Code setting allows it and the session is in a mode that asks. Answer it with a one-time yes, not "don't ask again".
-- `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop.
+- `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop. An approval is recorded in the run's events with the note you gave.
 - `crew run goto`. It moves the work to another station, and so it can step past an approval stop the same way `approve` does.
 
 For `approve` and `goto`, a `harnesses.yaml` set up by this version makes the confirmation hold: crew writes `ask` rules for both into the orchestrator's settings file, and Claude Code checks `ask` rules before `allow` rules across all its settings files, so the session asks you even when another setting allows them. A session started with permission checks bypassed asks about nothing. A file that still says `foreman:` gets no `ask` rules until you run `crew mission setup`.

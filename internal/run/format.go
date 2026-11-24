@@ -30,6 +30,12 @@ func FormatEvent(ev Event) string {
 		return fmt.Sprintf("%s ⚠ %s; sending work to %s", ts, ev.Msg, ev.Station)
 	case EvApproval:
 		return fmt.Sprintf("%s ⏸ waiting for approval: %s", ts, ev.Msg)
+	case EvApproved:
+		line := fmt.Sprintf("%s ✔ approved %s's %s", ts, ev.Station, ev.Route)
+		if ev.Msg != "" {
+			line += ": " + ev.Msg
+		}
+		return line
 	case EvMessage:
 		return fmt.Sprintf("%s ✉ message delivered to %s: %s", ts, ev.Station, ev.Msg)
 	case EvGoto:

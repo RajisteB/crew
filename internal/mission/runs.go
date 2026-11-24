@@ -269,11 +269,16 @@ func applyStep(fac source.Factory, st run.State, store run.Store, s RunStep) (ru
 		}
 		return next, queueNote(store, s.Note)
 	case "approve":
+		pending := st.Pending
 		next, _, err := run.Approve(fac, st, s.Station)
 		if err != nil {
 			return st, err
 		}
-		return next, queueNote(store, s.Note)
+		if err := queueNote(store, s.Note); err != nil {
+			return st, err
+		}
+		_, err = store.Emit(run.ApprovedEvent(*pending, s.Station, s.Note))
+		return next, err
 	}
 	return st, fmt.Errorf("unknown step kind %q", s.Kind)
 }

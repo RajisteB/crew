@@ -75,6 +75,11 @@ func Approve(f source.Factory, s State, gotoStation string) (State, Decision, er
 		return c, Decision{Kind: RunStation, Station: gotoStation}, nil
 	}
 	next, d := moveTo(c, f.Stations[p.Station].Routes[p.Route].To, p.Verdict.Summary)
+	if d.Kind == Finished {
+		// The run is done before the engine sees it again; keep the reason
+		// so the done event can say why.
+		next.Reason = d.Reason
+	}
 	return next, d, nil
 }
 
@@ -146,7 +151,7 @@ func Resume(f source.Factory, s State) (State, Decision) {
 	case c.Status == StatusAwaitingApproval:
 		return c, Decision{Kind: AwaitApproval, Station: c.Current}
 	case c.Status == StatusDone:
-		return c, Decision{Kind: Finished}
+		return c, Decision{Kind: Finished, Reason: c.Reason}
 	case c.Status == StatusFailed && !c.Retryable:
 		return c, Decision{Kind: Failed, Reason: c.Reason}
 	case c.Status == StatusInterrupted || c.Status == StatusFailed || c.InStation:

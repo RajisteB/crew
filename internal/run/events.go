@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -19,6 +20,7 @@ const (
 	EvNote        = "note"
 	EvDrift       = "drift"
 	EvApproval    = "approval"
+	EvApproved    = "approved"
 	EvInterrupted = "interrupted"
 	EvDone        = "done"
 	EvFailed      = "failed"
@@ -37,6 +39,25 @@ type Event struct {
 	Msg     string    `json:"msg,omitempty"`
 	Count   int       `json:"count,omitempty"`
 	Max     string    `json:"max,omitempty"`
+}
+
+// maxApprovalNote bounds the note an approval event carries.
+const maxApprovalNote = 500
+
+// ApprovedEvent describes an approval of p: where it was sent, if anywhere
+// other than along its route, and the note given with it.
+func ApprovedEvent(p Pending, gotoStation, note string) Event {
+	var parts []string
+	if gotoStation != "" {
+		parts = append(parts, "sent to "+gotoStation)
+	}
+	if note != "" {
+		if r := []rune(note); len(r) > maxApprovalNote {
+			note = string(r[:maxApprovalNote])
+		}
+		parts = append(parts, note)
+	}
+	return Event{Kind: EvApproved, Station: p.Station, Route: p.Route, Msg: strings.Join(parts, ": ")}
 }
 
 // Emit appends e with the next sequence number. An flock on events.lock keeps
