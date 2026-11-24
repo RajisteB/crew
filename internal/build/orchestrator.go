@@ -61,20 +61,59 @@ func orchestratorSettingsPath(crewDir, hn string, o Opts) string {
 	return filepath.Join(BuildDir(crewDir, o), hn, "agents", orchestratorSettingsFile)
 }
 
+// orchestratorHost reports the harness, the absolute crew directory and the
+// absolute settings path for hn, or false when the harness doesn't get an
+// orchestrator.
+func orchestratorHost(p *verify.Project, hn string, o Opts) (config.Harness, string, bool) {
+	h := p.Registry.Harnesses[hn]
+	if !canHostOrchestrator(h) {
+		return h, "", false
+	}
+	crewDir, err := filepath.Abs(p.Dir)
+	if err != nil {
+		return h, "", false
+	}
+	return h, orchestratorSettingsPath(crewDir, hn, o), true
+}
+
+// OrchestratorSettingsPath is the absolute path of the settings file that
+// crew compile writes for the orchestrator on harness hn. It is empty when the
+// harness doesn't get an orchestrator.
+func OrchestratorSettingsPath(p *verify.Project, hn string, o Opts) string {
+	_, path, _ := orchestratorHost(p, hn, o)
+	return path
+}
+
 // OrchestratorLaunch is the line that starts the orchestrator on harness hn,
 // with the agent name and the absolute settings path filled in. It reports
 // false when the harness doesn't get an orchestrator.
 func OrchestratorLaunch(p *verify.Project, hn string, o Opts) (string, bool) {
-	h := p.Registry.Harnesses[hn]
-	if !canHostOrchestrator(h) {
-		return "", false
-	}
-	crewDir, err := filepath.Abs(p.Dir)
-	if err != nil {
+	h, settings, ok := orchestratorHost(p, hn, o)
+	if !ok {
 		return "", false
 	}
 	line := strings.ReplaceAll(h.Orchestrator.Launch, "{name}", mission.OrchestratorName)
-	return strings.ReplaceAll(line, "{settings}", shellQuote(orchestratorSettingsPath(crewDir, hn, o))), true
+	return strings.ReplaceAll(line, "{settings}", shellQuote(settings)), true
+}
+
+// OrchestratorArgv is the command that starts the orchestrator on harness hn,
+// as separate arguments (no shell quoting). It reports false when the harness
+// doesn't get an orchestrator.
+func OrchestratorArgv(p *verify.Project, hn string, o Opts) ([]string, bool) {
+	h, settings, ok := orchestratorHost(p, hn, o)
+	if !ok {
+		return nil, false
+	}
+	words := strings.Fields(h.Orchestrator.Launch)
+	if len(words) == 0 {
+		return nil, false
+	}
+	argv := make([]string, len(words))
+	for i, w := range words {
+		w = strings.ReplaceAll(w, "{name}", mission.OrchestratorName)
+		argv[i] = strings.ReplaceAll(w, "{settings}", settings)
+	}
+	return argv, true
 }
 
 // shellQuote single-quotes s unless it only has characters a shell leaves alone.

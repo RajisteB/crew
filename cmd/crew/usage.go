@@ -18,6 +18,7 @@ Usage:
   crew automerge on|off|status           set auto-merge per domain (in a terminal), or show it
   crew jira setup|check|sync             show missions on a Jira board (setup needs a terminal)
   crew mission setup|plan|start|go|status|answer|amend|stop|resume   run a mission (see crew mission)
+  crew orchestrator [--harness H] [--print]   start the orchestrator in this directory (--print shows the command instead)
   crew migrate  [--from ~/crewfile] [--to ~/crew] [--dry-run]
                                          move an old crewfile setup to crew's names
 

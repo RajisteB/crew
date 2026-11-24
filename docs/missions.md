@@ -183,7 +183,7 @@ claude-code:
   orchestrator: claude --agent orchestrator --settings /home/you/crew/build/claude-code/agents/orchestrator.settings.json
 ```
 
-Run that line in a terminal inside the repo you want to work on. The `--settings` file carries the deny rules and the allowed tools. If you start the orchestrator any other way, for example `claude --agent orchestrator`, the session has only its tool list and its prompt, with no deny rules. Use the printed line.
+Run that line in a terminal inside the repo you want to work on. `crew orchestrator`, run in that directory, does the same thing, and `crew orchestrator --print` shows the line without starting anything. Arguments after `--` go to the harness as they are. The `--settings` file carries the deny rules and the allowed tools. If you start the orchestrator any other way, for example `claude --agent orchestrator`, the session has only its tool list and its prompt, with no deny rules. Use `crew orchestrator` or the printed line.
 
 The same session starts plain runs (see "Plain runs").
 

@@ -85,6 +85,17 @@ func main() {
 		}
 		return
 	}
+	if cmd == "orchestrator" {
+		err := orchestratorCmd(os.Args[2:], os.Stdout, execOrchestrator)
+		var ue usageError
+		if errors.As(err, &ue) {
+			fail(2, "%s", ue.msg)
+		}
+		if err != nil {
+			fail(1, "%v", err)
+		}
+		return
+	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	var f flags
 	fs.StringVar(&f.dir, "dir", "", "crew directory")
@@ -251,11 +262,13 @@ func printOrchestrator(w io.Writer, hn string, p *verify.Project, o build.Opts) 
 }
 
 // printLaunches prints, for each enabled harness that gets an orchestrator,
-// the line that starts it. verify and compile use it.
+// the line that starts it and the short command that does the same. verify
+// and compile use it.
 func printLaunches(w io.Writer, p *verify.Project, o build.Opts) {
+	def := defaultOrchestratorHarness(p, o)
 	for _, hn := range p.Enabled {
 		if line, ok := build.OrchestratorLaunch(p, hn, o); ok {
-			fmt.Fprintf(w, "%s:\n  orchestrator: %s\n", hn, line)
+			fmt.Fprintf(w, "%s:\n  orchestrator: %s\n  or, in a project directory: %s\n", hn, line, orchestratorHint(hn, def))
 		}
 	}
 }
