@@ -2,6 +2,8 @@ package mission
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -92,5 +94,73 @@ func TestEngine_DecidedEventsWaitForTheSavedState(t *testing.T) {
 	}
 	if got := h.kinds(); len(got) <= before {
 		t.Fatalf("no events after the tick: %v", got)
+	}
+}
+
+func TestPerform_NotificationAfterAHeldRecordIsHeldToo(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	tk := heldTick(t, h)
+	tk.unsaved = true
+	if err := tk.perform([]Action{
+		Record{Event: Event{Kind: EvWaitingOnPrincipal}},
+		Notify{Body: "p1 waits"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.kinds(); len(got) != 0 {
+		t.Fatalf("events before save = %v", got)
+	}
+	if err := tk.save(); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.kinds(); !slices.Equal(got, []string{EvWaitingOnPrincipal, EvNotified}) {
+		t.Fatalf("events after save = %v", got)
+	}
+}
+
+// An exception comes from an effect that does not save first; it must not
+// jump ahead of the decided events before it.
+func TestPerform_ExceptionKeepsItsPlaceAfterHeldEvents(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	runID := h.runPiece("P1")
+	h.runs.setRun(runID, limitHit(), false)
+	h.runs.summary = limitHit()
+	h.orch.decisions = []OrchDecision{{Action: "goto", Station: "plan", Reason: "bad plan"}}
+	tk := heldTick(t, h)
+	tk.unsaved = true
+	if err := tk.perform([]Action{
+		Record{Event: Event{Kind: EvWaitingOnPrincipal, Piece: "P0"}},
+		Notify{Body: "p0 waits"},
+		AskOrchestrator{Piece: "P1", Failure: "limit"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{EvWaitingOnPrincipal, EvNotified, EvException, EvDecision}
+	if got := h.kinds(); !slices.Equal(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+}
+
+func TestPerform_HeldEventsAreDroppedWhenPerformFailsBeforeASave(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	tk := heldTick(t, h)
+	tk.unsaved = true
+	// A directory where state.json goes makes the effect's save fail.
+	statePath := filepath.Join(h.store.Dir, "state.json")
+	if err := os.Remove(statePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(statePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := tk.perform([]Action{
+		Record{Event: Event{Kind: EvDecision}},
+		StartPiece{Piece: "P1"},
+	})
+	if err == nil {
+		t.Fatal("want the save to fail")
+	}
+	if got := h.kinds(); len(got) != 0 {
+		t.Fatalf("events = %v", got)
 	}
 }

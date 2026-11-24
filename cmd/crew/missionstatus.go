@@ -63,7 +63,18 @@ func deadEngineSuffix(env missionEnv, st mission.State) string {
 }
 
 func missionStatus(env missionEnv, id string) error {
-	store, st, err := openMission(env, id)
+	store, err := mission.Open(env.repoRoot, id)
+	if err != nil {
+		return err
+	}
+	// Events first, then the state: the engine saves the state before it
+	// writes the events that describe it, so a state read after the events is
+	// at least as new as they are.
+	events, err := store.EventsSince(0)
+	if err != nil {
+		return err
+	}
+	st, err := store.LoadState()
 	if err != nil {
 		return err
 	}
@@ -91,7 +102,7 @@ func missionStatus(env missionEnv, id string) error {
 	printQueued(out, m, st, readyText(env, st))
 	printEnded(out, "Complete", st, mission.PieceComplete)
 	printEnded(out, "Cancelled", st, mission.PieceCancelled)
-	return printEvents(out, store, env.flags.since)
+	return printEvents(out, events, env.flags.since)
 }
 
 func section(out io.Writer, title string, lines []string) {
@@ -204,11 +215,7 @@ func printEnded(out io.Writer, title string, st mission.State, status mission.Pi
 	}
 }
 
-func printEvents(out io.Writer, store mission.Store, since int) error {
-	all, err := store.EventsSince(0)
-	if err != nil {
-		return err
-	}
+func printEvents(out io.Writer, all []mission.Event, since int) error {
 	cursor, shown := 0, all
 	if n := len(all); n > 0 {
 		cursor = all[n-1].Seq

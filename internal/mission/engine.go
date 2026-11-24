@@ -176,7 +176,7 @@ func (t *tick) save() error {
 		return err
 	}
 	// Events decided with this state go out only now that it is on disk, so
-	// the status never shows events ahead of the state.
+	// events are never written ahead of the state.
 	t.unsaved = false
 	held := t.held
 	t.held = nil
@@ -184,6 +184,16 @@ func (t *tick) save() error {
 		t.emit(ev)
 	}
 	return nil
+}
+
+// emitInOrder appends an event that follows events still held, so the log
+// keeps the order of the actions. With nothing held it is written at once.
+func (t *tick) emitInOrder(ev Event) {
+	if len(t.held) > 0 {
+		t.held = append(t.held, ev)
+		return
+	}
+	t.emit(ev)
 }
 
 // adopt takes a new mission and state produced by a state-machine function.

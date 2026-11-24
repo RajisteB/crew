@@ -253,7 +253,7 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again
 	}
-	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
+	t.emitInOrder(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	if err != nil {
 		d = OrchDecision{Reason: err.Error()}
 	}
@@ -302,13 +302,7 @@ func (t *tick) notify(a Notify) {
 		t.note("", "can't notify: %v", err)
 		return
 	}
-	ev := Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)}
-	if len(t.held) > 0 {
-		// It follows events that are still held; keep the log in action order.
-		t.held = append(t.held, ev)
-		return
-	}
-	t.emit(ev)
+	t.emitInOrder(Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)})
 }
 
 func (t *tick) cleanup(a Cleanup) {

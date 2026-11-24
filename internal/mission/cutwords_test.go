@@ -68,7 +68,7 @@ func TestCutTitle(t *testing.T) {
 		{"drops trailing punctuation", strings.Repeat("a", 60) + ", bbbbbbbbbbbbbbbbbbbb", strings.Repeat("a", 60)},
 		{"one long word is cut hard", strings.Repeat("x", 90), strings.Repeat("x", 70)},
 		{"space in the first half is ignored", "ab " + strings.Repeat("c", 80), "ab " + strings.Repeat("c", 67)},
-		{"wide runes", strings.Repeat("é", 80), strings.Repeat("é", 70)},
+		{"multi-byte runes", strings.Repeat("é", 80), strings.Repeat("é", 70)},
 	}
 	for _, tc := range tests {
 		got := cutTitle(tc.in, maxTitleRunes)
