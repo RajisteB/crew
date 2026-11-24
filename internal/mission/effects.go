@@ -306,15 +306,20 @@ func (t *tick) cleanup(a Cleanup) {
 	if !ok {
 		return
 	}
-	t.removeWorktree(ps, a.Force)
+	if !t.removeWorktree(ps, a.Force) || !a.Merged || ps.Branch == "" {
+		return
+	}
+	if err := t.e.Git.DeleteBranch(t.ctx, ps.Branch); err != nil {
+		t.note(ps.ID, "can't delete the local branch %s: %v", ps.Branch, err)
+	}
 }
 
 // removeWorktree removes the piece's worktree and records that it is gone.
 // A failure is a note; the worktree stays recorded so removal is retried
-// when the loop starts again.
-func (t *tick) removeWorktree(ps PieceState, force bool) {
+// when the loop starts again. It reports whether the worktree is gone.
+func (t *tick) removeWorktree(ps PieceState, force bool) bool {
 	if ps.Worktree == "" {
-		return
+		return true
 	}
 	if err := t.e.Git.RemoveWorktree(t.ctx, ps.Worktree, force); err != nil {
 		if force {
@@ -322,12 +327,13 @@ func (t *tick) removeWorktree(ps PieceState, force bool) {
 		} else {
 			t.note(ps.ID, "%s: worktree left at %s (uncommitted work); remove it by hand when done", ps.ID, ps.Worktree)
 		}
-		return
+		return false
 	}
 	t.s = CleanedUp(t.s, ps.ID)
 	if err := t.save(); err != nil {
 		fmt.Fprintf(t.e.out(), "mission %s: can't save state: %v\n", t.s.MissionID, err)
 	}
+	return true
 }
 
 // retryCleanups removes the worktrees of finished pieces that still have

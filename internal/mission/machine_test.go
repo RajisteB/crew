@@ -132,7 +132,7 @@ func TestDecide_DoneNoCommitsCompletes(t *testing.T) {
 	if piece(t, ns, "P1").Status != PieceComplete {
 		t.Fatalf("want complete, got %s", piece(t, ns, "P1").Status)
 	}
-	if len(of[Cleanup](as)) != 1 || !hasKind(as, EvPieceComplete) {
+	if cl := of[Cleanup](as); len(cl) != 1 || cl[0].Merged || !hasKind(as, EvPieceComplete) {
 		t.Fatalf("want Cleanup and piece-complete, got %+v", as)
 	}
 	if !hasKind(as, EvMissionDone) || ns.Status != StatusDone {

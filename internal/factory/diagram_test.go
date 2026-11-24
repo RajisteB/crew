@@ -13,7 +13,7 @@ const shipChangeMermaid = `flowchart LR
   start(( )) --> s_plan
   s_plan("plan<br/><small>epic-planner</small>")
   s_build("build<br/><small>ticket-worker</small>")
-  s_review{{"review<br/><small>code-explorer</small>"}}
+  s_review{{"review<br/><small>change-reviewer</small>"}}
   t_done(["done"])
   s_plan -->|"ready"| s_build
   s_build -->|"done"| s_review

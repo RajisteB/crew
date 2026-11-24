@@ -388,3 +388,34 @@ func TestMergeInto_OtherFailureIsAnErrorAndLeavesNoMerge(t *testing.T) {
 		t.Fatal("expected error for ref starting with -")
 	}
 }
+
+func TestDeleteBranch_RemovesCrewBranchAndIsIdempotent(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "branch", "crew/m1/P1")
+	if err := repo.DeleteBranch(ctx, "crew/m1/P1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := run(t, repo.Dir, "branch", "--list", "crew/m1/P1"); got != "" {
+		t.Fatalf("branch still there: %q", got)
+	}
+	if err := repo.DeleteBranch(ctx, "crew/m1/P1"); err != nil {
+		t.Fatalf("second delete: %v", err)
+	}
+}
+
+func TestDeleteBranch_RefusesNonCrewBranch(t *testing.T) {
+	repo, _ := newRepo(t)
+	run(t, repo.Dir, "branch", "feature/x")
+	for _, b := range []string{"main", "feature/x"} {
+		err := repo.DeleteBranch(ctx, b)
+		if err == nil || !strings.Contains(err.Error(), "not a crew branch") {
+			t.Fatalf("%s: err = %v", b, err)
+		}
+		if got := run(t, repo.Dir, "branch", "--list", b); got == "" {
+			t.Fatalf("%s was deleted", b)
+		}
+	}
+	if err := repo.DeleteBranch(ctx, "-D"); err == nil {
+		t.Fatal("expected error for dash branch")
+	}
+}

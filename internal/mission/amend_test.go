@@ -98,7 +98,7 @@ func TestAmend_RemovingRunningPieceStopsIt(t *testing.T) {
 	if len(steps) != 1 || steps[0] != (RunStep{Piece: "P1", Kind: "stop"}) {
 		t.Fatalf("steps = %v", steps)
 	}
-	if c := of[Cleanup](as); len(c) != 1 || c[0].Piece != "P1" || c[0].Force {
+	if c := of[Cleanup](as); len(c) != 1 || c[0].Piece != "P1" || c[0].Force || c[0].Merged {
 		t.Fatalf("cleanups = %v", c)
 	}
 	if piece(t, s, "P2").Status != PieceCancelled || len(m.Pieces) != 2 || len(s.Pieces) != 5 {

@@ -298,3 +298,13 @@ func TestDecide_MergeWaitNotifySaysWhy(t *testing.T) {
 		t.Fatalf("notifies = %#v", n)
 	}
 }
+
+func TestDecide_MergedPRCleansUpAndDeletesBranch(t *testing.T) {
+	m, s, o := prCase(time.Minute, principal.AutoOn, chk("pass"))
+	o = withPR(o, func(p *gh.PR) { p.State = "MERGED" })
+	_, as := decide(m, s, o)
+	want := Cleanup{Piece: "a", Force: true, Merged: true}
+	if cl := of[Cleanup](as); len(cl) != 1 || cl[0] != want {
+		t.Fatalf("cleanup = %+v", cl)
+	}
+}

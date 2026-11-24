@@ -73,6 +73,9 @@ type Notify struct{ Title, Body string }
 type Cleanup struct {
 	Piece string
 	Force bool
+	// Merged: the piece's pull request was merged, so its local branch goes
+	// with its worktree.
+	Merged bool
 }
 type Record struct{ Event Event }
 
@@ -233,10 +236,7 @@ func approvalQuestion(rs run.State) string {
 	if rs.Pending != nil && rs.Pending.Verdict.Summary != "" {
 		q = rs.Pending.Verdict.Summary
 	}
-	if len(q) > maxSummaryLen {
-		q = q[:maxSummaryLen]
-	}
-	return q
+	return cutRunes(q, maxSummaryLen)
 }
 
 func (d *decider) failed(id string, rs run.State) {

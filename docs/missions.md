@@ -210,7 +210,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 
 ### A plan
 
-A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it. The line `<!-- crew:changes -->` ends the request: everything between the frontmatter and that line is the request, word for word, and crew records later changes below it, under `## Changes`. A plan without the marker line is rejected.
+A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it. The orchestrator leaves out sentences that are only about handling the mission, such as "don't start it yet", because every pull request quotes the request. The line `<!-- crew:changes -->` ends the request: everything between the frontmatter and that line is the request, word for word, and crew records later changes below it, under `## Changes`. A plan without the marker line is rejected.
 
 ```markdown
 ---
@@ -554,7 +554,7 @@ There are eight kinds:
 | Kind | What it means | What you can answer |
 | --- | --- | --- |
 | `merge` | The piece's pull request is open and crew did not merge it. The text of the item says why (see "Auto-merge"). | Nothing to type. Merge it on GitHub, or fix what the text names. crew sees the merge and moves on. `cancel` abandons the piece. |
-| `approval` | A station in the piece's factory is set to pause for approval (`approve: true`) and has finished. | `approve` or `cancel`. `approve` takes an optional `--station` to continue from a station other than the next one. |
+| `approval` | A station in the piece's factory is set to pause for approval (`approve: true`) and has finished. | `approve`, `goto` (with `--station`) or `cancel`. `goto` sends the work back to a station, with your `--note` for that station. `approve --station` does the same thing. |
 | `question` | The orchestrator couldn't settle a failure, or you must decide something. | `retry`, `goto` or `cancel`. On a conflict or failed-checks question, `retry` gives the piece two more tries. |
 | `limit` | A piece used up its orchestrator calls. | `retry`, `goto` or `cancel`. |
 | `pr-closed` | The pull request was closed without being merged. | `retry` (after you reopen it, crew goes back to watching it) or `cancel`. |
@@ -879,7 +879,7 @@ A plain run works in your main checkout, and crew does not check it against the 
 Three commands need your confirmation:
 
 - Starting a run. There is no `ask` rule for it, since no single prefix names it, so the session asks only when no other Claude Code setting allows it and the session is in a mode that asks. Answer it with a one-time yes, not "don't ask again".
-- `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop.
+- `crew run approve`. The orchestrator runs it only after you have said, in the conversation, to approve that stop. `crew run resume` never passes an approval stop. An approval is recorded in the run's events with the note you gave.
 - `crew run goto`. It moves the work to another station, and so it can step past an approval stop the same way `approve` does.
 
 For `approve` and `goto`, a `harnesses.yaml` set up by this version makes the confirmation hold: crew writes `ask` rules for both into the orchestrator's settings file, and Claude Code checks `ask` rules before `allow` rules across all its settings files, so the session asks you even when another setting allows them. A session started with permission checks bypassed asks about nothing. A file that still says `foreman:` gets no `ask` rules until you run `crew mission setup`.
@@ -914,7 +914,7 @@ A piece's run belongs to its mission. You can read it with `crew run status`, wh
 
 The engine is the only writer of `state.json` and `mission.md` while it runs. The other commands leave you a file in `inbox/`, or change the state only when no engine is running.
 
-When a piece's pull request is merged, crew removes the piece's worktree. When a piece finishes with nothing to commit, it is complete at once and no pull request is opened. Nothing is ever deleted on GitHub: crew does not delete remote branches or close pull requests. It merges a pull request only when auto-merge is on for the piece's domain. The local piece branches stay where they are.
+When a piece's pull request is merged, crew removes the piece's worktree. When a piece finishes with nothing to commit, it is complete at once and no pull request is opened. Nothing is ever deleted on GitHub: crew does not delete remote branches or close pull requests. It merges a pull request only when auto-merge is on for the piece's domain. The local branch of a piece whose pull request was merged is deleted with its worktree. A cancelled piece's local branch stays. The branches on GitHub stay too; GitHub's "Automatically delete head branches" setting removes those if you want that.
 
 ## What the safeguards do and don't cover
 
@@ -938,7 +938,7 @@ The limits, specifically:
 - **The auto-merge file has a checksum, nothing more.** `automerge.json` in `<crew dir>/principal/` is sealed like the repo confirmation. A file that has been edited by hand, or has no checksum, reads as off for every domain.
 - **The orchestrator session is yours.** crew can only apply the deny rules to it if you start it from the printed launch line.
 - **Answers relayed by the orchestrator are recorded word for word, but nothing proves you said them.**
-- **A plain run's approval is your confirmation in the session, and nothing records your words for it**, unlike a mission's answer.
+- **A plain run's approval is your confirmation in the session.** The approval and the note you gave are in the run's events, and nothing proves it was you who gave them.
 - **The confirmation is the harness's question.** `crew run approve` and `crew run goto` ask because of the `ask` rules crew writes; a session started with permission checks bypassed asks about nothing. Starting a run has no `ask` rule: another setting that allows it, or a mode that doesn't ask, skips the question. A `harnesses.yaml` that still says `foreman:` has no `ask` rules until `crew mission setup`.
 - **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 - **Checks are only as good as the repo's CI.** The factory's review station is the only thing between an agent's work and your review of the pull request.

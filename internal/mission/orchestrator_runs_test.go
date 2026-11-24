@@ -57,3 +57,10 @@ func TestOrchestratorBody_HeadlessRuleIsStillLast(t *testing.T) {
 		t.Errorf("body does not end with %q", want)
 	}
 }
+
+func TestOrchestratorBody_StillObeysTheSentencesItLeavesOut(t *testing.T) {
+	want := "You still do what the sentences you left out say."
+	if !strings.Contains(OrchestratorBody(), want) {
+		t.Fatalf("the orchestrator prompt must contain %q", want)
+	}
+}

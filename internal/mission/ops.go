@@ -24,6 +24,7 @@ type GitOps interface {
 	Fetch(ctx context.Context, branch string) error
 	AddWorktree(ctx context.Context, path, branch, from string) error
 	RemoveWorktree(ctx context.Context, path string, force bool) error
+	DeleteBranch(ctx context.Context, branch string) error
 	Dirty(ctx context.Context, worktree string) ([]string, error)
 	Ahead(ctx context.Context, worktree, base string) (int, error)
 	Push(ctx context.Context, worktree, branch string) error
@@ -105,7 +106,7 @@ func PieceInput(id string, m Mission, p Piece, d source.Domain, earlier []Earlie
 // public, so they carry names, the brief's first line, the request and the
 // last step's summary, nothing else.
 func PRText(id string, m Mission, p Piece, last run.StepRecord) (title, body string) {
-	title = cutRunes(firstLine(p.Brief), maxTitleRunes)
+	title = cutWords(firstLine(p.Brief), maxTitleRunes)
 	if title == "" {
 		title = p.ID
 	}

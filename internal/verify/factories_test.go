@@ -47,8 +47,8 @@ func TestFactories_HarnessNotEnabled(t *testing.T) {
 
 func TestFactories_AgentNotCompiledForHarness(t *testing.T) {
 	dir := fresh(t)
-	edit(t, filepath.Join(dir, "crew.yaml"), "  claude-code:\n    enabled: true\n    agents: [\"*\"]", "  claude-code:\n    enabled: true\n    agents: [\"*\"]\n    exclude: [code-explorer]")
-	expectError(t, dir, "station review: agent code-explorer isn't compiled for claude-code")
+	edit(t, filepath.Join(dir, "crew.yaml"), "  claude-code:\n    enabled: true\n    agents: [\"*\"]", "  claude-code:\n    enabled: true\n    agents: [\"*\"]\n    exclude: [change-reviewer]")
+	expectError(t, dir, "station review: agent change-reviewer isn't compiled for claude-code")
 }
 
 func TestFactories_ReservedName(t *testing.T) {

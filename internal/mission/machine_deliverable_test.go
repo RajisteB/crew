@@ -115,8 +115,15 @@ func TestDecide_DoneOnTheBoardAcceptsOnlyAPostedDeliverable(t *testing.T) {
 	if p.Status != PieceComplete || p.Wait != nil || len(ev) != 1 || ev[0].By != "principal" || ev[0].Msg != "its Jira issue was moved to Done" {
 		t.Fatalf("(a) piece = %+v, events = %+v", p, ev)
 	}
-	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force {
+	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force || cl[0].Merged {
 		t.Fatalf("(a) cleanup = %+v", cl)
+	}
+
+	// (a2) the same piece with a merged pull request: the cleanup deletes the branch.
+	s.Pieces[0].PR = 7
+	_, as = Decide(m, s, o, limits(1, 3), 0)
+	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force || !cl[0].Merged {
+		t.Fatalf("(a2) cleanup = %+v", cl)
 	}
 
 	// (b) a pr-open piece with no deliverable: nothing changes.
