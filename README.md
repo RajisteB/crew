@@ -35,7 +35,7 @@ You steer all of it by talking to one agent, the **orchestrator**, or by typing 
 | Harness | Agents and skills | Runs factory stations | Hosts the orchestrator | Runs mission pieces |
 | --- | --- | --- | --- | --- |
 | Claude Code | yes | yes | yes | yes |
-| OpenCode | yes | yes (not yet tested live) | no | no |
+| OpenCode | yes | yes | no | no |
 | Codex, Gemini CLI, Cursor | yes | only with a `headless:` command you add | no | no |
 
 Mission pieces need a harness that can apply deny rules to the sessions crew starts. `crew verify -v` says which of your harnesses can't.
