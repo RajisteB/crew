@@ -90,6 +90,11 @@ func (g *fakeGit) RemoveWorktree(_ context.Context, path string, force bool) err
 	return g.fail.hit("RemoveWorktree")
 }
 
+func (g *fakeGit) DeleteBranch(_ context.Context, branch string) error {
+	g.log.add("DeleteBranch %s", branch)
+	return g.fail.hit("DeleteBranch")
+}
+
 func (g *fakeGit) Dirty(_ context.Context, worktree string) ([]string, error) {
 	g.log.add("Dirty %s", worktree)
 	if f, ok := g.at[worktree]; ok {

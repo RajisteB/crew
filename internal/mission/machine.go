@@ -73,6 +73,9 @@ type Notify struct{ Title, Body string }
 type Cleanup struct {
 	Piece string
 	Force bool
+	// Merged: the piece's pull request was merged, so its local branch goes
+	// with its worktree.
+	Merged bool
 }
 type Record struct{ Event Event }
 

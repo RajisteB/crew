@@ -24,6 +24,7 @@ type GitOps interface {
 	Fetch(ctx context.Context, branch string) error
 	AddWorktree(ctx context.Context, path, branch, from string) error
 	RemoveWorktree(ctx context.Context, path string, force bool) error
+	DeleteBranch(ctx context.Context, branch string) error
 	Dirty(ctx context.Context, worktree string) ([]string, error)
 	Ahead(ctx context.Context, worktree, base string) (int, error)
 	Push(ctx context.Context, worktree, branch string) error

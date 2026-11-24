@@ -117,6 +117,29 @@ func (r Repo) AddWorktree(ctx context.Context, path, branch, from string) error 
 	return err
 }
 
+// crewBranchPrefix starts every branch crew creates.
+const crewBranchPrefix = "crew/"
+
+// DeleteBranch deletes the local branch, never a remote one. It refuses any
+// branch that crew did not create, and returns nil when the branch is gone.
+func (r Repo) DeleteBranch(ctx context.Context, branch string) error {
+	if err := checkRef("branch", branch); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(branch, crewBranchPrefix) {
+		return fmt.Errorf("won't delete branch %q: not a crew branch", branch)
+	}
+	if _, err := git(ctx, localTimeout, r.Dir, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			return nil
+		}
+		return err
+	}
+	_, err := git(ctx, localTimeout, r.Dir, "branch", "-D", branch)
+	return err
+}
+
 // RemoveWorktree removes the worktree at path. It returns nil when the
 // worktree is already gone. Without force, git refuses uncommitted changes.
 func (r Repo) RemoveWorktree(ctx context.Context, path string, force bool) error {

@@ -85,3 +85,51 @@ func TestEngine_StartNotAttemptedWhenLeftoverCannotBeRemoved(t *testing.T) {
 		t.Fatalf("retry: %+v", p)
 	}
 }
+
+func mergedCleanup(h *harness, merged bool) {
+	h.runPiece("P1")
+	h.edit(func(s *State) { s.Pieces[0].Status = PieceComplete })
+	t := &tick{e: h.e, ctx: context.Background(), s: h.state(), notes: map[string]struct{}{}}
+	t.cleanup(Cleanup{Piece: "P1", Force: true, Merged: merged})
+}
+
+func TestEngine_MergedCleanupDeletesBranchAfterWorktree(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	branch := "crew/" + h.id + "/P1"
+	mergedCleanup(h, true)
+	rm, del := h.log.indexes("RemoveWorktree"), h.log.indexes("DeleteBranch")
+	if len(rm) != 1 || len(del) != 1 || rm[0] > del[0] || !h.log.has("DeleteBranch "+branch) {
+		t.Fatalf("calls: %v", h.log.calls)
+	}
+}
+
+func TestEngine_UnmergedCleanupKeepsBranch(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	mergedCleanup(h, false)
+	if h.log.has("DeleteBranch") {
+		t.Fatalf("calls: %v", h.log.calls)
+	}
+}
+
+func TestEngine_BranchKeptWhenWorktreeRemovalFails(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	h.fail.failNext("RemoveWorktree", 1)
+	mergedCleanup(h, true)
+	if h.log.has("DeleteBranch") {
+		t.Fatalf("calls: %v", h.log.calls)
+	}
+}
+
+func TestEngine_BranchDeleteFailureIsOnlyANote(t *testing.T) {
+	h := newHarness(t, twoPieces()[0])
+	h.fail.failNext("DeleteBranch", 1)
+	mergedCleanup(h, true)
+	notes := h.events(EvNote)
+	want := "can't delete the local branch crew/" + h.id + "/P1"
+	if len(notes) != 1 || !strings.Contains(notes[0].Msg, want) {
+		t.Fatalf("notes = %+v", notes)
+	}
+	if h.piece("P1").Worktree != "" {
+		t.Fatal("piece not cleaned up")
+	}
+}

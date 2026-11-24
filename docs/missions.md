@@ -914,7 +914,7 @@ A piece's run belongs to its mission. You can read it with `crew run status`, wh
 
 The engine is the only writer of `state.json` and `mission.md` while it runs. The other commands leave you a file in `inbox/`, or change the state only when no engine is running.
 
-When a piece's pull request is merged, crew removes the piece's worktree. When a piece finishes with nothing to commit, it is complete at once and no pull request is opened. Nothing is ever deleted on GitHub: crew does not delete remote branches or close pull requests. It merges a pull request only when auto-merge is on for the piece's domain. The local piece branches stay where they are.
+When a piece's pull request is merged, crew removes the piece's worktree. When a piece finishes with nothing to commit, it is complete at once and no pull request is opened. Nothing is ever deleted on GitHub: crew does not delete remote branches or close pull requests. It merges a pull request only when auto-merge is on for the piece's domain. The local branch of a piece whose pull request was merged is deleted with its worktree. A cancelled piece's local branch stays. The branches on GitHub stay too; GitHub's "Automatically delete head branches" setting removes those if you want that.
 
 ## What the safeguards do and don't cover
 
