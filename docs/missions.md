@@ -554,7 +554,7 @@ There are eight kinds:
 | Kind | What it means | What you can answer |
 | --- | --- | --- |
 | `merge` | The piece's pull request is open and crew did not merge it. The text of the item says why (see "Auto-merge"). | Nothing to type. Merge it on GitHub, or fix what the text names. crew sees the merge and moves on. `cancel` abandons the piece. |
-| `approval` | A station in the piece's factory is set to pause for approval (`approve: true`) and has finished. | `approve` or `cancel`. `approve` takes an optional `--station` to continue from a station other than the next one. |
+| `approval` | A station in the piece's factory is set to pause for approval (`approve: true`) and has finished. | `approve`, `goto` (with `--station`) or `cancel`. `goto` sends the work back to a station, with your `--note` for that station. `approve --station` does the same thing. |
 | `question` | The orchestrator couldn't settle a failure, or you must decide something. | `retry`, `goto` or `cancel`. On a conflict or failed-checks question, `retry` gives the piece two more tries. |
 | `limit` | A piece used up its orchestrator calls. | `retry`, `goto` or `cancel`. |
 | `pr-closed` | The pull request was closed without being merged. | `retry` (after you reopen it, crew goes back to watching it) or `cancel`. |

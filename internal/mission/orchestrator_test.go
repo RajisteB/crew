@@ -260,3 +260,9 @@ func TestOrchestratorBody_MentionsDelegation(t *testing.T) {
 		t.Fatalf("the example's third piece must be delegated, with no factory: %+v", mis.Pieces)
 	}
 }
+
+func TestOrchestratorBody_ApprovalTakesGoto(t *testing.T) {
+	if !strings.Contains(OrchestratorBody(), "An approval takes approve, goto or cancel") {
+		t.Error("body does not say an approval takes goto")
+	}
+}

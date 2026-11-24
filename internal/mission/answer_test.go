@@ -137,3 +137,35 @@ func TestApplyAnswer_DoesNotMutateInput(t *testing.T) {
 		t.Error("state mutated")
 	}
 }
+
+func TestApplyAnswer_ApprovalGotoSendsBackThroughApprove(t *testing.T) {
+	_, s, _, step, err := answer(waiting(WaitApproval, PieceRunning), Answer{Do: "goto", Station: "build", Note: "fix the typo", Words: "send it back"})
+	if err != nil || step == nil || *step != (RunStep{Piece: "P1", Kind: "approve", Station: "build", Note: "fix the typo"}) {
+		t.Fatalf("step = %+v, err = %v", step, err)
+	}
+	if s.Pieces[0].Wait != nil {
+		t.Errorf("wait not cleared: %+v", s.Pieces[0])
+	}
+	d := s.Pieces[0].Decisions
+	if len(d) != 1 || d[0].Action != "goto" || d[0].Station != "build" {
+		t.Errorf("decisions = %+v", d)
+	}
+}
+
+func TestApplyAnswer_ApprovalGotoNeedsAStation(t *testing.T) {
+	in := waiting(WaitApproval, PieceRunning)
+	_, s, _, _, err := answer(in, Answer{Do: "goto"})
+	if err == nil || !strings.Contains(err.Error(), "is not in the factory of piece") {
+		t.Fatalf("err = %v", err)
+	}
+	if !reflect.DeepEqual(s, in) {
+		t.Error("state changed on error")
+	}
+}
+
+func TestApplyAnswer_ApprovalRetryListsItsChoices(t *testing.T) {
+	_, _, _, _, err := answer(waiting(WaitApproval, PieceRunning), Answer{Do: "retry"})
+	if err == nil || !strings.Contains(err.Error(), "the choices are: approve, goto, cancel") {
+		t.Errorf("err = %v", err)
+	}
+}

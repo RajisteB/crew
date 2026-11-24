@@ -79,6 +79,11 @@ func answerStep(d *decider, id string, w Wait, a Answer) *RunStep {
 			return step
 		}
 	}
+	if w.Kind == WaitApproval && a.Do == answerGoto {
+		// The run is paused at its approval stop: approving with a station is
+		// the one move that leaves it for a named station.
+		return &RunStep{Piece: id, Kind: "approve", Station: a.Station, Note: a.Note}
+	}
 	switch a.Do {
 	case answerApprove:
 		return &RunStep{Piece: id, Kind: "approve", Station: a.Station, Note: a.Note}
@@ -145,7 +150,7 @@ func checkAnswer(m Mission, in CheckInput, p PieceState, w Wait, a Answer) error
 func answerChoices(p PieceState, w Wait) []string {
 	switch {
 	case w.Kind == WaitApproval:
-		return []string{answerApprove, answerCancel}
+		return []string{answerApprove, answerGoto, answerCancel}
 	case w.Kind == WaitQuestion && w.Back == PieceQueued:
 		return []string{answerCancel}
 	case w.Kind == WaitQuestion || w.Kind == WaitLimit:
