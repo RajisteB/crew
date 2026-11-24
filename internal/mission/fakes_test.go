@@ -73,6 +73,8 @@ type fakeGit struct {
 	mergedHead string   // when set, a clean MergeInto moves head here
 	changed    []string // what ChangedFiles reports
 	conflicts  []string // what MergeInto reports
+
+	onRemoveWorktree func() // called at the start of each RemoveWorktree, when set
 }
 
 func (g *fakeGit) Fetch(_ context.Context, branch string) error {
@@ -87,6 +89,9 @@ func (g *fakeGit) AddWorktree(_ context.Context, path, branch, from string) erro
 
 func (g *fakeGit) RemoveWorktree(_ context.Context, path string, force bool) error {
 	g.log.add("RemoveWorktree %s force=%v", path, force)
+	if g.onRemoveWorktree != nil {
+		g.onRemoveWorktree()
+	}
 	return g.fail.hit("RemoveWorktree")
 }
 

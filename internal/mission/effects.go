@@ -50,7 +50,11 @@ func (t *tick) perform(actions []Action) error {
 		case Cleanup:
 			t.cleanup(a)
 		case Record:
-			t.emit(a.Event)
+			if t.unsaved {
+				t.held = append(t.held, a.Event)
+			} else {
+				t.emit(a.Event)
+			}
 		}
 		if err != nil {
 			return err
@@ -298,7 +302,13 @@ func (t *tick) notify(a Notify) {
 		t.note("", "can't notify: %v", err)
 		return
 	}
-	t.emit(Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)})
+	ev := Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)}
+	if len(t.held) > 0 {
+		// It follows events that are still held; keep the log in action order.
+		t.held = append(t.held, ev)
+		return
+	}
+	t.emit(ev)
 }
 
 func (t *tick) cleanup(a Cleanup) {
