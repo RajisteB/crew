@@ -110,7 +110,7 @@ func (t *tick) merge(a Merge) error {
 	t.emit(Event{Kind: EvPRMerged, Piece: a.Piece,
 		Msg: fmt.Sprintf("PR #%d merged by crew (auto-merge %s for %s)", ps.PR, auto.Mode, p.Domain)})
 	if now, _ := t.s.Piece(a.Piece); now.Status == PieceComplete {
-		t.removeWorktree(ps, true)
+		t.cleanup(Cleanup{Piece: a.Piece, Force: true, Merged: true})
 	}
 	return nil
 }

@@ -48,7 +48,8 @@ func (d *decider) deliverables() {
 		switch {
 		case !unaccepted(*p):
 			d.complete(id)
-			d.add(Cleanup{Piece: id, Force: true})
+			// A delivered piece with a pull request has it merged.
+			d.add(Cleanup{Piece: id, Force: true, Merged: p.PR != 0})
 		case p.Wait == nil:
 			d.wait(id, WaitDeliverable, deliverableQuestion(d.s.MissionID, *p), "")
 		}

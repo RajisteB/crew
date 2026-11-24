@@ -236,10 +236,7 @@ func approvalQuestion(rs run.State) string {
 	if rs.Pending != nil && rs.Pending.Verdict.Summary != "" {
 		q = rs.Pending.Verdict.Summary
 	}
-	if len(q) > maxSummaryLen {
-		q = q[:maxSummaryLen]
-	}
-	return q
+	return cutRunes(q, maxSummaryLen)
 }
 
 func (d *decider) failed(id string, rs run.State) {

@@ -938,7 +938,7 @@ The limits, specifically:
 - **The auto-merge file has a checksum, nothing more.** `automerge.json` in `<crew dir>/principal/` is sealed like the repo confirmation. A file that has been edited by hand, or has no checksum, reads as off for every domain.
 - **The orchestrator session is yours.** crew can only apply the deny rules to it if you start it from the printed launch line.
 - **Answers relayed by the orchestrator are recorded word for word, but nothing proves you said them.**
-- **A plain run's approval is your confirmation in the session, and nothing records your words for it**, unlike a mission's answer.
+- **A plain run's approval is your confirmation in the session.** The approval and the note you gave are in the run's events, and nothing proves it was you who gave them.
 - **The confirmation is the harness's question.** `crew run approve` and `crew run goto` ask because of the `ask` rules crew writes; a session started with permission checks bypassed asks about nothing. Starting a run has no `ask` rule: another setting that allows it, or a mode that doesn't ask, skips the question. A `harnesses.yaml` that still says `foreman:` has no `ask` rules until `crew mission setup`.
 - **crew pushes whatever stations commit.** It doesn't scan for secrets or stray files.
 - **Checks are only as good as the repo's CI.** The factory's review station is the only thing between an agent's work and your review of the pull request.

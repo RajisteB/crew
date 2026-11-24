@@ -29,11 +29,21 @@ func TestAnswer_AcceptCompletes(t *testing.T) {
 	if len(ev) != 1 || ev[0].By != "principal" || ev[0].Msg != "answered" {
 		t.Fatalf("events = %+v", ev)
 	}
-	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force || cl[0].Piece != "P1" {
+	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force || cl[0].Piece != "P1" || cl[0].Merged {
 		t.Fatalf("cleanup = %+v", cl)
 	}
 	if !hasKind(as, EvAnswered) || !hasKind(as, EvPieceComplete) {
 		t.Fatalf("records = %v", recordKinds(as))
+	}
+}
+
+func TestAnswer_AcceptAfterMergeKeepsTheMergedFlag(t *testing.T) {
+	_, _, as, _, err := answer(deliveredAnswerState(7), Answer{Do: "accept", Words: "looks good"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cl := of[Cleanup](as); len(cl) != 1 || !cl[0].Force || !cl[0].Merged {
+		t.Fatalf("cleanup = %+v", cl)
 	}
 }
 

@@ -22,6 +22,7 @@ func TestCutWords(t *testing.T) {
 		{"abcdefghijklmnop", 8, "abcdefg…"},
 		{"ab cdefghijklmnopqrstuvwxyz", 12, "ab cdefghij…"},
 		{"ééééé ééééé ééééé", 12, "ééééé ééééé…"},
+		{"Fix the bug. Then more words here", 14, "Fix the bug…"},
 		{longSentence, 70, "Add an exported function Farewell(name string) string to the greet…"},
 	}
 	for _, tc := range tests {

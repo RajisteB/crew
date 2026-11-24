@@ -120,7 +120,7 @@ func cutWords(text string, n int) string {
 	if i := lastSpace(head); i >= n/2 {
 		head = head[:i]
 	}
-	return strings.TrimRight(string(head), " ,;:") + "…"
+	return strings.TrimRight(string(head), " ,;:.") + "…"
 }
 
 // lastSpace is the rune index of the last space in r, or -1.

@@ -111,7 +111,7 @@ func answerDeliverable(d *decider, id string, a Answer) (step *RunStep, done boo
 	case answerAccept:
 		d.accept(id, principalBy, "answered")
 		d.complete(id)
-		d.add(Cleanup{Piece: id, Force: true})
+		d.add(Cleanup{Piece: id, Force: true, Merged: p.PR != 0}) // a delivered piece's PR is merged
 		return nil, true
 	case answerGoto:
 		p.Deliverable, p.Status = nil, PieceRunning

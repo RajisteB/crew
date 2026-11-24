@@ -277,8 +277,10 @@ func applyStep(fac source.Factory, st run.State, store run.Store, s RunStep) (ru
 		if err := queueNote(store, s.Note); err != nil {
 			return st, err
 		}
-		_, err = store.Emit(run.ApprovedEvent(*pending, s.Station, s.Note))
-		return next, err
+		// The event is a log. A failed write must not leave the inbox item to be
+		// applied again on every tick, so the approval goes ahead without it.
+		_, _ = store.Emit(run.ApprovedEvent(*pending, s.Station, s.Note))
+		return next, nil
 	}
 	return st, fmt.Errorf("unknown step kind %q", s.Kind)
 }

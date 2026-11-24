@@ -94,11 +94,12 @@ func runApprove(id string, f runFlags, out io.Writer) error {
 	if err := store.SaveState(st); err != nil {
 		return err
 	}
-	ev, err := store.Emit(run.ApprovedEvent(*pending, f.gotoStation, note))
-	if err != nil {
-		return err
+	if ev, err := store.Emit(run.ApprovedEvent(*pending, f.gotoStation, note)); err != nil {
+		// The event is a log; the approval is saved, so the run goes on.
+		fmt.Fprintf(out, "note: the approval was not recorded in the run's events: %v\n", err)
+	} else {
+		fmt.Fprintln(out, run.FormatEvent(ev))
 	}
-	fmt.Fprintln(out, run.FormatEvent(ev))
 	return continueRun(id, f, out)
 }
 

@@ -70,6 +70,10 @@ func TestEngine_AutoMergeOnMergesPassingPR(t *testing.T) {
 	if !h.log.has("RemoveWorktree " + h.e.RepoRoot + "/.crew/worktrees/" + h.id + "-P1 force=true") {
 		t.Fatalf("calls: %v", h.log.calls)
 	}
+	rm, del := h.log.indexes("RemoveWorktree"), h.log.indexes("DeleteBranch")
+	if len(rm) != 1 || len(del) != 1 || rm[0] > del[0] || !h.log.has("DeleteBranch crew/"+h.id+"/P1") {
+		t.Fatalf("calls: %v", h.log.calls)
+	}
 	h.tick()
 	if h.piece("P2").Status != PieceRunning {
 		t.Fatalf("P2 = %+v", h.piece("P2"))
