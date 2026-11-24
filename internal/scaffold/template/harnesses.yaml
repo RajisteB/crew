@@ -190,8 +190,8 @@ harnesses:
     headless:
       # The compiled agent's tools map disables every tool outside its
       # capabilities. No --auto: it would also approve whatever opencode asks
-      # about (edits outside the project, your own "ask" rules). Not yet
-      # smoke-tested as a station harness.
+      # about (edits outside the project, your own "ask" rules). Run live as a
+      # station harness in plain runs.
       command: [opencode, run, --agent, "{agent}", "{prompt}"]
       prompt_via: arg
       allow_via: agent-file

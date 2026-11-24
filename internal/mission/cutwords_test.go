@@ -39,7 +39,7 @@ func TestCutWords(t *testing.T) {
 func TestPRText_TitleEndsAtAWord(t *testing.T) {
 	p := Piece{ID: "P1", Domain: "product", Factory: "feature", Brief: longSentence + "\nmore"}
 	title, _ := PRText("m-1", Mission{Request: "r"}, p, run.StepRecord{})
-	if want := "Add an exported function Farewell(name string) string to the greet…"; title != want {
+	if want := "Add an exported function Farewell(name string) string to the greet"; title != want {
 		t.Errorf("title = %q, want %q", title, want)
 	}
 }
@@ -53,5 +53,37 @@ func TestTrackerText_SummariesEndAtAWord(t *testing.T) {
 		if !strings.HasSuffix(s, "…") || utf8.RuneCountInString(s) > maxSummaryRunes {
 			t.Errorf("%s summary = %q (%d runes)", name, s, utf8.RuneCountInString(s))
 		}
+	}
+}
+
+func TestCutTitle(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"fits", "Add a greeting", "Add a greeting"},
+		{"exactly 70", strings.Repeat("a", 70), strings.Repeat("a", 70)},
+		{"cut at a word", longSentence, "Add an exported function Farewell(name string) string to the greet"},
+		{"drops trailing punctuation", strings.Repeat("a", 60) + ", bbbbbbbbbbbbbbbbbbbb", strings.Repeat("a", 60)},
+		{"one long word is cut hard", strings.Repeat("x", 90), strings.Repeat("x", 70)},
+		{"space in the first half is ignored", "ab " + strings.Repeat("c", 80), "ab " + strings.Repeat("c", 67)},
+		{"multi-byte runes", strings.Repeat("é", 80), strings.Repeat("é", 70)},
+	}
+	for _, tc := range tests {
+		got := cutTitle(tc.in, maxTitleRunes)
+		if got != tc.want {
+			t.Errorf("%s: cutTitle = %q, want %q", tc.name, got, tc.want)
+		}
+		if strings.Contains(got, "…") || utf8.RuneCountInString(got) > maxTitleRunes || !utf8.ValidString(got) {
+			t.Errorf("%s: %q has a mark, is too long or is invalid", tc.name, got)
+		}
+	}
+}
+
+func TestPRText_ShortTitleIsUnchanged(t *testing.T) {
+	p := Piece{ID: "P1", Domain: "product", Factory: "feature", Brief: "Add a greeting\nmore"}
+	if title, _ := PRText("m-1", Mission{Request: "r"}, p, run.StepRecord{}); title != "Add a greeting" {
+		t.Errorf("title = %q", title)
 	}
 }

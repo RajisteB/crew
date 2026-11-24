@@ -106,7 +106,7 @@ func PieceInput(id string, m Mission, p Piece, d source.Domain, earlier []Earlie
 // public, so they carry names, the brief's first line, the request and the
 // last step's summary, nothing else.
 func PRText(id string, m Mission, p Piece, last run.StepRecord) (title, body string) {
-	title = cutWords(firstLine(p.Brief), maxTitleRunes)
+	title = cutTitle(firstLine(p.Brief), maxTitleRunes)
 	if title == "" {
 		title = p.ID
 	}

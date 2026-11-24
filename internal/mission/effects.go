@@ -50,7 +50,11 @@ func (t *tick) perform(actions []Action) error {
 		case Cleanup:
 			t.cleanup(a)
 		case Record:
-			t.emit(a.Event)
+			if t.unsaved {
+				t.held = append(t.held, a.Event)
+			} else {
+				t.emit(a.Event)
+			}
 		}
 		if err != nil {
 			return err
@@ -249,7 +253,7 @@ func (t *tick) askOrchestrator(a AskOrchestrator) error {
 	if t.ctx.Err() != nil {
 		return nil // stopped during the call: not a decision, not a question; the next engine asks again
 	}
-	t.emit(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
+	t.emitInOrder(Event{Kind: EvException, Piece: a.Piece, Run: ps.RunID, Msg: a.Failure})
 	if err != nil {
 		d = OrchDecision{Reason: err.Error()}
 	}
@@ -298,7 +302,7 @@ func (t *tick) notify(a Notify) {
 		t.note("", "can't notify: %v", err)
 		return
 	}
-	t.emit(Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)})
+	t.emitInOrder(Event{Kind: EvNotified, Msg: cutRunes(a.Body, noteRunes)})
 }
 
 func (t *tick) cleanup(a Cleanup) {

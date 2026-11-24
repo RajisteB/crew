@@ -97,6 +97,8 @@ type tick struct {
 	mDirty   bool
 	switches *switchSnapshot // the switches read this tick, once
 	halted   bool            // the mission was stopped during this tick; no further actions run
+	unsaved  bool            // t.s holds a decision that is not on disk yet
+	held     []Event         // decided events waiting for the save
 }
 
 // Tick runs one round. The caller holds the mission lock. A failure that
@@ -126,6 +128,7 @@ func (t *tick) run() (State, error) {
 	t.observe()
 	next, actions := Decide(t.m, t.s, t.obs, t.lim, e.Settings.Remind())
 	t.s = next
+	t.unsaved = true
 	if err := t.perform(actions); err != nil {
 		return t.s, err
 	}
@@ -169,7 +172,28 @@ func (t *tick) save() error {
 		}
 		t.mDirty = false
 	}
-	return t.e.Store.SaveState(t.s)
+	if err := t.e.Store.SaveState(t.s); err != nil {
+		return err
+	}
+	// Events decided with this state go out only now that it is on disk, so
+	// events are never written ahead of the state.
+	t.unsaved = false
+	held := t.held
+	t.held = nil
+	for _, ev := range held {
+		t.emit(ev)
+	}
+	return nil
+}
+
+// emitInOrder appends an event that follows events still held, so the log
+// keeps the order of the actions. With nothing held it is written at once.
+func (t *tick) emitInOrder(ev Event) {
+	if len(t.held) > 0 {
+		t.held = append(t.held, ev)
+		return
+	}
+	t.emit(ev)
 }
 
 // adopt takes a new mission and state produced by a state-machine function.
