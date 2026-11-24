@@ -210,7 +210,7 @@ All of them take `--dir` (the crew directory) and `--project` (the repo; default
 
 ### A plan
 
-A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it. The line `<!-- crew:changes -->` ends the request: everything between the frontmatter and that line is the request, word for word, and crew records later changes below it, under `## Changes`. A plan without the marker line is rejected.
+A plan is a Markdown file. The frontmatter lists the pieces. The body is your request, word for word, because crew compares later changes against it. The orchestrator leaves out sentences that are only about handling the mission, such as "don't start it yet", because every pull request quotes the request. The line `<!-- crew:changes -->` ends the request: everything between the frontmatter and that line is the request, word for word, and crew records later changes below it, under `## Changes`. A plan without the marker line is rejected.
 
 ```markdown
 ---

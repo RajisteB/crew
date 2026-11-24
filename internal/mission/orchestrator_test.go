@@ -266,3 +266,15 @@ func TestOrchestratorBody_ApprovalTakesGoto(t *testing.T) {
 		t.Error("body does not say an approval takes goto")
 	}
 }
+
+func TestOrchestratorBody_HandlingInstructionsStayOutOfTheRequest(t *testing.T) {
+	body := OrchestratorBody()
+	for _, want := range []string{
+		"Leave out, whole, any sentence that only tells you how to handle the mission",
+		"word for word",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
